@@ -50,6 +50,23 @@ def test_reduction_to_independent_grid():
     assert res.score_b.mean() == pytest.approx(lb, abs=0.01)
 
 
+def test_lambda_override_matches_analytic_grid():
+    """simulate(lam=...) bypasses Elo and uses the given intensities exactly —
+    uncoupled marginals must match dc_grid(la, lb, 0) (used for odds-anchored
+    timing markets, rec #3)."""
+    eng = MCEngine(GM, None, make_dynamics(), n_draws=400_000, coupled=False,
+                   frailty=False, seed=8)
+    la, lb = 1.85, 0.95
+    res = eng.simulate(0.0, 0.0, lam=(la, lb))
+    assert res.score_a.mean() == pytest.approx(la, abs=0.01)
+    assert res.score_b.mean() == pytest.approx(lb, abs=0.01)
+    grid = dc_grid(la, lb, 0.0)
+    assert answer(res, "win", "a") == pytest.approx(mk.p_win(grid, "a"), abs=0.004)
+    assert answer(res, "ht_tied") == pytest.approx(
+        float(np.trace(dc_grid((1 - mk.SECOND_HALF_SHARE) * la,
+                               (1 - mk.SECOND_HALF_SHARE) * lb, 0.0))), abs=0.02)
+
+
 def test_coherence_properties(engine):
     rng = np.random.default_rng(9)
     for _ in range(20):

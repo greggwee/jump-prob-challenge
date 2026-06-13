@@ -1,0 +1,96 @@
+"""Compute base rates + the confirmed-edge gate that drives extremizing (rec #2).
+
+Base rates per archetype (the field proxy for no-line markets) come from the
+backtests. The edge gate asks, per archetype FAMILY, on SETTLED LIVE questions:
+is our realized Brier beating the proxy-field's Brier, with enough sample and a
+real margin? If yes -> set k>1 for that family (we have earned leverage). If not
+-> k=1 (stay honest). This is the evidence gate the user chose.
+
+Run after each matchday settles:
+  python scripts/update_edge_gate.py
+"""
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from jumpprob.models.strategy import field_proxy
+from jumpprob.submit.api_client import SportsPredictClient
+from jumpprob.submit.runner import COUNT_ARCHS, PLAYER_ARCHS, TIMING_ARCHS
+
+PROC = Path("data/processed")
+LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
+MIN_SETTLED = 20          # need this many settled in a family before trusting edge
+MARGIN = 0.005            # our Brier must beat field proxy by this to earn k>1
+K_ON_CONFIRMED = 1.3      # leverage granted to a confirmed-edge family
+
+FAMILY = {**{a: "count" for a in COUNT_ARCHS},
+          **{a: "player" for a in PLAYER_ARCHS},
+          **{a: "timing" for a in TIMING_ARCHS}}
+
+
+def archetype_base_rates() -> dict:
+    """Pool historical outcomes per archetype from the backtests."""
+    rates: dict[str, float] = {}
+    counts = PROC / "backtest_counts.csv"
+    if counts.exists():
+        c = pd.read_csv(counts)
+        c = c[c["src"] == "model"]
+        rates.update(c.groupby("archetype")["outcome"].mean().to_dict())
+    # map the backtest count names to the live parser families' typical base rate
+    # (coarse: use the pooled count base rate for all count archetypes)
+    if counts.exists():
+        pooled_count = float(c["outcome"].mean())
+        for a in COUNT_ARCHS:
+            rates.setdefault(a, pooled_count)
+    praw = PROC / "backtest_players_raw.csv"
+    if praw.exists():
+        p = pd.read_csv(praw)
+        by = p.groupby("archetype")["outcome"].mean().to_dict()
+        rates["player_sot_ge"] = by.get("sot_ge_1", 0.3)
+        rates["player_scores"] = by.get("scores", 0.12)
+        rates["player_ga"] = by.get("scores", 0.12) * 1.6  # goal-or-assist ~ 1.6x scoring
+    bt2 = PROC / "backtest_v2_go.csv"
+    if bt2.exists():
+        v = pd.read_csv(bt2)
+        rates.update(v.groupby("archetype")["outcome"].mean().to_dict())
+    return {k: round(float(v), 4) for k, v in rates.items()}
+
+
+def confirmed_edge_gate(base_rates: dict) -> dict:
+    """Per-family k from settled live results vs the proxy field."""
+    client = SportsPredictClient("SPORTSPREDICT_KEY_A", dry_run=True)
+    settled = pd.DataFrame(client.results(LOBBY))
+    settled = settled.dropna(subset=["brier_score"])
+    md = PROC / "matchday_predictions.csv"
+    if settled.empty or not md.exists():
+        return {}
+    settled = settled.merge(pd.read_csv(md)[["market_id", "archetype"]], on="market_id", how="left")
+    settled["p"] = settled["probability_submitted"] / 100.0
+    settled["outcome"] = np.where(
+        np.isclose((settled["p"] - 1) ** 2, settled["brier_score"], atol=1e-6), 1.0, 0.0)
+    settled["family"] = settled["archetype"].map(FAMILY)
+
+    gate = {}
+    for fam, g in settled.dropna(subset=["family"]).groupby("family"):
+        our = float(((g["p"] - g["outcome"]) ** 2).mean())
+        fld = float(np.mean([
+            (field_proxy(a, p, base_rates) - y) ** 2
+            for a, p, y in zip(g["archetype"], g["p"], g["outcome"])]))
+        confirmed = len(g) >= MIN_SETTLED and our < fld - MARGIN
+        gate[fam] = K_ON_CONFIRMED if confirmed else 1.0
+        print(f"  {fam:7} n={len(g):3d}  our Brier {our:.4f} vs field {fld:.4f}  "
+              f"-> k={gate[fam]}{'  CONFIRMED' if confirmed else ''}")
+    return gate
+
+
+base = archetype_base_rates()
+(PROC / "base_rates.json").write_text(json.dumps(base, indent=1))
+print(f"base rates written for {len(base)} archetypes")
+print("edge gate (per family):")
+gate = confirmed_edge_gate(base)
+(PROC / "edge_gate.json").write_text(json.dumps(gate, indent=1))
+print(f"\nwrote edge_gate.json: {gate}")
+print("k=1 everywhere until a family confirms edge over >=20 settled questions.")

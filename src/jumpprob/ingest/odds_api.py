@@ -12,7 +12,13 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import requests
+
+from jumpprob.models.devig import consensus, overround
+from jumpprob.models.market_anchor import MatchAnchor
+from jumpprob.normalize.teams import canonical
+from jumpprob.submit.env import load_dotenv
 
 BASE = "https://api.the-odds-api.com/v4"
 SPORT = "soccer_fifa_world_cup"  # confirm exact key via list_sports() when live
@@ -20,6 +26,7 @@ RAW_DIR = Path("data/raw/odds")
 
 
 def _key() -> str:
+    load_dotenv()
     key = os.environ.get("THE_ODDS_API_KEY")
     if not key:
         raise RuntimeError("set THE_ODDS_API_KEY (free key: the-odds-api.com)")
@@ -45,3 +52,83 @@ def snapshot_odds(sport: str = SPORT, markets: str = "h2h,totals", raw_dir: Path
     dest = raw_dir / f"odds_{sport}_{stamp}.json"
     dest.write_text(json.dumps(resp.json()))
     return dest
+
+
+def fetch_events(sport: str = SPORT, markets: str = "h2h,totals") -> list[dict]:
+    """Live odds for all upcoming games (also caches a snapshot)."""
+    resp = requests.get(
+        f"{BASE}/sports/{sport}/odds",
+        params={"apiKey": _key(), "regions": "eu,uk", "markets": markets, "oddsFormat": "decimal"},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    events = resp.json()
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    (RAW_DIR / f"odds_{sport}_{stamp}.json").write_text(json.dumps(events))
+    return events
+
+
+def load_latest(raw_dir: Path = RAW_DIR) -> list[dict]:
+    """Most recent cached snapshot (avoids spending a credit when fresh)."""
+    snaps = sorted(raw_dir.glob(f"odds_{SPORT}_*.json"))
+    if not snaps:
+        raise FileNotFoundError("no cached odds snapshot; call fetch_events() first")
+    return json.loads(snaps[-1].read_text())
+
+
+def _books_1x2(event: dict) -> list[tuple[str, list[float]]]:
+    home, away = event["home_team"], event["away_team"]
+    out = []
+    for bm in event.get("bookmakers", []):
+        for m in bm.get("markets", []):
+            if m["key"] != "h2h":
+                continue
+            px = {o["name"]: o["price"] for o in m["outcomes"]}
+            if home in px and away in px and "Draw" in px:
+                out.append((bm["key"], [px[home], px["Draw"], px[away]]))
+    return out
+
+
+def _books_over25(event: dict) -> list[tuple[str, list[float]]]:
+    out = []
+    for bm in event.get("bookmakers", []):
+        for m in bm.get("markets", []):
+            if m["key"] != "totals":
+                continue
+            over = under = None
+            for o in m["outcomes"]:
+                if o.get("point") == 2.5:
+                    if o["name"] == "Over":
+                        over = o["price"]
+                    elif o["name"] == "Under":
+                        under = o["price"]
+            if over and under:
+                out.append((bm["key"], [over, under]))
+    return out
+
+
+def event_to_anchor(event: dict) -> MatchAnchor | None:
+    """One Odds API event -> de-vigged book consensus (wisdom of crowds)."""
+    books = _books_1x2(event)
+    if not books:
+        return None
+    cons = consensus(books)  # [P(home), P(draw), P(away)], Shin + sharpness weights
+    over_books = _books_over25(event)
+    p_over = float(consensus(over_books)[0]) if over_books else None
+    return MatchAnchor(
+        home=canonical(event["home_team"]), away=canonical(event["away_team"]),
+        p_home=float(cons[0]), p_draw=float(cons[1]), p_away=float(cons[2]),
+        p_over25=p_over, n_books=len(books),
+        avg_overround=float(np.mean([overround(o) for _, o in books])),
+    )
+
+
+def build_anchors(events: list[dict]) -> dict[tuple[str, str], MatchAnchor]:
+    """{(canonical_home, canonical_away): MatchAnchor} for all priced games."""
+    out = {}
+    for ev in events:
+        a = event_to_anchor(ev)
+        if a is not None:
+            out[(a.home, a.away)] = a
+    return out

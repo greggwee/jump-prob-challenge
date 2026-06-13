@@ -6,3 +6,11 @@ data/raw/
 data/cache/
 *.egg-info/
 .env
+
+# runtime state & logs (regenerated live; some contain our live predictions)
+data/submissions/
+data/scheduler.log
+data/processed/scheduler_state.json
+data/processed/api_snapshot.json
+data/*.txt
+data/*.log

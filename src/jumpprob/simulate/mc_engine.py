@@ -92,9 +92,16 @@ class MCEngine:
         return (np.repeat(la_blk, reps)[: self.n], np.repeat(lb_blk, reps)[: self.n])
 
     def simulate(self, elo_a: float, elo_b: float, a_home_ground: bool = False,
-                 referee: str | None = None) -> SimResult:
+                 referee: str | None = None, lam: tuple[float, float] | None = None) -> SimResult:
         n = self.n
-        lam_a, lam_b = self._lambdas(elo_a, elo_b, a_home_ground)
+        if lam is not None:
+            # fixed intensities (e.g. odds-anchored blended lambdas) — bypass the
+            # Elo->lambda map and posterior predictive; the anchor has already
+            # resolved the intensity, so we don't reintroduce model uncertainty.
+            lam_a = np.full(n, lam[0])
+            lam_b = np.full(n, lam[1])
+        else:
+            lam_a, lam_b = self._lambdas(elo_a, elo_b, a_home_ground)
         mg = self._m["goal"]
 
         score_a = np.zeros(n, dtype=np.int32)

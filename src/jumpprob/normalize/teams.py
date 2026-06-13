@@ -28,6 +28,7 @@ ALIASES: dict[str, str] = {
     "Czechia": "Czech Republic",
     "Curacao": "Curaçao",
     "Bosnia-Herzegovina": "Bosnia and Herzegovina",
+    "Bosnia & Herzegovina": "Bosnia and Herzegovina",  # The Odds API spelling
 }
 
 

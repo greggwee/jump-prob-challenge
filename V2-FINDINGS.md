@@ -66,7 +66,9 @@ market per account, so no parallel live A/B):
 
 - Every matchday, `scripts/shadow_v2.py` logs v2 predictions for all open
   markets next to the submitted v1 values (531/700 markets simulated today;
-  mean |p_v2 − p_v1| = 0.041 — genuine methodological differentiation, no shading).
+  mean |p_v2 − p_v1| = 0.0164 under the production goal-only config — the
+  differences concentrate in timing and goal-structure markets where v2
+  genuinely differs; 0.041 under full coupling before the ablation decision).
 - `scripts/score_shadow.py` scores both on settled outcomes (recovered from our
   own Brier returns; p=0.50 settlements dropped as unrecoverable).
 - **Promotion threshold: v2 cumulative Brier ≤ v1 over ≥150 settled simulated

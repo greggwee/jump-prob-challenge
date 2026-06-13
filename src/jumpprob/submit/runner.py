@@ -18,19 +18,43 @@ population prior for unseen players; minutes scenario mix
 
 from __future__ import annotations
 
+import json
 import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from jumpprob.models.count_model import p_a_gt_b, p_sum_ge
 from jumpprob.models.goal_model import dc_grid
-from jumpprob.models.market_anchor import blend
+from jumpprob.models.market_anchor import MatchAnchor, blend, blend_lambdas, implied_lambdas, inv_logit, logit
 from jumpprob.models.calibration import submit_int
 from jumpprob.normalize.teams import canonical
 from jumpprob.simulate import markets as mk
+from jumpprob.simulate import mc_engine
 from jumpprob.submit.parser import ParsedQuestion, parse_question
+
+# Archetype families (calibration + engine routing). Timing markets are the
+# subset the analytic engine only approximates — route them through the v2 MC
+# simulator (rec #3). Goal markets are anchored when odds exist (skip calib);
+# count/player markets are model-only (always calibrate, rec #1).
+TIMING_ARCHS = {"ht_tied", "ht_leading", "h2_more_goals_than_h1", "first_goal_half",
+                "first_goal_and_win", "first_goal_and_opp_2h", "goals_gt_half"}
+GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge",
+              "team_scores_half", "half_total_ge", "team_goals_ge"} | TIMING_ARCHS
+COUNT_ARCHS = {"corners_gt", "sot_gt", "fouls_gt", "cards_gt", "team_corners_ge",
+               "team_sot_ge", "team_cards_ge", "cards_ge", "corners_total_ge",
+               "total_sot_half_ge", "total_sot_ge", "offsides_ge"}
+PLAYER_ARCHS = {"player_scores", "player_sot_ge", "player_ga"}
+
+# parser archetype + side -> mc_engine.answer(archetype, side) for timing markets
+_MC_TIMING = {
+    "ht_tied": "ht_tied", "ht_leading": "ht_leading",
+    "h2_more_goals_than_h1": "h2_more_goals_than_h1", "first_goal_half": "first_goal_half",
+    "first_goal_and_win": "first_goal_and_win", "first_goal_and_opp_2h": "first_goal_and_opp_2h",
+    "goals_gt_half": "goals_gt_half",
+}
 
 CODE_MAP = {
     "CAN": "Canada", "BIH": "Bosnia and Herzegovina", "USA": "United States",
@@ -69,17 +93,69 @@ class MatchContext:
     lam_b: float
     grid: np.ndarray
     rho_dc: float
+    anchored: bool = False   # True if goal intensities were blended with book odds
+    sim: object = None       # v2 MC SimResult (timing markets), at the same lambdas
 
 
 class Runner:
-    def __init__(self, pipeline, player_table: pd.DataFrame):
+    def __init__(self, pipeline, player_table: pd.DataFrame, mc=None, calibration: dict | None = None,
+                 aggression: float = 1.0):
         self.pl = pipeline
         self.players = self._player_rates(player_table)
+        self.mc = mc                    # optional v2 MCEngine for timing markets (rec #3)
+        self.calib = calibration if calibration is not None else self._load_calibration()
+        # evidence-gated extremizing (rec #2). gate/base_rates default to inert.
+        from jumpprob.models import strategy
+        self.gate = strategy.load_edge_gate()
+        self.base_rates = strategy.load_base_rates()
+        self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
         self._base_ctx = MatchContext("X", "Y", lam0, lam0,
                                       self.pl.goal_model.scoreline_grid(lam0, lam0),
                                       self.pl.goal_model.rho_dc)
+
+    @staticmethod
+    def _load_calibration() -> dict:
+        p = Path("data/processed/live_calibration.json")
+        return json.loads(p.read_text()) if p.exists() else {}
+
+    def _extremize(self, arch: str, fam: str | None, p: float, anchored: bool,
+                   stage_mult: float = 1.0) -> float:
+        """Evidence-gated extremizing (rec #2). No-op (returns p) unless the
+        family's confirmed-edge gate grants k>1. Anchored direct-market goal
+        questions are the floor — never extremized (we ARE the field there)."""
+        from jumpprob.models import strategy
+        if anchored and arch not in TIMING_ARCHS and fam == "goal":
+            return p  # direct anchored market = calibrated floor
+        gate_fam = "timing" if arch in TIMING_ARCHS else fam
+        if gate_fam is None:
+            return p
+        k = strategy.k_for(gate_fam, self.gate, stage_mult, self.aggression)
+        if k == 1.0:
+            return p
+        field = strategy.field_proxy(arch, p, self.base_rates)
+        return strategy.extremize(p, field, k)
+
+    def _family(self, arch: str) -> str | None:
+        if arch in COUNT_ARCHS:
+            return "count"
+        if arch in PLAYER_ARCHS:
+            return "player"
+        if arch in GOAL_ARCHS:
+            return "goal"
+        return None  # constants (penalty/red) — not calibrated
+
+    def calibrate(self, arch: str, p: float, anchored: bool) -> float:
+        """Apply per-family Platt (rec #1). Goal markets skip calibration when
+        anchored (the market is already calibrated); count/player always."""
+        fam = self._family(arch)
+        if fam is None or fam not in self.calib:
+            return p
+        if fam == "goal" and anchored:
+            return p
+        a, b = self.calib[fam]
+        return float(inv_logit(a * logit(p) + b))
 
     def _player_rates(self, pm: pd.DataFrame) -> pd.DataFrame:
         pm = pm.assign(ga=pm["goals"] + pm.get("assists", 0))
@@ -131,12 +207,37 @@ class Runner:
                 return a, b
         return None
 
-    def context(self, team_a: str, team_b: str) -> MatchContext:
+    def context(self, team_a: str, team_b: str,
+                anchor: MatchAnchor | None = None) -> MatchContext:
+        """Build the match context. With an odds anchor, blend the model's goal
+        intensities toward the book consensus (Phase 7) so every downstream
+        answer — win, totals, half-goals, counts, props — inherits the market
+        view coherently. Without one, pure model (unchanged behaviour)."""
         ra, rb = self.pl.ratings[team_a], self.pl.ratings[team_b]
         la, lb = self.pl.goal_model.intensities(ra, rb)
+        rho = self.pl.goal_model.rho_dc
+        anchored = False
+        if anchor is not None:
+            # orient the anchor to (team_a, team_b): the odds feed's home/away
+            # need not match the SportsPredict match-name order.
+            if anchor.home == team_a:
+                p_a_win, p_b_win = anchor.p_home, anchor.p_away
+            elif anchor.away == team_a:
+                p_a_win, p_b_win = anchor.p_away, anchor.p_home
+            else:
+                p_a_win = p_b_win = None  # team mismatch -> no anchor
+            if p_a_win is not None:
+                la_mkt, lb_mkt = implied_lambdas(
+                    p_a_win, anchor.p_draw, p_b_win, anchor.p_over25, rho=rho)
+                # guard: ignore a pathological inversion, fall back to model lambdas
+                if 0.05 <= la_mkt <= 6.0 and 0.05 <= lb_mkt <= 6.0:
+                    la, lb = blend_lambdas((la, lb), (la_mkt, lb_mkt))
+                    anchored = True
+        # v2 MC simulation at the SAME (possibly anchored) lambdas, for the
+        # timing markets the analytic engine only approximates (rec #3).
+        sim = self.mc.simulate(0.0, 0.0, lam=(la, lb)) if self.mc is not None else None
         return MatchContext(team_a, team_b, la, lb,
-                            self.pl.goal_model.scoreline_grid(la, lb),
-                            self.pl.goal_model.rho_dc)
+                            self.pl.goal_model.scoreline_grid(la, lb), rho, anchored, sim)
 
     # ------------------------------------------------------------------
     def answer(self, q: ParsedQuestion, ctx: MatchContext) -> float | None:
@@ -145,6 +246,12 @@ class Runner:
         if q.subject:
             c = canonical(q.subject)
             side = "a" if c == ctx.team_a else "b" if c == ctx.team_b else None
+
+        # rec #3: timing markets come from the v2 MC simulator (coherent, exact)
+        # rather than the analytic approximations below, when a sim is available.
+        if ctx.sim is not None and q.archetype in _MC_TIMING:
+            return mc_engine.answer(ctx.sim, _MC_TIMING[q.archetype], side=side,
+                                    threshold=q.threshold, half=q.half)
 
         def lams(s):  # (team, opp) intensities for side s
             return (ctx.lam_a, ctx.lam_b) if s == "a" else (ctx.lam_b, ctx.lam_a)
@@ -275,8 +382,16 @@ class Runner:
         return None
 
     # ------------------------------------------------------------------
-    def predictions_for(self, market_rows: list[dict]) -> tuple[list[dict], list[dict]]:
-        """Returns (payload rows with p for both bots, unanswered rows)."""
+    def predictions_for(self, market_rows: list[dict],
+                        anchors: dict[tuple[str, str], MatchAnchor] | None = None
+                        ) -> tuple[list[dict], list[dict]]:
+        """Returns (payload rows with p for both bots, unanswered rows).
+
+        anchors: optional {(team_a, team_b): MatchAnchor} (canonical names, both
+        orientations accepted). When a match is anchored, Bot A uses the blended
+        answer directly (no shrink toward base — the market is already the
+        conservative estimate)."""
+        anchors = anchors or {}
         by_match: dict[str, list[dict]] = {}
         for m in market_rows:
             by_match.setdefault(m["match"]["name"], []).append(m)
@@ -287,7 +402,8 @@ class Runner:
             if teams is None:
                 skipped.extend({"match": mname, "question": r["question"], "reason": "teams unresolved"} for r in rows)
                 continue
-            ctx = self.context(*teams)
+            anchor = anchors.get(teams) or anchors.get((teams[1], teams[0]))
+            ctx = self.context(*teams, anchor=anchor)
             for r in rows:
                 q = parse_question(r["question"])
                 if q is None:
@@ -297,9 +413,18 @@ class Runner:
                 if p is None:
                     skipped.append({"match": mname, "question": r["question"], "reason": "unanswerable"})
                     continue
+                # rec #1: calibrate model-only markets (count/player always; goal
+                # only when unanchored). Anchored goal markets pass through.
+                p = self.calibrate(q.archetype, p, ctx.anchored)
                 p = float(np.clip(p, 0.01, 0.99))
-                p_base = self.answer(q, self._base_ctx)
-                p_a = blend([p_base, p], [BOT_A_BASE_WEIGHT, 1 - BOT_A_BASE_WEIGHT]) if p_base else p
+                fam = self._family(q.archetype)
+                if ctx.anchored and fam == "goal":
+                    p_a = p  # market is already calibrated/conservative — don't shrink
+                else:
+                    p_base = self.answer(q, self._base_ctx)
+                    p_a = blend([p_base, p], [BOT_A_BASE_WEIGHT, 1 - BOT_A_BASE_WEIGHT]) if p_base else p
+                # rec #2: evidence-gated extremizing (no-op until a family earns k>1)
+                p_a = float(np.clip(self._extremize(q.archetype, fam, p_a, ctx.anchored), 0.01, 0.99))
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,
                     "question": r["question"], "archetype": q.archetype,

@@ -18,6 +18,7 @@ players = pd.read_parquet("data/processed/player_match.parquet")
 players["date"] = pd.to_datetime(players["date"])
 
 rows = []
+rows_raw_all = []
 for i, t in enumerate(ORDER):
     if i == 0:
         continue
@@ -26,6 +27,7 @@ for i, t in enumerate(ORDER):
     prior_sot = train["sot"].sum() / train["minutes"].sum()
     prior_goal = train["goals"].sum() / train["minutes"].sum()
 
+    raw_rows = []  # per-prediction at the production m0, for calibration fitting
     for m0 in (90.0, 270.0, 540.0):
         # expanding rates over all data up to and including tournament t,
         # priors fixed from training window
@@ -45,8 +47,14 @@ for i, t in enumerate(ORDER):
                 "brier_base": float(np.mean((p_base - y) ** 2)),
                 "base_rate": float(y.mean()),
             })
+            # production m0s: sot uses 270, goals uses 540 (player_model.py)
+            if (kind == "sot_ge_1" and m0 == 270.0) or (kind == "scores" and m0 == 540.0):
+                for pm, yy in zip(np.atleast_1d(p_model), y):
+                    raw_rows.append({"archetype": kind, "p_model": float(pm), "outcome": float(yy)})
+    rows_raw_all.extend(raw_rows)
 
 bt = pd.DataFrame(rows)
+pd.DataFrame(rows_raw_all).to_csv("data/processed/backtest_players_raw.csv", index=False)
 agg = bt.groupby(["archetype", "m0"]).apply(
     lambda g: pd.Series({
         "n": g["n"].sum(),

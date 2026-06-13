@@ -55,3 +55,64 @@ def devig_shin(odds) -> np.ndarray:
     # z in (0, 1); excess(0) = booksum normalized... bracket carefully
     z = brentq(excess, 1e-12, 0.5, xtol=1e-12)
     return shin_probs(z)
+
+
+def overround(odds) -> float:
+    """Book margin = sum(1/o) - 1. ~0.02 for a sharp book, ~0.08 for a soft one,
+    ~0 for an exchange / prediction-market mid-price."""
+    return float(implied_raw(odds).sum() - 1.0)
+
+
+# Named-book sharpness priors. The inverse-overround term below already
+# up-weights tight-margin books, so this is a small nudge for books known to
+# be sharp beyond what their margin shows (limits, who-moves-first). Kept
+# modest deliberately. A prediction-market mid-price is passed as a pseudo-book.
+SHARP_BOOKS = {
+    "pinnacle": 2.0, "betfair_ex_eu": 2.0, "betfair": 2.0,
+    "kalshi": 2.0, "polymarket": 2.0, "bet365": 1.3,
+}
+
+
+def consensus(books, method: str = "shin", sharp_weights: dict | None = None,
+              eps: float = 0.005) -> np.ndarray:
+    """Wisdom-of-crowds consensus across books for ONE market.
+
+    books: [(name, [decimal odds in a fixed outcome order]), ...]. Each book is
+    de-vigged individually (Shin), then averaged in PROBABILITY space with
+    weight  w = sharp_mult(name) / (overround + eps).
+
+    Why probability-space (not logit)? Books are not independent forecasters —
+    they are correlated copies of the same sharp line plus noise. The right
+    pool for many noisy estimates of ONE quantity is a (precision-weighted)
+    arithmetic mean. Logit/geometric pooling is for COMBINING DIVERSE sources
+    (our model vs the market), which happens later in market_anchor.blend.
+
+    Why 1/(overround+eps)? The margin is an observable sharpness proxy: a 2%
+    book is sharper than an 8% book, so it earns more weight. eps keeps a
+    zero-margin exchange/prediction-market from getting infinite weight.
+
+    A prediction market (Kalshi/Polymarket) enters as a pseudo-book: pass its
+    per-outcome odds as 1/mid_price; its ~0 overround naturally earns it high
+    weight, and SHARP_BOOKS gives real-money venues a further nudge. Cap a thin
+    market's influence by passing a smaller sharp_weights[name] (liquidity).
+    """
+    sharp = {**SHARP_BOOKS, **(sharp_weights or {})}
+    n = len(books[0][1])
+    acc = np.zeros(n)
+    wsum = 0.0
+    for name, odds in books:
+        if len(odds) != n:
+            raise ValueError(f"book {name}: {len(odds)} outcomes, expected {n}")
+        p = devig(odds, method)
+        w = sharp.get(name, 1.0) / (max(overround(odds), 0.0) + eps)
+        acc += w * p
+        wsum += w
+    out = acc / wsum
+    return out / out.sum()
+
+
+def devig(odds, method: str = "shin") -> np.ndarray:
+    fn = {"basic": devig_basic, "power": devig_power, "shin": devig_shin}.get(method)
+    if fn is None:
+        raise ValueError(f"unknown devig method: {method}")
+    return fn(odds)

@@ -41,22 +41,35 @@ class SportsPredictClient:
             time.sleep(wait)
         self._last_request = time.monotonic()
 
+    def _send(self, method: str, path: str, *, params=None, body=None, retries: int = 4):
+        """HTTP with retry+backoff on transient failures (5xx / 429 / network).
+        4xx (except 429) raise immediately — they are our error, not the server's."""
+        hdr = {"Authorization": f"Bearer {self.key}"}
+        last = None
+        for attempt in range(retries):
+            self._throttle()
+            try:
+                resp = requests.request(method, f"{BASE}{path}", params=params, json=body,
+                                        headers=hdr, timeout=30)
+            except requests.RequestException as e:  # connection/timeout — transient
+                last = e
+            else:
+                if resp.status_code < 400:
+                    return resp.json()
+                if resp.status_code != 429 and resp.status_code < 500:
+                    resp.raise_for_status()  # 4xx (e.g. 409 duplicate) — don't retry
+                last = requests.HTTPError(f"{resp.status_code} for {path}", response=resp)
+            time.sleep(min(2 ** attempt, 8))  # 1s, 2s, 4s, 8s
+        raise last
+
     def _get(self, path: str, **params):
-        self._throttle()
-        resp = requests.get(f"{BASE}{path}", params=params,
-                            headers={"Authorization": f"Bearer {self.key}"}, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        return self._send("GET", path, params=params)
 
     def _post(self, path: str, body: dict):
         if self.dry_run:
             self._log("DRY-POST", path, body)
             return {"dry_run": True, "path": path, "body": body}
-        self._throttle()
-        resp = requests.post(f"{BASE}{path}", json=body,
-                             headers={"Authorization": f"Bearer {self.key}"}, timeout=30)
-        resp.raise_for_status()
-        out = resp.json()
+        out = self._send("POST", path, body=body)
         self._log("POST", path, {"body": body, "response": out})
         return out
 
@@ -64,11 +77,7 @@ class SportsPredictClient:
         if self.dry_run:
             self._log("DRY-PATCH", path, body)
             return {"dry_run": True}
-        self._throttle()
-        resp = requests.patch(f"{BASE}{path}", json=body,
-                              headers={"Authorization": f"Bearer {self.key}"}, timeout=30)
-        resp.raise_for_status()
-        out = resp.json()
+        out = self._send("PATCH", path, body=body)
         self._log("PATCH", path, {"body": body, "response": out})
         return out
 
