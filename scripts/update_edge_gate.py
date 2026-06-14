@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from jumpprob.models.strategy import field_proxy
+from jumpprob.models.strategy import field_model, load_field_sharpness
 from jumpprob.submit.api_client import SportsPredictClient
 from jumpprob.submit.runner import COUNT_ARCHS, PLAYER_ARCHS, TIMING_ARCHS
 
@@ -73,12 +73,13 @@ def confirmed_edge_gate(base_rates: dict) -> dict:
         np.isclose((settled["p"] - 1) ** 2, settled["brier_score"], atol=1e-6), 1.0, 0.0)
     settled["family"] = settled["archetype"].map(FAMILY)
 
+    sharp = load_field_sharpness()
     gate = {}
     for fam, g in settled.dropna(subset=["family"]).groupby("family"):
         our = float(((g["p"] - g["outcome"]) ** 2).mean())
-        fld = float(np.mean([
-            (field_proxy(a, p, base_rates) - y) ** 2
-            for a, p, y in zip(g["archetype"], g["p"], g["outcome"])]))
+        lam = sharp.get(fam, 0.5)
+        fld = float(np.mean([(field_model(p, lam) - y) ** 2
+                             for p, y in zip(g["p"], g["outcome"])]))
         confirmed = len(g) >= MIN_SETTLED and our < fld - MARGIN
         gate[fam] = K_ON_CONFIRMED if confirmed else 1.0
         print(f"  {fam:7} n={len(g):3d}  our Brier {our:.4f} vs field {fld:.4f}  "

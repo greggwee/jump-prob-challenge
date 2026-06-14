@@ -82,12 +82,19 @@ with tab_results:
             if md is not None:
                 res = res.merge(md[["market_id", "match", "archetype"]], on="market_id", how="left")
 
+            st.markdown("### 🤖 gigabot1 (Bot A) — match history performance")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Settled questions", len(res))
-            c2.metric("Our mean Brier", f"{res.brier_score.mean():.4f}")
-            c3.metric("vs coin-flip (0.25)", f"{0.25 - res.brier_score.mean():+.4f}")
-            won = res["outcome"].mean()
-            c4.metric("YES-outcome rate", f"{won:.0%}" if not np.isnan(won) else "—")
+            c2.metric("Mean Brier", f"{res.brier_score.mean():.4f}",
+                      help="Lower is better. Coin-flip = 0.25.")
+            won_rate = (res.brier_score < 0.25).mean()
+            c3.metric("Questions beating coin-flip", f"{won_rate:.0%}",
+                      delta=f"{0.25 - res.brier_score.mean():+.4f} Brier/q")
+            # standard error of mean Brier — is the edge significant yet?
+            se = res.brier_score.std() / np.sqrt(len(res))
+            edge = 0.25 - res.brier_score.mean()
+            c4.metric("Edge vs coin-flip", f"{edge / se:+.1f} σ" if se > 0 else "—",
+                      help=f"Std error {se:.4f}. |σ|>2 ≈ significant. NOTE: coin-flip is not the field.")
 
             # field-relative: API hides field Brier; let the user paste total RBP
             st.caption("The API does not expose the field average. Paste your total "
@@ -113,10 +120,26 @@ with tab_results:
                     yes_rate=("outcome", "mean")).sort_values("brier")
                 st.dataframe(by_arch.round(4), use_container_width=True)
             if "match" in res and res["match"].notna().any():
-                st.subheader("Brier by match")
+                st.subheader("Match history (Brier per match — lower is better)")
                 by_match = res.groupby("match").agg(
                     n=("brier_score", "size"), brier=("brier_score", "mean")).sort_values("brier")
-                st.dataframe(by_match.round(4), use_container_width=True)
+                bc1, bc2 = st.columns([2, 3])
+                bc1.dataframe(by_match.round(4), use_container_width=True)
+                bc2.bar_chart(by_match["brier"])
+                st.caption("Best match → worst match. The 0.25 line is coin-flip.")
+
+            # what worked / what went wrong
+            cw1, cw2 = st.columns(2)
+            with cw1.expander("✅ Best 8 calls (lowest Brier)", expanded=True):
+                b = res.nsmallest(8, "brier_score")
+                b["outcome"] = b["outcome"].map({1.0: "YES", 0.0: "NO"}).fillna("?")
+                st.dataframe(b[["match", "question", "probability_submitted", "outcome", "brier_score"]]
+                             .round(3), hide_index=True, use_container_width=True)
+            with cw2.expander("❌ Worst 8 calls (highest Brier)", expanded=True):
+                w = res.nlargest(8, "brier_score")
+                w["outcome"] = w["outcome"].map({1.0: "YES", 0.0: "NO"}).fillna("?")
+                st.dataframe(w[["match", "question", "probability_submitted", "outcome", "brier_score"]]
+                             .round(3), hide_index=True, use_container_width=True)
 
             # Phase 7 validation: pure-model vs odds-anchored Brier on settled markets
             anc = load_csv("odds_anchor_run.csv")

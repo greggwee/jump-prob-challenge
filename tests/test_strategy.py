@@ -2,7 +2,11 @@
 
 import pytest
 
-from jumpprob.models.strategy import extremize, field_proxy, k_for
+import numpy as np
+
+from jumpprob.models.market_anchor import inv_logit, logit
+from jumpprob.models.strategy import (
+    calibrate_field_sharpness, extremize, field_model, field_proxy, k_for)
 
 
 class TestExtremize:
@@ -43,6 +47,55 @@ class TestFieldProxy:
     def test_no_line_belief_equals_base(self):
         base = {"x": 0.30}
         assert field_proxy("x", 0.30, base) == pytest.approx(0.30, abs=1e-9)
+
+
+class TestFieldModel:
+    def test_endpoints(self):
+        # lambda=1 -> field is the belief; lambda=0 -> field is 50
+        assert field_model(0.8, 1.0) == pytest.approx(0.8)
+        assert field_model(0.8, 0.0) == pytest.approx(0.5)
+        assert field_model(0.2, 0.5) < 0.5  # belief below 50 stays below, shrunk
+
+    def test_self_modulating_extremizer(self):
+        """The composition extremize(belief, field_model(belief, lam), k) must
+        equal inv_logit([lam + k(1-lam)] logit belief) — the elegant identity."""
+        belief, lam, k = 0.72, 0.4, 1.6
+        field = field_model(belief, lam)
+        got = extremize(belief, field, k)
+        coef = lam + k * (1 - lam)
+        want = inv_logit(coef * logit(belief))
+        assert got == pytest.approx(want, abs=1e-9)
+
+    def test_clueless_field_gives_full_extremizing(self):
+        # lam=0 (clueless field) -> coefficient = k (full leverage)
+        belief, k = 0.7, 2.0
+        got = extremize(belief, field_model(belief, 0.0), k)
+        assert got == pytest.approx(inv_logit(k * logit(belief)), abs=1e-9)
+
+    def test_sharp_field_gives_no_extremizing(self):
+        # lam=1 (sharp field) -> no leverage regardless of k
+        belief, k = 0.7, 3.0
+        assert extremize(belief, field_model(belief, 1.0), k) == pytest.approx(belief, abs=1e-9)
+
+
+class TestCalibrateFieldSharpness:
+    def test_recovers_global_scale(self):
+        """Generate outcomes from a known field sharpness; calibration recovers
+        a multiplier that reproduces the observed field Brier."""
+        rng = np.random.default_rng(3)
+        n = 4000
+        beliefs = rng.uniform(0.15, 0.85, n)
+        families = rng.choice(["count", "player", "timing"], n)
+        # true field at half the prior sharpness
+        lam_true = np.array({"count": 0.40, "player": 0.45, "timing": 0.35}[f] * 0.5
+                            for f in families) if False else \
+                   np.array([{"count": 0.40, "player": 0.45, "timing": 0.35}[f] * 0.5 for f in families])
+        f_true = inv_logit(lam_true * np.log(beliefs / (1 - beliefs)))
+        y = (rng.random(n) < f_true).astype(float)
+        observed = float(np.mean((f_true - y) ** 2))
+        table, g = calibrate_field_sharpness(beliefs, y, families, observed)
+        assert 0.3 < g < 0.8  # true scale was 0.5
+        assert all(0 <= v <= 1 for v in table.values())
 
 
 class TestKFor:

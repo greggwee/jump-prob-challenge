@@ -108,6 +108,7 @@ class Runner:
         from jumpprob.models import strategy
         self.gate = strategy.load_edge_gate()
         self.base_rates = strategy.load_base_rates()
+        self.field_sharpness = strategy.load_field_sharpness()  # Phase C
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -134,7 +135,8 @@ class Runner:
         k = strategy.k_for(gate_fam, self.gate, stage_mult, self.aggression)
         if k == 1.0:
             return p
-        field = strategy.field_proxy(arch, p, self.base_rates)
+        # Phase C: structural field = belief shrunk toward 50 by family sharpness.
+        field = strategy.field_model(p, self.field_sharpness.get(gate_fam, 0.5))
         return strategy.extremize(p, field, k)
 
     def _family(self, arch: str) -> str | None:
