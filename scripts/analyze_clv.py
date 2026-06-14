@@ -54,6 +54,26 @@ def report(df, label):
 
 report(m, "ALL settled ledger markets")
 report(m[m.archetype.isin(MAIN)], "MAIN markets (real book CLV)")
+
+# improvement #5: right-size the odds-blend weight from goal-market CLV.
+GOAL = MAIN | {"team_scores_half", "half_total_ge", "team_goals_ge", "goals_gt_half",
+               "ht_tied", "ht_leading", "h2_more_goals_than_h1"}
+gm = m[m.archetype.isin(GOAL)]
+print("\n=== #5 weight recommendation (goal-market CLV) ===")
+if len(gm) < 30:
+    print(f"  data-gated: only {len(gm)} settled goal markets in the ledger "
+          f"(need ~30+). Hold w_market=0.85; recommendation fires as data accrues.")
+else:
+    bp, bm_, bb = gm.b_sub_pure.mean(), gm.b_sub_market.mean(), gm.b_sub_a.mean()
+    print(f"  n={len(gm)}  Brier pure {bp:.4f} | blend(0.85) {bb:.4f} | market(1.0) {bm_:.4f}")
+    if bm_ < bb - 0.0005:
+        print(f"  -> 15% model has NEGATIVE CLV ({bm_-bb:+.4f}); RAISE w_market toward 0.95")
+    elif bb <= bm_ and bb <= bp:
+        print("  -> blend is best; HOLD w_market at 0.85")
+    elif bp < bb:
+        print("  -> market is hurting; LOWER w_market")
+    else:
+        print("  -> blend ~ market; mild raise toward 0.90 reasonable")
 print("\nby family:")
 fam = {**{a:"goal" for a in GOAL_ARCHS}, **{a:"count" for a in COUNT_ARCHS},
        **{a:"player" for a in PLAYER_ARCHS}}

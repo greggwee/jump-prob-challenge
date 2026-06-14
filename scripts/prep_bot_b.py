@@ -73,7 +73,7 @@ for m in open_matches:
         p1 = float(np.clip(p1, 0.01, 0.99))
         p2 = float(np.clip(p2, 0.01, 0.99))
         rows.append({
-            "match": m["name"], "kickoff": m["closing_time"],
+            "match": m["name"], "kickoff": m["opening_time"],  # opening_time = true kickoff
             "market_id": k["id"], "question": k["question"], "archetype": q.archetype,
             "p_bot_a": round(p1, 4), "sub_a": submit_int(p1),
             "p_bot_b": round(p2, 4), "sub_b": submit_int(p2),

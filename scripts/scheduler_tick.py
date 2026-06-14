@@ -5,15 +5,21 @@ odds credits). When an open match is inside the firing window before kickoff, it
 runs a TARGETED odds-anchored submission for just that match's markets via Bot A,
 capturing the latest (near-closing) line.
 
-TIMEZONE: everything is UTC. The API gives kickoff (`closing_time`) in UTC, and
-datetime.now(timezone.utc) is UTC regardless of the desktop's local time-zone
-setting — so this works correctly no matter where you are travelling, as long as
-the machine's absolute clock is right (NTP handles that; the zone offset does not
-matter). No local time is ever used.
+KICKOFF = opening_time, NOT closing_time. Verified 2026-06-14 against the Odds
+API: SportsPredict `opening_time` equals the true kickoff (commence_time), and
+`closing_time` is kickoff + ~2.5h (≈ match end). Markets LOCK at kickoff
+(opening_time), per the contest rules. The old code keyed off closing_time, so
+the window only matched ~2h after kickoff — by then markets were locked
+(open_market_count=0) and it never fired. Fixed to use opening_time.
+
+TIMEZONE: everything is UTC. opening_time is UTC, and datetime.now(timezone.utc)
+is UTC regardless of the desktop's local time-zone — correct anywhere you travel,
+as long as the machine clock is right (NTP). No local time is ever used.
 
 Window: fire when WIN_MIN <= minutes_to_kickoff <= WIN_MAX. WIN_MIN must exceed
 the worst-case run time (~model load 2m + targeted submit ~30s) so the PATCH
-lands before the market locks. A global throttle avoids back-to-back heavy runs.
+lands before the market locks at kickoff. A global throttle avoids back-to-back
+heavy runs.
 """
 
 import json
@@ -31,7 +37,7 @@ from jumpprob.submit.api_client import SportsPredictClient  # noqa: E402
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
-WIN_MIN, WIN_MAX = 4.0, 16.0      # minutes-to-kickoff firing window
+WIN_MIN, WIN_MAX = 6.0, 25.0      # minutes-to-kickoff (opening_time) firing window
 THROTTLE_MIN = 3.5                 # don't launch runs closer together than this
 DRY = "--dry" in sys.argv
 STATE = ROOT / "data" / "processed" / "scheduler_state.json"
@@ -64,7 +70,7 @@ def main() -> None:
     for m in matches:
         if m.get("open_market_count", 0) <= 0:
             continue
-        ko = datetime.fromisoformat(m["closing_time"].replace("Z", "+00:00"))
+        ko = datetime.fromisoformat(m["opening_time"].replace("Z", "+00:00"))  # kickoff = lock
         mins = (ko - now).total_seconds() / 60.0
         if WIN_MIN <= mins <= WIN_MAX:
             near.append((m["name"], round(mins, 1)))
