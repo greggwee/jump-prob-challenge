@@ -99,14 +99,18 @@ class MatchContext:
 
 class Runner:
     def __init__(self, pipeline, player_table: pd.DataFrame, mc=None, calibration: dict | None = None,
-                 aggression: float = 1.0):
+                 aggression: float = 1.0, w_market: float | None = None):
         self.pl = pipeline
         self.players = self._player_rates(player_table)
         self.mc = mc                    # optional v2 MCEngine for timing markets (rec #3)
         self.calib = calibration if calibration is not None else self._load_calibration()
+        from jumpprob.models.market_anchor import W_MARKET
+        self.w_market = W_MARKET if w_market is None else w_market  # odds-blend weight (CLV passes set 0/1)
         # evidence-gated extremizing (rec #2). gate/base_rates default to inert.
         from jumpprob.models import strategy
-        self.gate = strategy.load_edge_gate()
+        # effective gate = max(live edge gate, backtest prop-edge gate) per family
+        live, bt = strategy.load_edge_gate(), strategy.load_backtest_gate()
+        self.gate = {f: max(live.get(f, 1.0), bt.get(f, 1.0)) for f in set(live) | set(bt)}
         self.base_rates = strategy.load_base_rates()
         self.field_sharpness = strategy.load_field_sharpness()  # Phase C
         self.aggression = aggression
@@ -233,7 +237,7 @@ class Runner:
                     p_a_win, anchor.p_draw, p_b_win, anchor.p_over25, rho=rho)
                 # guard: ignore a pathological inversion, fall back to model lambdas
                 if 0.05 <= la_mkt <= 6.0 and 0.05 <= lb_mkt <= 6.0:
-                    la, lb = blend_lambdas((la, lb), (la_mkt, lb_mkt))
+                    la, lb = blend_lambdas((la, lb), (la_mkt, lb_mkt), self.w_market)
                     anchored = True
         # v2 MC simulation at the SAME (possibly anchored) lambdas, for the
         # timing markets the analytic engine only approximates (rec #3).

@@ -60,6 +60,13 @@ def load_edge_gate() -> dict:
     return _load("edge_gate.json", {})
 
 
+def load_backtest_gate() -> dict:
+    """Per-family k from the offline prop-edge backtest (improvement #2): lets
+    the extremizer fire on edge proven over six tournaments rather than waiting
+    for never-confirmed live edge."""
+    return _load("backtest_gate.json", {})
+
+
 def load_field_sharpness() -> dict:
     """Per-family field sharpness, calibrated values overriding the priors."""
     return {**FIELD_SHARPNESS, **_load("field_model.json", {})}

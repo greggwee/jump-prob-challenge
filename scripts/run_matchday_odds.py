@@ -55,18 +55,33 @@ all_markets = [m for m in client.markets(LOBBY)
 print(f"{len(all_markets)} open markets" + (f" (filtered to {matches_filter})" if matches_filter else ""))
 market_rows = [{**m, "match": m["match"]} for m in all_markets]
 
-# pure-model pass (no anchors) and anchored pass
+# three passes for CLV (improvement #1): pure model (w=0, no anchors), the
+# odds-anchored blend we submit (w=0.85), and the pure closing line (w=1).
 pure, _ = runner.predictions_for(market_rows)
 anchored, skipped = runner.predictions_for(market_rows, anchors=anchors)
+blend_w = runner.w_market
+runner.w_market = 1.0
+market, _ = runner.predictions_for(market_rows, anchors=anchors)
+runner.w_market = blend_w  # restore the blend weight
 pure_by_mkt = {r["market_id"]: r for r in pure}
+mkt_by_mkt = {r["market_id"]: r for r in market}
 
 rows = []
 for r in anchored:
     p = pure_by_mkt.get(r["market_id"], {})
-    rows.append({**r, "sub_pure": p.get("sub_a", r["sub_a"])})
+    m = mkt_by_mkt.get(r["market_id"], {})
+    rows.append({**r, "sub_pure": p.get("sub_a", r["sub_a"]),
+                 "sub_market": m.get("sub_a", r["sub_a"])})
 df = pd.DataFrame(rows)
 df["delta"] = df["sub_a"] - df["sub_pure"]
 df.to_csv("data/processed/odds_anchor_run.csv", index=False)
+
+# append to the persistent CLV ledger (pure / market-close / blend per market)
+ledger = Path("data/processed/clv_ledger.csv")
+stamp = pd.Timestamp.now(tz="UTC").isoformat()
+led = df[["market_id", "match", "question", "archetype", "sub_pure", "sub_market", "sub_a"]].copy()
+led.insert(0, "ts", stamp)
+led.to_csv(ledger, mode="a", header=not ledger.exists(), index=False)
 
 # which matches got anchored?
 anchored_matches = sorted({r["match"] for r in anchored

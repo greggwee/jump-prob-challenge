@@ -10,7 +10,10 @@ data/cache/
 # runtime state & logs (regenerated live; some contain our live predictions)
 data/submissions/
 data/scheduler.log
+data/learning.log
 data/processed/scheduler_state.json
 data/processed/api_snapshot.json
+data/processed/clv_ledger.csv
+data/processed/clv_analysis.csv
 data/*.txt
 data/*.log
