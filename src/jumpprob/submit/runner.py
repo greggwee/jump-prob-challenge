@@ -45,7 +45,7 @@ GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge"
               "team_scores_half", "half_total_ge", "team_goals_ge"} | TIMING_ARCHS
 COUNT_ARCHS = {"corners_gt", "sot_gt", "fouls_gt", "cards_gt", "team_corners_ge",
                "team_sot_ge", "team_cards_ge", "cards_ge", "corners_total_ge",
-               "total_sot_half_ge", "total_sot_ge", "offsides_ge"}
+               "total_sot_half_ge", "total_sot_ge", "offsides_ge", "both_teams_sot_ge"}
 PLAYER_ARCHS = {"player_scores", "player_sot_ge", "player_ga"}
 
 # parser archetype + side -> mc_engine.answer(archetype, side) for timing markets
@@ -144,6 +144,11 @@ class Runner:
         return strategy.extremize(p, field, k)
 
     def _family(self, arch: str) -> str | None:
+        # offsides get their OWN calibration: a StatsBomb→SportsPredict definition
+        # gap makes them over-priced live (the pooled count Platt shifts them the
+        # WRONG way). Must precede the COUNT_ARCHS check (#2).
+        if arch == "offsides_ge":
+            return "offsides"
         if arch in COUNT_ARCHS:
             return "count"
         if arch in PLAYER_ARCHS:
@@ -374,6 +379,12 @@ class Runner:
             return p_sum_ge(side_pmf("corners", "a"), side_pmf("corners", "b"), q.threshold)
         if a in ("total_sot_half_ge", "total_sot_ge"):
             return p_sum_ge(side_pmf("shots_on_target", "a"), side_pmf("shots_on_target", "b"), q.threshold)
+        if a == "both_teams_sot_ge":
+            # P(team A >= thr SoT AND team B >= thr SoT); independence given
+            # intensities (same conditional-independence used elsewhere)
+            pa = float(side_pmf("shots_on_target", "a")[q.threshold:].sum())
+            pb = float(side_pmf("shots_on_target", "b")[q.threshold:].sum())
+            return pa * pb
         if a == "offsides_ge":
             return None if side is None else float(side_pmf("offsides", side)[q.threshold:].sum())
         if a in ("player_scores", "player_sot_ge", "player_ga"):

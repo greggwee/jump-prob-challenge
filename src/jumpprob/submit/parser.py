@@ -108,6 +108,12 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("team_scores_half", m[1], half=1)),
     (re.compile(r"will (.+?) score a goal \(excluding own goals\)", re.I),
      lambda m: ParsedQuestion("player_scores", m[1])),
+    # "both teams ..." MUST precede the greedy player/team patterns below, or the
+    # `(.+?)` swallows "both teams" and mis-prices it as a single player's prop.
+    (re.compile(r"will both teams have at least (\d+) shots? on target in the (first|second) half", re.I),
+     lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]), half=1 if m[2].lower() == "first" else 2)),
+    (re.compile(r"will both teams have at least (\d+) shots? on target", re.I),
+     lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]))),
     (re.compile(r"will (.+?) have at least (\d+) shots? on target in the (first|second) half", re.I),
      lambda m: ParsedQuestion("player_sot_ge", m[1], threshold=int(m[2]), half=1 if m[3].lower() == "first" else 2)),
     (re.compile(r"will (.+?) have at least (\d+) shots? on target", re.I),

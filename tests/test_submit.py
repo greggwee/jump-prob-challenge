@@ -37,6 +37,18 @@ def test_unknown_question_returns_none():
     assert parse_question("Will the referee wear gloves?") is None
 
 
+def test_both_teams_sot_not_mis_parsed_as_player():
+    """Regression: 'both teams' must not be swallowed by the greedy player-SoT
+    regex (was mis-priced ~9% vs ~75% fair, a per-match point bleed)."""
+    q = parse_question("Will both teams have at least 1 shot on target in the second half?")
+    assert q is not None and q.archetype == "both_teams_sot_ge"
+    assert q.threshold == 1 and q.half == 2
+    q2 = parse_question("Will both teams have at least 1 shot on target?")
+    assert q2.archetype == "both_teams_sot_ge" and q2.half is None
+    # a real player prop still parses as a player prop
+    assert parse_question("Will Son Heung-min have at least 1 shot on target?").archetype == "player_sot_ge"
+
+
 def test_platt_recovers_overconfidence():
     """Generate predictions that are systematically overconfident; Platt must
     fit a < 1 (shrink toward 0.5) and improve Brier."""

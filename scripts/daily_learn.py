@@ -53,17 +53,24 @@ def main() -> None:
     except Exception as e:
         log(f"results refresh FAILED: {e}")
 
-    # 2. update edge gate from settlements -> extremizing-gate learning
-    try:
-        p = subprocess.run([str(PYEXE), "scripts/update_edge_gate.py"],
-                           cwd=str(ROOT), capture_output=True, text=True, timeout=300,
-                           creationflags=CREATE_NO_WINDOW)
-        tail = " | ".join((p.stdout.strip().splitlines() or [""])[-2:])
-        log(f"edge gate: {tail}")
-        if p.returncode != 0 and p.stderr:
-            log(f"  edge gate stderr: {p.stderr.strip().splitlines()[-1][:200]}")
-    except Exception as e:
-        log(f"edge gate FAILED: {e}")
+    def _run(label: str, script: str, want_line: str = "offsides"):
+        try:
+            p = subprocess.run([str(PYEXE), script],
+                               cwd=str(ROOT), capture_output=True, text=True, timeout=300,
+                               creationflags=CREATE_NO_WINDOW)
+            lines = p.stdout.strip().splitlines() or [""]
+            tail = next((ln for ln in lines if want_line in ln), lines[-1])
+            log(f"{label}: {tail.strip()}")
+            if p.returncode != 0 and p.stderr:
+                log(f"  {label} stderr: {p.stderr.strip().splitlines()[-1][:200]}")
+        except Exception as e:
+            log(f"{label} FAILED: {e}")
+
+    # 2. refit calibration from accumulating settled data — the offsides
+    #    definition-gap correction sharpens as live offsides settle.
+    _run("calibration", "scripts/fit_live_calibration.py", want_line="offsides")
+    # 3. update edge gate from settlements -> extremizing-gate learning
+    _run("edge gate", "scripts/update_edge_gate.py", want_line="edge_gate")
 
     log("daily learn complete")
 

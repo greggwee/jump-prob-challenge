@@ -56,5 +56,37 @@ if praw.exists():
     p = pd.read_csv(praw)
     table["player"] = fit(p["p_model"], p["outcome"].to_numpy(), "player")
 
+# OFFSIDES (#2): a StatsBomb->SportsPredict definition gap over-prices offsides
+# LIVE (backtest is calibrated; live n=8 had pred 0.50 vs realized 0.125). Fit a
+# regularized intercept-only shift from LIVE settled offsides (slope=1; one
+# parameter, heavily shrunk toward 0 so a tiny sample can't over-correct), and
+# keep offsides OUT of the pooled count Platt (which shifts the wrong way).
+def fit_offsides_live(tau: float = 0.8):
+    from jumpprob.submit.api_client import SportsPredictClient
+    LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
+    try:
+        res = pd.DataFrame(SportsPredictClient("SPORTSPREDICT_KEY_A", dry_run=True)
+                           .results(LOBBY)).dropna(subset=["brier_score"])
+    except Exception as e:
+        print(f"  offsides: live fetch failed ({e}); identity"); return [1.0, 0.0]
+    res["p"] = res["probability_submitted"] / 100.0
+    res["outcome"] = np.where(np.isclose((res["p"] - 1) ** 2, res["brier_score"], atol=1e-6), 1.0, 0.0)
+    md = pd.read_csv("data/processed/matchday_predictions.csv")[["market_id", "archetype"]]
+    res = res.merge(md, on="market_id", how="left")
+    o = res[res["archetype"] == "offsides_ge"]
+    if len(o) < 5:
+        print(f"  offsides: only {len(o)} live settled; identity"); return [1.0, 0.0]
+    from scipy.optimize import minimize_scalar
+    x = np.array([logit(v) for v in o["p"].clip(0.01, 0.99)])
+    y = o["outcome"].to_numpy()
+    # intercept-only logistic MLE + L2(b)/tau^2 shrinkage toward 0
+    b = minimize_scalar(lambda b: float(np.sum(np.logaddexp(0, x + b)) - np.sum(y * (x + b))
+                                        + 0.5 * b * b / tau ** 2), bounds=(-3, 3), method="bounded").x
+    print(f"  offsides n={len(o)} live: pred {o['p'].mean():.3f} realized {y.mean():.3f} "
+          f"-> shrunk intercept b={b:+.3f} (down-shift)")
+    return [1.0, round(float(b), 4)]
+
+table["offsides"] = fit_offsides_live()
+
 Path("data/processed/live_calibration.json").write_text(json.dumps(table, indent=1))
 print("\nwrote data/processed/live_calibration.json:", table)

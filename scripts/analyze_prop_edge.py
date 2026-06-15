@@ -57,6 +57,14 @@ for fam, df in load_family_predictions().items():
     diff = sharp_b - our_b   # positive = we beat the sharp field
     t, pval = stats.ttest_rel(sharp_b, our_b)
     confirmed = diff.mean() > 0 and pval < 0.05
+    # SURVIVORSHIP GUARD: the player backtest is biased — its players HAD
+    # international history (that's why they're in the data), but live WC squads
+    # mostly don't, so our live player fair value is data-starved (e.g. Kubo: 90
+    # min, predicted 7% score-or-assist, he did it -> Brier 0.865). Extremizing
+    # there amplifies a broken model. Keep player at k=1 until the club-rate
+    # model lands (PLAYER-DATA-PLAN.md #2), regardless of the backtest.
+    if fam == "player":
+        confirmed = False
     gate[fam] = K_ON_EDGE if confirmed else 1.0
     report.append({"family": fam, "n": len(df), "our_brier": our_b.mean(),
                    "sharp_field": sharp_b.mean(), "prior_field": prior_b.mean(),
