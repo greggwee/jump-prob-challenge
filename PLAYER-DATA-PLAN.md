@@ -38,7 +38,8 @@ Kubo: 90 min). **Data access verified 2026-06-14** (`discover_understat.py`):
 | source | content | access (verified) |
 |---|---|---|
 | **Understat AJAX** | per-player club-season: games, time(min), goals, npg, xG, npxG, shots, assists, xA, key_passes (top-5 leagues, multi-season) | **WORKS with plain `requests`**: `POST /main/getPlayersStats/` form `{league, season}` → JSON `{players:[...]}` (195 KB, all players). The old embedded-`playersData` scrape is DEAD (site changed) — use the AJAX endpoint. |
-| **FBref** (Opta) | SoT/90 directly, broad coverage | 403 to plain requests; use `soccerdata` 1.9.0 (available) if needed |
+| ~~**FBref** (Opta)~~ | SoT/90 directly, broad coverage | **DEAD (2026-06-15):** Cloudflare JS-challenge 403 to every HTTP client (plain `requests`, `curl_cffi` impersonating Chrome/Safari/Android) AND to `soccerdata`'s reader; `fbrapi.com` proxy also JS-walled. Needs a real headless browser — not worth it. **→ pivoted to API-Football.** |
+| **API-Football** (api-sports.io) | **shots.on (SoT) directly** + broad leagues (Saudi/Qatar/Liga MX/MLS/Championship/Portugal/Eredivisie/Süper Lig) | **WORKS, keyed** (`API_FOOTBALL_KEY` in `.env`). Free tier 100/day + ~10/min. `/players/profiles?search=` (no league) → id, then `/players?id=&season=`. Per-hole-player fetch (~2 req each) keeps under quota. |
 | **Transfermarkt** | market value = **"fame"** proxy | scrapeable (later, for the name-bias step) |
 
 **Build (file-level):**
@@ -136,8 +137,10 @@ governs the whole plan* — the live coverage-hole rate.
 - `ingest/understat.py` — `POST /main/getPlayersStats/ {league, season}` for the
   top-5 + Eredivisie/Primeira/Championship/Russian, last ~2 seasons → per-player
   games, minutes, shots, xG, npxG, goals, npg, assists, xA, key_passes. Append-only.
-- `ingest/fbref.py` via `soccerdata` — broad league coverage + **direct SoT/90**
-  (M1: FBref is the *primary* SoT source; Understat the xG/volume backbone).
+- ~~`ingest/fbref.py` via `soccerdata`~~ → **`ingest/apifootball.py`** (FBref is
+  Cloudflare-walled; see source table). Broad leagues + **direct SoT/90** via
+  `shots.on` (M1: API-Football is now the *primary* SoT source; Understat the
+  xG/volume backbone). Per-hole-player profile→id→stats; 429-backoff; cached.
 - `normalize/players.py` — canonical player names; **fix the mojibake** (L3: the
   parquet shows `M�rio Figueira Fernandes`; decode encoding properly + fold
   diacritics) and a mis-resolution sanity gate (flag joins whose implied prob
@@ -146,6 +149,13 @@ governs the whole plan* — the live coverage-hole rate.
   the club tables → report the fraction with NO join, broken out by
   confederation/league. This is H1's load-bearing number; it gates everything
   downstream and tells us which leagues to add next.
+  - **RESULT (2026-06-15):** prop-population census = 43 players. Understat alone
+    **56%** covered (44% hole). + API-Football broad leagues → **84%** (hole **16%**,
+    6 residual). Residuals: diminutive mismatch (Ben Waine=Benjamin), accent/nickname
+    search misses (Orkun Kökçü), no-data ids (Fajardo, Mohanad Ali, R. Mendes), and
+    Al-Taamari (Ligue 1 → an Understat-side name-match fix, not a true gap).
+    `scripts/coverage_census.py` (Understat) then `scripts/broad_rates.py`
+    (+API-Football merge) → `player_rates_combined.parquet`.
 
 ### Phase 2 — Estimate the transfer + league strength (H2, M3 — no hand-set constants)
 - Point-in-time join: past-tournament players (StatsBomb) ↔ their *pre-tournament*
