@@ -31,6 +31,7 @@ from jumpprob.models.goal_model import dc_grid
 from jumpprob.models.market_anchor import MatchAnchor, blend, blend_lambdas, implied_lambdas, inv_logit, logit
 from jumpprob.models.calibration import submit_int
 from jumpprob.normalize.teams import canonical
+from jumpprob.normalize.players import build_index as _club_index_fn, resolve as _club_resolve
 from jumpprob.simulate import markets as mk
 from jumpprob.simulate import mc_engine
 from jumpprob.submit.parser import ParsedQuestion, parse_question
@@ -73,6 +74,12 @@ CODE_MAP = {
 }
 
 MINUTE_SCENARIOS = [(0.80, 80.0), (0.12, 25.0), (0.08, 0.0)]
+# club->international rate discount: players shoot/score less for country than club
+# (tougher opponents, less-familiar teammates). Fit on settled player props (see
+# scripts/fit_player_transfer.py); 1.0 = no discount.
+PLAYER_TRANSFER = 0.80   # validated flat optimum on settled player_ga (scripts/fit_player_transfer.py)
+CLUB_RATES = Path("data/processed/player_rates_combined.parquet")
+SOT_PER_SHOT = 0.37   # Understat has no SoT -> estimate from total shots
 P_RED_MATCH = 0.065   # P(>=1 red): 0.067 reds/match measured, 6 tournaments
 P_PEN_MATCH = 0.293   # A6
 BOT_A_BASE_WEIGHT = 0.25
@@ -102,6 +109,8 @@ class Runner:
                  aggression: float = 1.0, w_market: float | None = None):
         self.pl = pipeline
         self.players = self._player_rates(player_table)
+        self.player_transfer = PLAYER_TRANSFER
+        self._load_club_rates()  # club-history priors for player props (data fix)
         self.mc = mc                    # optional v2 MCEngine for timing markets (rec #3)
         self.calib = calibration if calibration is not None else self._load_calibration()
         from jumpprob.models.market_anchor import W_MARKET
@@ -188,13 +197,52 @@ class Runner:
         self.prior_sot, self.prior_goal, self.prior_ga = prior_sot, prior_goal, prior_ga
         return tot
 
+    def _load_club_rates(self) -> None:
+        """Per-minute club rates (sot, npg, ga) from the combined Understat+API-Football
+        table, used as a player-specific PRIOR. Replaces the global population prior so
+        established attackers are no longer shrunk to the average (the systematic
+        under-pricing the settled-match audit found). SoT estimated from shots where
+        Understat lacks it. Inert (falls back to population prior) if the table is absent."""
+        self.club_rates: dict[str, tuple] = {}
+        self.club_idx = None
+        if not CLUB_RATES.exists():
+            return
+        df = pd.read_parquet(CLUB_RATES).drop_duplicates(subset="player_name", keep="first")
+        for r in df.itertuples():
+            sot90 = getattr(r, "sot_p90", None)
+            if sot90 is None or (isinstance(sot90, float) and np.isnan(sot90)):
+                sot90 = float(getattr(r, "shots_p90", 0) or 0) * SOT_PER_SHOT
+            npg90 = float(getattr(r, "npg_p90", 0) or 0)
+            ga90 = npg90 + float(getattr(r, "assists_p90", 0) or 0)
+            self.club_rates[r.player_name] = (sot90 / 90.0, npg90 / 90.0, ga90 / 90.0)
+        self.club_idx = _club_index_fn(df["player_name"])
+
+    def _club_prior(self, name: str) -> tuple | None:
+        """Resolve a market player name to their per-minute club rates (or None)."""
+        if self.club_idx is None:
+            return None
+        match, _ = _club_resolve(name, *self.club_idx)
+        return self.club_rates.get(match) if match else None
+
     def player_rate(self, name: str) -> tuple[float, float, float]:
+        """Per-minute (sot, goal, ga) rates. The GA prior uses the transfer-discounted
+        CLUB rate (club assists are our biggest blind spot — validated on settled props:
+        it cuts player_ga Brier ~0.19->0.16). SoT and scores keep the population prior:
+        on settled data the club rate over-predicts SoT (the tail is better handled by
+        the Phase-1 floor) and erodes our genuine player_scores edge. The tournament
+        appearances then shrink off the prior (Gamma-Poisson, M0=270/540)."""
+        club = self._club_prior(name)
+        prior_sot, prior_goal = self.prior_sot, self.prior_goal
+        prior_ga = self.player_transfer * club[2] if club else self.prior_ga
         tokens = _norm_name(name).split()
         hits = self.players[self.players["norm"].apply(lambda n: all(t in n for t in tokens))]
         if len(hits) == 1:
-            return (float(hits["rate_sot"].iloc[0]), float(hits["rate_goal"].iloc[0]),
-                    float(hits["rate_ga"].iloc[0]))
-        return self.prior_sot, self.prior_goal, self.prior_ga
+            h = hits.iloc[0]
+            m = float(h["minutes"])
+            return ((float(h["sot"]) + prior_sot * 270) / (m + 270),
+                    (float(h["goals"]) + prior_goal * 540) / (m + 540),
+                    (float(h["ga"]) + prior_ga * 540) / (m + 540))
+        return prior_sot, prior_goal, prior_ga   # no tournament appearances -> the prior
 
     # ------------------------------------------------------------------
     def resolve_teams(self, match_name: str, questions: list[str]) -> tuple[str, str] | None:
