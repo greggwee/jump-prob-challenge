@@ -72,6 +72,25 @@ def load_field_sharpness() -> dict:
     return {**FIELD_SHARPNESS, **_load("field_model.json", {})}
 
 
+def load_confidence_gate() -> dict:
+    """Phase-1 asymmetric calibration table {archetype: {a, b, f}} from
+    scripts/fit_confidence.py. Empty (inert) until fit."""
+    return _load("confidence_gate.json", {})
+
+
+def apply_confidence(p: float, archetype: str, gate: dict) -> float:
+    """Asymmetric confidence calibration (Phase 1): per-ARCHETYPE Platt (a, b) then a
+    ONE-SIDED lower floor f. The floor raises confident-low bets that lose
+    catastrophically when wrong (player props: us 7-13% vs a crowd that hedges 22-50%)
+    WITHOUT capping our correct high-confidence calls. No-op for archetypes not in the
+    gate, so archetypes where we have edge (e.g. player_scores) are untouched."""
+    e = gate.get(archetype)
+    if not e:
+        return p
+    q = float(inv_logit(e.get("a", 1.0) * logit(p) + e.get("b", 0.0)))
+    return max(q, e.get("f", 0.0))
+
+
 def field_model(belief: float, lam: float) -> float:
     """Structural field estimate (Phase C): our belief shrunk toward 50 by the
     field's sharpness. A logit-scaling — lam=1 keeps the belief, lam=0 -> 0.5.

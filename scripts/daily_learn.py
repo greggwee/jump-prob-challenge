@@ -71,6 +71,14 @@ def main() -> None:
     _run("calibration", "scripts/fit_live_calibration.py", want_line="offsides")
     # 3. update edge gate from settlements -> extremizing-gate learning
     _run("edge gate", "scripts/update_edge_gate.py", want_line="edge_gate")
+    # 4. Phase 1: rebuild settled+crowd dataset and refit asymmetric confidence
+    #    calibration (floors confident-low bets on archetypes where that loses big).
+    #    Uses the harvested crowd consensus (data/processed/crowd_consensus_raw.csv;
+    #    refresh manually until the harvest is automated — new markets without crowd
+    #    data are simply not yet in the fit). The fit self-gates on a no-regression
+    #    LOO-match CV, so a refit can only tighten the floor set, never regress it.
+    _run("settled dataset", "scripts/build_settled_dataset.py", want_line="wrote settled_with_crowd")
+    _run("confidence", "scripts/fit_confidence.py", want_line="wrote confidence_gate")
 
     log("daily learn complete")
 

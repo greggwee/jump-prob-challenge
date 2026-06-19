@@ -9,6 +9,109 @@ $\text{logit}(p) = \ln\frac{p}{1-p}$ its inverse.
 
 ---
 
+## 0. The system end to end (read this first)
+
+The sections below are organized by *mathematical topic*. This one is organized by
+*what actually happens* when a fixture comes up, so the pieces have a place to live.
+Bot A's job: turn "Spain vs Cape Verde, kicking off in 90 minutes" into an integer
+1–99 for each of ~25 questions per match, and do it in a way that survives a
+relative-Brier contest against a field that also reads the odds.
+
+**The one-sentence thesis.** Build one coherent generative model of the match —
+a pair of goal intensities $(\lambda_a, \lambda_b)$ that everything else descends
+from — *anchor it to the betting market* so its absolute calibration is at least as
+good as the crowd's, then spend a small, **gated** amount of deliberate
+miscalibration only on the obscure markets where the crowd can't price and our
+models genuinely deviate. Calibration is the floor; edge is the no-line markets.
+
+**The pipeline, in order.**
+
+1. **Standing data (fit once, point-in-time).** Elo ratings from every
+   international result (§3); a decay-weighted Poisson goal model mapping Elo
+   difference → expected goals (§2.2); a negative-binomial count model for
+   corners/cards/SoT/offsides/fouls fit from a StatsBomb event stream (§5); club
+   per-90 rates for player props from Understat + API-Football (§6.4). Every
+   feature is the value *before* the match it predicts — the discipline that makes
+   backtests honest (§3, point-in-time).
+
+2. **A fixture arrives.** The scheduler wakes 6–25 min before a match's
+   `opening_time` (= kickoff), pulls the live market list, and the parser
+   (`submit/parser.py`) classifies each question into an *archetype* —
+   `win`, `total_ge`, `ht_tied`, `team_corners_ge`, `player_sot_ge`, … — extracting
+   subject team/player and thresholds. Archetypes group into four **families**
+   (goal, count, player, timing) that share calibration and strategy treatment.
+
+3. **The goal backbone.** Elo → $(\lambda_a, \lambda_b)$. From these we build a
+   Dixon–Coles-corrected scoreline grid (§2.3) *and* run the v2 Monte-Carlo
+   point-process simulator (§8) at the same intensities. The grid is fast and
+   closed-form; the simulator captures state-dependent dynamics (trailing teams
+   push, late-game cards) that the grid can't.
+
+4. **The market anchor (the single most important step for not losing).** When
+   bookmaker odds exist, de-vig each book (Shin, §4.2), combine books into one
+   sharpness-weighted consensus (§10), invert the consensus 1X2 + totals back into
+   *market* intensities $(\lambda_a^{\text{mkt}}, \lambda_b^{\text{mkt}})$ (§11),
+   and geometric-blend in log-space: $\lambda^{\text{blend}} = \exp(0.85\ln\lambda^{\text{mkt}} + 0.15\ln\lambda^{\text{model}})$.
+   Rebuilding the grid/sim on $\lambda^{\text{blend}}$ makes **every** downstream
+   market — win, totals, halves, counts, props — inherit the market's information
+   *coherently*, because they all descend from one intensity pair (§11).
+
+5. **Read off every market.** From the (anchored) grid and simulator: 1X2 and
+   totals directly; half-markets by Poisson thinning (§6.1); team counts from the
+   NegBin pmfs (§5); "more corners than" comparisons by convolution/CDF (§5.2);
+   player props by thinning the player's shrunk per-90 rate over a *minutes mixture*
+   that respects Jensen (§6.2–6.3). Penalties/red cards use measured base rates.
+
+6. **Calibration (§7).** Each family gets a Platt map $\sigma(a\,\text{logit}\,p+b)$
+   fit on settled outcomes; when a family's forecasts barely vary, fall back to
+   intercept-only. Anchored goal markets skip calibration — the market is already
+   calibrated, re-Platting would double-count. Offsides carries its own map (its
+   StatsBomb definition disagrees with the platform's "caught offside").
+
+7. **Strategy: gated extremizing (§12).** The contest scores you *relative to the
+   field*, so honest calibration on markets the field also prices earns ≈0. The
+   extremizer amplifies only our *deviation from the field proxy*, per family, by a
+   factor $k$ — and $k=1$ (honest) unless a gate (live or backtest) proves edge for
+   that family. Anchored main markets are never extremized: there we *are* the
+   field, so they're a pure calibrated floor.
+
+8. **Submit and learn.** Round to an integer 1–99 (§1.3), batch-submit, log the
+   blend/market/pure variants for CLV measurement. Daily, the learner refits
+   calibration from new settlements and updates the edge gate. The whole loop is
+   re-runnable and idempotent.
+
+**Why this is statistically robust — the five load-bearing ideas.**
+
+- **A strictly proper objective (§1).** Honesty minimizes expected Brier; any
+  shading costs the *square* of the deviation. We only depart from honesty under
+  the explicit, different rank objective of §12, and only where gated.
+- **One coherent generative core.** Everything is a functional of $(\lambda_a,
+  \lambda_b)$, so the 25 answers per match cannot contradict each other (P(win) and
+  P(over 2.5) and P(team scores in 2H) are mutually consistent by construction).
+  Patches like Dixon–Coles and frailty are corrections to *that* model, not
+  separate models.
+- **The market as a calibration floor.** Decades of efficiency research say the
+  closing line is the best public forecast; anchoring to it removed our worst
+  absolute blunders (the pure-Elo USA misprice, §11) and guarantees we don't lose
+  *relative* ground to a sharper field on the main markets.
+- **Uncertainty is propagated, not ignored.** The goal model's parameter
+  covariance is carried through a sandwich estimator (§8.4) and averaged over MC
+  draws, which automatically pulls thin-data probabilities back toward 50 — honest
+  hedging worth Brier where the data is weak.
+- **Every component had to earn its place (§9).** The decision rule was fixed
+  *before* each experiment: keep a component iff it improves out-of-sample Brier on
+  six point-in-time tournament backtests. Squad-quality and a GBM hybrid were
+  *rejected* by this rule; their rejection is a finding about where the residual
+  information lives (markets, lineups, club form), not a failure.
+
+The honest current limitation is the **field proxy** (§12.5): we cannot see the
+crowd, so we estimate it. That single approximation gates how much edge we dare
+spend, and improving it is the highest-value open problem. §13 closes the loop with
+what the *settled* results say about where this whole machine is actually winning
+and losing.
+
+---
+
 ## 1. The scoring rule: why honesty is mathematically optimal
 
 ### 1.1 The Brier score and strict propriety
@@ -399,6 +502,38 @@ Naive: $E[M] = 67$, $1 - e^{-1.34} = 0.738$. Correct:
 $0.8(1-e^{-1.6}) + 0.12(1-e^{-0.5}) = 0.8(0.798) + 0.12(0.393) = 0.686$.
 A five-point overstatement — material, and largest exactly for rotation risks.
 
+### 6.4 Where the rates come from: the club-data layer
+
+§6.2 needs a per-90 rate $r_0$ and a player-specific count $y$ over $m$ minutes.
+National-team history is far too thin (a striker plays ~8 competitive internationals
+a year), so the signal must come from **club** football. Two sources, joined on a
+folded name key (`normalize/players.py`: accent/punctuation/order-invariant, with a
+strict-subset tier for middle names and an ambiguity guard):
+
+- **Understat** — top-5 leagues + Russian, with **xG, npxG, shots, key passes, xA**.
+  Rich quality signal, but no shots-*on-target* and no breadth.
+- **API-Football** (api-sports.io) — broad leagues Understat misses (Saudi, Qatar,
+  Liga MX, MLS, Championship, Primeira, Eredivisie, Süper Lig) and, crucially,
+  **`shots.on` directly** — the exact quantity the `player_sot_ge` prop needs.
+  (FBref would have been the natural single source but is Cloudflare-walled to every
+  HTTP client; the pivot to API-Football is documented in the plan.)
+
+**The load-bearing number is coverage, not richness.** A player with no club join
+falls back to the data-starved population prior — the §6.2 shrinkage collapses to
+$\hat r \approx r_0$, i.e. we price every uncovered striker identically. That is the
+"Kubo failure mode," and it is *exactly* where the settled review (§13) finds our
+biggest player-prop bleeds. So the gating metric is the **coverage hole**: the
+fraction of players appearing in actual prop markets with no rate. The census
+(`scripts/coverage_census.py` → `broad_rates.py`) measured it at **44% with
+Understat alone, cut to 16% after API-Football** — the difference is the leverage to
+even *attempt* a calibrated player-prop number rather than a base-rate guess.
+
+Two disciplines carry over from the rest of the system. **Shrinkage by minutes**
+(§6.2) means a 477-minute fragmented season contributes its rate but is pulled hard
+toward the prior — high-variance samples don't get to shout. And **point-in-time
+honesty**: rates are last-completed-season club form, known before kickoff, never
+contaminated by the tournament we're predicting.
+
 ---
 
 ## 7. Calibration
@@ -753,3 +888,111 @@ winner-take-most race rewards variance on your genuine edge. The resolution is
 not to abandon calibration but to use it as a floor and spend a gated, bounded
 amount of variance precisely where — and only where — you can prove you beat the
 crowd.*
+
+---
+
+## 13. What the settled results actually say (the empirical audit)
+
+Theory is cheap; the contest is settling questions. As of the last review,
+**253 settled, sign-determined questions across 26 matches**, mean Brier **0.2317**
+(beats coin-flip 0.25). The public REST API exposes no field data (every
+leaderboard/stats endpoint 500s — `audit_field_api.py`), so the per-question
+analysis below estimates relative points with the *same* field proxy the live
+extremizer uses (§12.5: belief shrunk toward 50 by per-family sharpness $\lambda$).
+Reproduce with `scripts/review_settled.py`.
+
+> **Reality check from the website (2026-06-19).** The platform front-end
+> (`play.sportspredict.com`, behind login — the React app reads `/api/probability/*`,
+> a different namespace than the public `/api/v1/*` we audited) reports gigabot1's
+> **actual RBP = +520.41, rank #240 of 2,818** forecasters (top ~8.5%; the field is
+> 317 bots + ~2,500 humans). And — correcting an earlier claim in this very note —
+> the site **does expose the crowd per question**: `POST /api/probability/match-stats`
+> returns, for each market, the crowd mean prediction (`prediction_average`), the
+> outcome, the field mean Brier (`brier_average`), our Brier (`brier_user`), and the
+> per-question relative score. **Scoring is confirmed relative Brier**:
+> $\text{RBP}=\sum_q(B^{\text{field}}_q-B^{\text{you}}_q)\times100$, where
+> $B^{\text{field}}$ is the *mean of individual forecasters' Briers* (not the Brier of
+> the mean forecast). The per-question number in the collapsed history list is a
+> different, **absolute** Brier×100 — conflating the two is what produced the wrong
+> "only the aggregate is relative" claim earlier.
+>
+> **The crowd is NOT coin-flip — that earlier inference was wrong.** Direct example
+> (CAN vs QAT, gigabot1): field $B=0.231$, us $0.222$, RBP $+9.56$. The crowd makes
+> *sensible, varied* forecasts (Canada to win 71%, Qatar more fouls 56%, Qatar 5+
+> corners 28%) — it is moderately calibrated, not clueless. Where it *does* default
+> to ~50% is **player props it has no read on** (Jonathan David SoT: crowd 50%, us a
+> confident-wrong 15% → **RBP −44**; Akram Afif SoT: crowd 42%, us a confident-right
+> 9% → **RBP +19**). So our edge is real but **smaller per-question** than a
+> coin-flip baseline implies, and player props are simultaneously our biggest upside
+> *and* biggest blow-up risk — exactly the high-variance family the §6.4 club-data
+> and SoT-calibration work targets. **Highest-value unlock: harvest `match-stats`
+> across settled matches to replace the §12.5 *proxy* field with the measured crowd
+> distribution**, then re-derive per-family edge and re-gate extremizing against the
+> real field instead of a guess.
+
+### 13.1 Where the points actually come from
+
+| family | n | Brier | proxy RBP | reading |
+|---|---|---|---|---|
+| **timing** | 18 | 0.194 | **+53** | first-goal-half, HT-tied/leading: obscure, no line, crowd guesses near 50 — our thinning model genuinely deviates. Our best edge. |
+| other (pen/red) | 13 | 0.217 | +12 | measured penalty/red base rates beat a clueless crowd. |
+| player | 49 | 0.201 | −8 | *bimodal* — see below. |
+| count | 102 | 0.239 | −8 | *bimodal* — corners/SoT win, offsides/fouls/cards bleed. |
+| goal | 71 | 0.254 | −22 | **proxy artifact**: these are anchored, so the real field *is* the market and true relative damage on upsets ≈ 0 (the CLV ledger confirms the anchor tracks the close). Read as ≈floor, not a −22 loss. |
+
+The family averages hide the real structure, which is **bimodal within count and
+player**:
+
+- **Genuine edge (extremize candidates if the gate confirms):**
+  `team_corners_ge` (+36), `sot_gt` (+33), `corners_gt` (+26), `team_sot_ge` (+24),
+  `first_goal_half` (+18), `ht_tied`/`ht_leading` (+28 combined), `player_scores`
+  (+30). These beat even the assumption-light base-rate baseline by +0.05 to +0.21
+  Brier — real skill, not proxy luck.
+- **Negative-value markets (our model is worse than *guessing the base rate*):**
+  `offsides_ge` (−51 RBP, −0.023 vs base over n=22), `fouls_gt` (−41, −0.030 over
+  n=20), `team_cards_ge` (−0.187, n=2). Offsides and fouls are near-random at the
+  team-half level; the model spends confidence it hasn't earned. **Action: shrink
+  these hard toward the base rate** (cap their deviation), the single biggest
+  available point recovery.
+
+### 13.2 The crowd asymmetry, quantified
+
+Per-question RBP is **left-skewed (skew −1.45)**: best single call +10.4, worst
+−28.4 — a **2.7× downside/upside ratio**. This is the §1 algebra made physical:
+relative points $= B_{\text{field}} - B_{\text{you}}$, and since $B_{\text{you}}\in
+[0,0.98]$, a confident-wrong call ($B\to0.98$) loses almost a full point while a
+confident-right call only earns back $B_{\text{field}}$ — and on easy questions the
+field is right too, so the upside is small. **Being wrong while the crowd is right
+is the only thing that really hurts; being right while the crowd is right earns
+nothing.**
+
+The confidence buckets show the trap directly:
+
+| our lean $|p-0.5|$ | n | hit-rate | RBP / question |
+|---|---|---|---|
+| 0.0–0.1 | 88 | 55% | +0.09 |
+| **0.1–0.2** | 84 | 63% | **+0.67** ← the sweet spot |
+| 0.2–0.35 | 56 | 66% | −0.15 |
+| **0.35–0.5** | 25 | **76%** | **−1.20** ← hits often, still loses points |
+
+Our *most confident* bucket hits 76% of the time and **still bleeds −1.2 pts/q**,
+because the 24% of misses cost ~−27 each and the 76% of hits only save a few. This
+is decisive evidence **for** the gated, deviation-only extremizing of §12 and
+**against** naive confidence: the points live in moderate, well-aimed leans, not in
+maximal conviction. Net across everything: 157 questions earn (+801), 96 lose
+(−775), for +26 — positive, but thin, and entirely dependent on *not* taking the
+catastrophic confident-wrong calls.
+
+### 13.3 The one systematic bias worth fixing now
+
+Every one of our worst single bleeds is the **same shape**: we predicted a
+shots-on-target / "both teams SoT" / player-SoT event *unlikely* and it happened
+(Kubo p7→YES −28, both-teams-SoT p9→YES −28, Díaz p10→YES −28, Xhaka p11→YES −27).
+`player_sot_ge` realizes **40%** but we predict a mean of **29%** — a −0.11
+calibration bias toward under-calling shots on target. (The `both_teams_sot` cases
+were a parser bug, since fixed.) Two fixes converge on it: (i) the §6.4 club-data
+layer now supplies **direct `shots.on` rates** for exactly these players, which
+should lift the under-prediction; (ii) a calibration intercept correction on the SoT
+families. This is the clearest line from "the data says we're wrong here" to "here
+is the mechanism that fixes it" — and the reason the player-data work was worth
+doing.

@@ -113,6 +113,7 @@ class Runner:
         self.gate = {f: max(live.get(f, 1.0), bt.get(f, 1.0)) for f in set(live) | set(bt)}
         self.base_rates = strategy.load_base_rates()
         self.field_sharpness = strategy.load_field_sharpness()  # Phase C
+        self.confidence = strategy.load_confidence_gate()       # Phase 1 asym. calibration
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -142,6 +143,12 @@ class Runner:
         # Phase C: structural field = belief shrunk toward 50 by family sharpness.
         field = strategy.field_model(p, self.field_sharpness.get(gate_fam, 0.5))
         return strategy.extremize(p, field, k)
+
+    def _confidence(self, arch: str, p: float) -> float:
+        """Phase 1 asymmetric calibration: floor confident-low bets per archetype
+        (no-op where the gate has no entry, e.g. archetypes we have edge on)."""
+        from jumpprob.models import strategy
+        return strategy.apply_confidence(p, arch, self.confidence)
 
     def _family(self, arch: str) -> str | None:
         # offsides get their OWN calibration: a StatsBomb→SportsPredict definition
@@ -442,6 +449,9 @@ class Runner:
                     p_a = blend([p_base, p], [BOT_A_BASE_WEIGHT, 1 - BOT_A_BASE_WEIGHT]) if p_base else p
                 # rec #2: evidence-gated extremizing (no-op until a family earns k>1)
                 p_a = float(np.clip(self._extremize(q.archetype, fam, p_a, ctx.anchored), 0.01, 0.99))
+                # Phase 1: asymmetric confidence calibration — floor confident-low bets on
+                # the archetypes where betting below the crowd loses catastrophically.
+                p_a = float(np.clip(self._confidence(q.archetype, p_a), 0.01, 0.99))
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,
                     "question": r["question"], "archetype": q.archetype,
