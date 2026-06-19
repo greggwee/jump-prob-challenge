@@ -125,10 +125,20 @@ def event_to_anchor(event: dict) -> MatchAnchor | None:
 
 
 def build_anchors(events: list[dict]) -> dict[tuple[str, str], MatchAnchor]:
-    """{(canonical_home, canonical_away): MatchAnchor} for all priced games."""
+    """{(canonical_home, canonical_away): MatchAnchor} for all priced games.
+
+    Per-event guard: a single malformed/degenerate quote (e.g. a market locking near
+    kickoff that returns decimal odds <= 1.0) must NOT crash the whole submission run —
+    the live scheduler calls this path. Skip just that event; the match falls back to
+    the pure model (or, if locked, isn't open for submission anyway)."""
     out = {}
     for ev in events:
-        a = event_to_anchor(ev)
+        try:
+            a = event_to_anchor(ev)
+        except Exception as e:
+            print(f"  ! anchor skipped: {ev.get('home_team', '?')} vs "
+                  f"{ev.get('away_team', '?')} ({str(e)[:50]})")
+            continue
         if a is not None:
             out[(a.home, a.away)] = a
     return out
