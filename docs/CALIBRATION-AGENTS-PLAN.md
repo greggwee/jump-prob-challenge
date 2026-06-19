@@ -133,13 +133,21 @@ settled questions. Components as requested, grounded so the LLMs don't hallucina
 **B1 — scope.** Agents run **only** on lagging/hard archetypes; never the markets we beat
 or the anchored goal markets.
 
-**B2 — expert roles, each given data not asked to guess blind:** lineup/availability
-(confirmed XI from API-Football → §6.3 minutes mixture); player-prop expert (club per-90
-rates incl. the new API-Football SoT, lineup, base rate, **our prior**, **consensus** →
-adjustment + rationale); tactical-matchup (style/press/stakes → directional nudges);
-compound-question (joint events where independence breaks); discipline/aggregator
-(combines experts + model + consensus; breaks sharp disagreements with explicit tactical
-reasoning; defaults to consensus when unsure).
+**B2 — expert roles, grounded in HISTORY not just the current fixture.** The whole point
+is a consensus over a player's and a team's *track record*, which is the signal both our
+shrinkage-heavy statistical model and the obscure-player crowd under-use:
+- **player-prop expert** — given the player's **multi-season club history** (Understat
+  xG/npxG/shots/key-passes/xA + API-Football **SoT/90 and minutes**), recent form, role,
+  the **opponent's defensive history** (SoT/goals conceded from the count model + Elo),
+  confirmed lineup, the base rate, **our model's prior**, and the crowd consensus →
+  returns a probability *grounded in that history* with rationale. (This is the layer
+  that would have known Gyökeres @ 2.57 SoT/90 is not an 11% shot.)
+- **team expert** — Elo trajectory, past-tournament results, head-to-head, style/press.
+- **tactical-matchup** — defensive setup / possession / stakes → directional nudges.
+- **compound-question** — joint events where independence breaks (btts AND 3+ goals).
+- **discipline/aggregator** — combines the history-grounded experts + our model + the
+  crowd; breaks sharp disagreements with explicit reasoning; defaults to consensus when
+  the experts have no historical edge.
 
 **B3 — "poll several models, average."** Claude Opus 4.8 (discipline) + Sonnet 4.6 /
 Haiku 4.5 (experts) at varied temps; optional one cross-provider for genuine decorrelation.
@@ -165,15 +173,42 @@ family has ≥~30 settled questions. Same rule that rejected squad-quality and t
 
 ## 5. How the pieces fit
 
-- **Part A** lifts the floor (stop bleeding on low-edge archetypes) — fast, certain,
-  reversible, no new dependencies.
-- **Part 2 (consensus anchor)** is the biggest *potential* win **conditional on 2a**
-  (consensus observable *and stable* pre-kickoff). If the consensus is only populated
-  post-submission or moves after we submit, the live anchor is unusable — so it is gated,
-  not assumed.
-- **Part B** is offence where neither model nor raw consensus is sharp — grounded in the
-  club-rate data we already built + the consensus we unlocked, and **shadow-only** until
-  samples support a real gate.
+> **HARD CONSTRAINT (2026-06-19): the crowd consensus is visible only AFTER bets lock.**
+> Predictions are hidden until settlement, so `prediction_average` can NEVER be a live
+> prior at submit time. This **kills the live consensus anchor (former Phase 2)**. The
+> consensus remains valuable but only **offline** — as a calibration target and grader
+> we harvest post-settlement — never to price a live bet. Every live mechanism must use
+> only what is observable before lock: the betting market, our own models, and player/
+> team **history**. Phase 1 (floor, fit on outcomes) and Phase 3 (history experts) were
+> already consensus-free at runtime, so they are unaffected; only the offsides/fouls/win
+> "lean on the smarter crowd" path is lost and must be replaced by outcome-based
+> calibration (below).
+
+The layers address DIFFERENT question types:
+
+- **Part A (floor)** lifts the floor on the worst player-prop tails — fit on OUTCOMES,
+  consensus-free at runtime. Shipped, live.
+- **Part B (history-grounded experts)** is the fix for **player props** — and the reason
+  is sharp: on obscure players the crowd consensus is uninformative anyway (~50%, the
+  field doesn't know the player either), so even if we *could* see it live it wouldn't
+  help. The only way to be more accurate is to **inject player + team history** the field
+  lacks, all available pre-lock. So player props need **A (floor) + B (experts) +
+  lineups**.
+- **No live crowd anchor.** For the no-line markets where the crowd genuinely beats us
+  (offsides, fouls), we cannot borrow its number live; we can only make OUR model
+  better-calibrated against outcomes as matches settle (limited by sample size), with the
+  consensus as the offline benchmark for how good "well-calibrated" looks.
+
+| question type | sharpest LIVE signal | mechanism (all submit-time observable) |
+|---|---|---|
+| match winner / totals / BTTS | betting market | **betting-market anchor** (live) |
+| halves / timing | our model (we beat the field) | keep model |
+| team counts: corners, SoT-compare | our model (we beat the field) | keep model |
+| team counts: offsides, fouls, cards | our calibrated model | **outcome-based calibration** (crowd unavailable live; consensus = offline target) |
+| match winner where we lag | betting market | **fix anchor application (A6)** — we shouldn't be deviating from the line |
+| player props (scores / SoT / G+A) | player + team **history** | **Phase 1 floor + Phase 3 history experts + lineups** |
+| compound (btts AND 3+) | history + joint reasoning | Phase 3 compound expert |
+| penalty / red | measured base rate | keep model |
 
 ---
 
@@ -203,11 +238,19 @@ family has ≥~30 settled questions. Same rule that rejected squad-quality and t
 - 1g. Unit tests + LOO-match settled backtest gate (no family regresses); wire refit into
   `daily_learn.py`.
 
-**Phase 2 — live crowd-consensus anchor (biggest *potential* win, gated)**
-- 2a. **Verify `prediction_average` is observable AND stable pre-kickoff** (poll an ongoing
-  match at the scheduler's T−6…25 window; check drift after our submit). Blocker for 2b.
-- 2b. If yes: `ingest/crowd_consensus.py` + a no-line consensus-anchor blend (weight fit
-  like the market anchor); gate on the LOO-match backtest.
+**Phase 2 — outcome-based calibration for the crowd-beats-us markets**
+*(The live consensus anchor is infeasible — consensus is post-lock only. The consensus
+is the offline GRADER/target, not a live input.)*
+- 2a. Periodically re-harvest the settled consensus → keep `crowd_consensus_raw.csv`
+  fresh; track the per-archetype us-vs-consensus gap as a calibration KPI (how close are
+  we getting to the achievable Brier the crowd demonstrates?).
+- 2b. `offsides`/`fouls`: as more matches settle, refit per-family calibration on
+  OUTCOMES (regularized Platt / spread-compression `a<1`), gated by LOO-match CV. Limited
+  by sample size; the consensus benchmarks the ceiling but is never an input.
+- 2c. `win` (−41 despite being anchored): the **A6** diagnostic — is the betting-market
+  anchor oriented/applied right, or is post-anchor calibration distorting the line? Fix
+  the anchor so we stop deviating from the market where the crowd (which reads the same
+  line) beats us. Consensus-free.
 
 **Phase 3 — multi-agent expert layer (shadow-only until families ≥~30)**
 - 3a. `ingest/lineups.py` (API-Football `/fixtures/lineups`); confirm tier/timing.

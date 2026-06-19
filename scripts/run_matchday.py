@@ -54,26 +54,15 @@ if a1_test:
     ok_b = rb and rb[0].get("succeeded", 0) == 1
     print("A1 RESULT:", "both bots accepted on same market" if ok_b else "REJECTED — one prediction per market per ACCOUNT; submit via Bot A only")
 elif live:
-    # A1 test (2026-06-12) showed predictions are one-per-market-per-ACCOUNT:
-    # the second key gets 'already exists'. All submissions go through Bot A
-    # as a single consolidated leaderboard entry; KEY_B is backup/ops only.
-    # Submit the pure calibrated model (sub_b) — the configuration the
-    # backtests validated; the 25% base-rate blend variant was a two-bot
-    # decorrelation device that no longer applies with a single entry.
-    pa = [{"market_id": r["market_id"], "lobby_id": r["lobby_id"], "probability": int(r["sub_b"])} for r in payloads]
-    print(f"\nLIVE: submitting {len(pa)} predictions via Bot A...")
-    out_a = bot_a.submit_batch(pa)
-    total = sum(b.get("total", 0) for b in out_a)
-    ok = sum(b.get("succeeded", 0) for b in out_a)
-    failed = sum(b.get("failed", 0) for b in out_a)
-    print(f"batches: {len(out_a)} | total {total} succeeded {ok} failed {failed}")
-    errs = {}
-    for b in out_a:
-        for r in b.get("results", []):
-            if not r.get("success"):
-                errs[r.get("error", "?")] = errs.get(r.get("error", "?"), 0) + 1
-    if errs:
-        print("failure reasons:", errs)
-    print("done — verify with /predictions")
+    # DEPRECATED live path. The production submitter is scripts/run_matchday_odds.py:
+    # it anchors Bot A goal intensities to the betting line (W_MARKET) and applies the
+    # Phase-1 confidence floor, then submits `sub_a`. THIS script builds UN-anchored
+    # predictions (no odds fetch), so submitting `sub_b`/`sub_a` from here would clobber
+    # the live entry with the wrong configuration. Refuse and redirect so there is a
+    # single live path (the divergence was a real footgun — see CALIBRATION-AGENTS-PLAN).
+    print("\nLIVE submission is DISABLED in this script. Use the odds-anchored path:")
+    print('    python scripts/run_matchday_odds.py --live [--matches "Team A vs Team B"]')
+    print("(run_matchday.py is dry-build only: it writes matchday_predictions.csv for the join tables.)")
+    sys.exit(2)
 else:
     print("\nDRY RUN complete — payloads logged to data/submissions/, predictions to data/processed/matchday_predictions.csv")
