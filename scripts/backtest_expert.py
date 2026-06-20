@@ -89,7 +89,7 @@ def main() -> None:
         cap = P.DEFAULT_CAP if action == P.BLEND_CAPPED else None
         oos, cvw = _loo_match(gg, cap) if action in (P.BLEND, P.BLEND_CAPPED) else (gg["b_model"].mean(), 0.0)
         rows.append({
-            "archetype": a, "route": action, "n": len(gg),
+            "archetype": a, "route": action, "n": len(gg), "n_crowd": int(gg["b_crowd"].notna().sum()),
             "b_model": gg["b_model"].mean(), "b_armed": gg["b_armed"].mean(),
             "b_crowd": gg["b_crowd"].mean(),
             "RBP_model": gg["rbp_model"].sum(), "RBP_armed": gg["rbp_armed"].sum(),
@@ -100,19 +100,23 @@ def main() -> None:
     pd.set_option("display.width", 220)
     print(rep.round(4).to_string(index=False))
 
-    tot_d = df["rbp_armed"].sum() - df["rbp_model"].sum()
-    print(f"\n=== AS ARMED (current gate) on the player-prop subset ===")
-    print(f"  Brier   model={df['b_model'].mean():.4f}  armed={df['b_armed'].mean():.4f}  "
-          f"crowd={df['b_crowd'].mean():.4f}")
-    print(f"  RBP     model={df['rbp_model'].sum():+.1f}  armed={df['rbp_armed'].sum():+.1f}  "
-          f"-> expert layer adds {tot_d:+.1f} RBP across {len(df)} settled props")
+    nc = df["b_crowd"].notna()                       # RBP needs the harvested crowd consensus
+    tot_d = df.loc[nc, "rbp_armed"].sum() - df.loc[nc, "rbp_model"].sum()
+    print(f"\n=== AS ARMED (current gate) ===")
+    print(f"  Brier — ALL {len(df)} settled player props:  model={df['b_model'].mean():.4f} -> "
+          f"armed={df['b_armed'].mean():.4f}  ({df['b_model'].mean()-df['b_armed'].mean():+.4f}/q)")
+    print(f"  RBP   — the {int(nc.sum())} with crowd data:   model={df.loc[nc,'rbp_model'].sum():+.1f} -> "
+          f"armed={df.loc[nc,'rbp_armed'].sum():+.1f}  -> expert layer adds {tot_d:+.1f} RBP "
+          f"(vs consensus, a conservative field proxy)")
 
     tail = df[(df["our_p"] < TAIL_LOW) & (df["outcome"] == 1)]
     if len(tail):
+        tnc = tail["b_crowd"].notna()
         print(f"\n  catastrophic-low tail (bet <{TAIL_LOW}, happened): n={len(tail)}  "
-              f"Brier {tail['b_model'].mean():.3f} -> {tail['b_armed'].mean():.3f}  "
-              f"RBP {(tail['b_crowd']-tail['b_model']).sum()*100:+.1f} -> "
-              f"{(tail['b_crowd']-tail['b_armed']).sum()*100:+.1f}")
+              f"Brier {tail['b_model'].mean():.3f} -> {tail['b_armed'].mean():.3f}"
+              + (f"  RBP {(tail.loc[tnc,'b_crowd']-tail.loc[tnc,'b_model']).sum()*100:+.1f} -> "
+                 f"{(tail.loc[tnc,'b_crowd']-tail.loc[tnc,'b_armed']).sum()*100:+.1f} (n={int(tnc.sum())})"
+                 if tnc.any() else ""))
 
 
 if __name__ == "__main__":

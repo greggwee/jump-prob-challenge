@@ -56,13 +56,21 @@ def build() -> pd.DataFrame:
     crowd = pd.read_csv("data/processed/crowd_consensus_raw.csv")  # id8, crowd(%), out
     crowd["crowd_p"] = crowd["crowd"] / 100.0
     df["id8"] = df["market_id"].str[:8]
-    df = df.merge(crowd[["id8", "crowd_p", "out"]], on="id8", how="inner")  # only markets with crowd data
+    # LEFT join: keep EVERY settled question; crowd_p is present only for the
+    # manually-harvested matches (26 of 30). A prior INNER join silently dropped
+    # ~40 settled questions (incl. 12 player props) just because their match's
+    # crowd consensus was never harvested — they still have our_p + outcome and
+    # belong in the backtest (RBP-vs-crowd is simply unavailable for them).
+    df = df.merge(crowd[["id8", "crowd_p", "out"]], on="id8", how="left")
 
-    # authoritative outcome = the crowd file's `out` (resolves p=0.5 ambiguity); cross-check
-    df["outcome"] = df["out"].astype(float)
-    chk = df.dropna(subset=["out_brier"])
-    mism = int((chk["out_brier"] != chk["outcome"]).sum())
-    print(f"outcome cross-check: {mism} mismatches of {len(chk)} (expect 0)")
+    # outcome: crowd `out` where harvested (resolves the p=0.5 ambiguity), else the
+    # value recovered from our own Brier; drop the rare row where neither resolves.
+    df["outcome"] = df["out"].fillna(df["out_brier"])
+    df = df.dropna(subset=["outcome"]).copy()
+    df["outcome"] = df["outcome"].astype(float)
+    chk = df.dropna(subset=["out_brier", "out"])
+    mism = int((chk["out_brier"] != chk["out"]).sum())
+    print(f"outcome cross-check (crowd subset): {mism} mismatches of {len(chk)} (expect 0)")
 
     df["family"] = df["archetype"].map(family_of)
     df["our_brier"] = (df["our_p"] - df["outcome"]) ** 2
