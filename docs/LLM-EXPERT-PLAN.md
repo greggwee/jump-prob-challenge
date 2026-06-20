@@ -462,3 +462,14 @@ master switch and routing guards are unchanged. Note `player_ga` is uncapped (it
 reliable — rich grounding fixes the assist blindness) while `player_sot_ge` keeps its cap (its
 ensemble over-predicts SoT, so the pull must be bounded). The web layer inherits these weights and is
 validated forward as its props settle.
+
+**Correction — completed-data re-tune (same day).** The above used `settled_with_crowd.parquet` built
+with an **inner join** on the manually-harvested crowd file, which kept only 257 of 296 settled
+questions (43 of 49 ex-bug player props). Fixed to a **left join** (296 rows; crowd_p present only
+where harvested). Re-running on the complete 49 ex-bug player props moved `player_sot_ge`'s honest
+LOO-match optimum from 0.75 down to an interior **0.60** (the 6 recovered cases confirm the SoT
+ensemble over-pulls at high weight). **Live gate is now `player_ga` 0.85 / `player_sot_ge` 0.60** —
+Brier over all 49 props 0.1852 → 0.1720, **+71.9 RBP** on the 43 with crowd data, tail 0.781 → 0.636.
+RBP throughout is vs the *consensus* (a conservative field proxy; the real individual field scores
+worse, so true RBP is higher). Only player props are blended (gate scope), so this is the expert
+layer's full contest contribution.
