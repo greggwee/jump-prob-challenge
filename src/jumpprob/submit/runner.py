@@ -124,6 +124,8 @@ class Runner:
         self.base_rates = strategy.load_base_rates()
         self.field_sharpness = strategy.load_field_sharpness()  # Phase C
         self.confidence = strategy.load_confidence_gate()       # Phase 1 asym. calibration
+        self.risk = strategy.load_risk_gate()                   # Phase R de-confidence (off unless RISK_GATE_ENABLE)
+        self.risk_on = strategy.risk_enabled()
         self.panel = panel_mod.load_panel()                     # L0 LLM expert cache (shadow by default)
         self.expert_gate = panel_mod.load_gate()                # L2 per-archetype blend gate (off unless AI_EXPERT_ENABLE)
         self.aggression = aggression
@@ -161,6 +163,11 @@ class Runner:
         (no-op where the gate has no entry, e.g. archetypes we have edge on)."""
         from jumpprob.models import strategy
         return strategy.apply_confidence(p, arch, self.confidence)
+
+    def _risk(self, arch: str, p: float) -> float:
+        """Phase R: shrink no-edge archetypes toward the base rate (no-op otherwise)."""
+        from jumpprob.models import strategy
+        return strategy.apply_risk(p, arch, self.risk, self.base_rates)
 
     def _family(self, arch: str) -> str | None:
         # offsides get their OWN calibration: a StatsBomb→SportsPredict definition
@@ -509,6 +516,11 @@ class Runner:
                 # expert number is still logged for the forward-test. See LLM-EXPERT-PLAN.
                 p_blend, einfo = panel_mod.apply_expert(r["id"], q.archetype, p_a, self.panel, self.expert_gate)
                 p_a = float(np.clip(p_blend, 0.01, 0.99))
+                # Phase R risk management: shrink no-edge archetypes toward the base
+                # rate (don't bet over-confidently where we have no validated edge).
+                # Off unless RISK_GATE_ENABLE; no-op for archetypes not in the gate.
+                if self.risk_on:
+                    p_a = float(np.clip(self._risk(q.archetype, p_a), 0.01, 0.99))
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,
                     "question": r["question"], "archetype": q.archetype,

@@ -24,6 +24,7 @@ edge is the part of the adjustment the crowd does not make.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from jumpprob.models.market_anchor import inv_logit, logit
@@ -89,6 +90,42 @@ def apply_confidence(p: float, archetype: str, gate: dict) -> float:
         return p
     q = float(inv_logit(e.get("a", 1.0) * logit(p) + e.get("b", 0.0)))
     return max(q, e.get("f", 0.0))
+
+
+def load_risk_gate() -> dict:
+    """Phase R de-confidence: {archetype: s} for NO-EDGE archetypes. On archetypes
+    where the 6-tournament backtest found ~no edge (offsides/fouls/cards), any
+    deviation from the base rate is noise that loses RBP, so we keep only fraction
+    s<1 of it. Empty (inert) until set; applied only when risk_enabled()."""
+    return _load("risk_gate.json", {})
+
+
+_risk_env_loaded = False
+
+
+def risk_enabled() -> bool:
+    """Master switch for the de-confidence shrink (RISK_GATE_ENABLE, default off)."""
+    global _risk_env_loaded
+    if not _risk_env_loaded:
+        try:
+            from jumpprob.submit.env import load_dotenv
+            load_dotenv()
+        except Exception:
+            pass
+        _risk_env_loaded = True
+    return os.environ.get("RISK_GATE_ENABLE", "0").strip().lower() not in ("", "0", "false", "no")
+
+
+def apply_risk(p: float, archetype: str, gate: dict, base_rates: dict) -> float:
+    """Shrink the submission's deviation from the base rate toward 0 for no-edge
+    archetypes (risk management — don't bet over-confidently where we have no edge).
+    Base-rate-aware: a genuinely low/high base (e.g. a rare event) is preserved;
+    only UNJUSTIFIED deviation is pulled in. No-op for archetypes not in the gate."""
+    s = gate.get(archetype)
+    if s is None:
+        return p
+    base = base_rates.get(archetype, 0.5)
+    return extremize(p, base, float(s))   # extremize with k=s<1 == shrink toward base
 
 
 def field_model(belief: float, lam: float) -> float:
