@@ -35,6 +35,7 @@ from jumpprob.normalize.players import build_index as _club_index_fn, resolve as
 from jumpprob.simulate import markets as mk
 from jumpprob.simulate import mc_engine
 from jumpprob.submit.parser import ParsedQuestion, parse_question
+from jumpprob.agents import panel as panel_mod  # out-of-band LLM blend (daemon reads cache only)
 
 # Archetype families (calibration + engine routing). Timing markets are the
 # subset the analytic engine only approximates — route them through the v2 MC
@@ -123,6 +124,7 @@ class Runner:
         self.base_rates = strategy.load_base_rates()
         self.field_sharpness = strategy.load_field_sharpness()  # Phase C
         self.confidence = strategy.load_confidence_gate()       # Phase 1 asym. calibration
+        self.panel = panel_mod.load_panel()                     # L0 LLM expert cache (shadow by default)
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -500,10 +502,17 @@ class Runner:
                 # Phase 1: asymmetric confidence calibration — floor confident-low bets on
                 # the archetypes where betting below the crowd loses catastrophically.
                 p_a = float(np.clip(self._confidence(q.archetype, p_a), 0.01, 0.99))
+                # L0 LLM expert layer (out-of-band panel; shadow by default). At the
+                # default env (all role weights 0) apply_expert returns p_a unchanged,
+                # so sub_a is byte-for-byte identical; a cache miss -> pure model. The
+                # expert number is still logged for the forward-test. See LLM-EXPERT-PLAN.
+                p_blend, einfo = panel_mod.apply_expert(r["id"], q.archetype, p_a, self.panel)
+                p_a = float(np.clip(p_blend, 0.01, 0.99))
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,
                     "question": r["question"], "archetype": q.archetype,
                     "p_bot_a": round(p_a, 4), "sub_a": submit_int(p_a),
                     "p_bot_b": round(p, 4), "sub_b": submit_int(p),
+                    "p_expert": einfo.get("expert"), "expert_action": einfo.get("action"),
                 })
         return out, skipped
