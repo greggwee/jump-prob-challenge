@@ -388,6 +388,36 @@ career numbers — and shows the L1/L2 verdicts were *conditional on the groundi
 the gate ships only what's validated on the grounding the live pipeline generates. Tactical questions
 now also receive the matchup + base rate (were fully blind). Still inert until `AI_EXPERT_ENABLE=1`.
 
-**Not yet built:** Tier 2 — the lineup pass (API-Football confirmed XI / expected minutes); Tier 3 —
-web search for live (post-cutoff) form + online/critic consensus. Budget-managed: the re-test was
-scoped to the player-prop archetypes (the gate-relevant ones), not the full 221.
+**Not yet built (at Tier-1 time):** Tier 2 — the lineup pass; Tier 3 — web search. See §13.
+
+---
+
+## 13. Tier 2/3 — lineup + live form via web search (2026-06-20)
+
+**Tier 2 (API-Football lineup pass) is blocked:** the free-tier key returns *"Free plans do not have
+access to this season, try from 2022 to 2024"* — no 2026 fixtures/lineups. Free live-lineup sources
+for WC 2026 are paywalled across the board (TheSportsDB, football-data.org). So Tier 2 pivoted to
+**web search** (which also delivers Tier 3), per the user's call.
+
+**Tier 3 (web-search expert) — built and proven, not yet live.** `expert.forecast_web()` gives a
+panelist the `web_search_20260209` server tool: it pulls the confirmed lineup, recent form, and
+injury/pundit news for the specific match (past the models' Jan-2026 cutoff), then prices the
+question. Not combined with structured output (web results carry citations → 400 with
+`output_config.format`); the probability is parsed from a final `PROBABILITY: <p>` line. Handles
+`pause_turn`; `max_uses` caps searches.
+
+**Proof (Gyökeres SoT, NED vs SWE, today's slate):** it surfaced his injury uncertainty ("due to
+undergo further tests", left out of the Nov-2025 squad), weak international form, and the strong
+Dutch defense → **0.34** (just above the 22% base rate, near the model's 32%), with sources. Exactly
+the lineup/availability + form signal the offline data cannot have.
+
+**Why it isn't wired live yet — two real constraints:**
+1. **Cost.** ~$0.2–0.4 per question (≈9 server-tool ops/call, incl. the `_20260209` filter's
+   code-exec). The ~$5 Anthropic budget covers roughly *one slate at a single model*. Not sustainable
+   across slates without a top-up.
+2. **Validation.** Web search can't be offline-validated — settled matches leak the actual result
+   (post-match articles), upcoming ones aren't graded. It's forward-validated only.
+
+**Recommended deployment when budget allows:** run web search only on the **highest-leverage** player
+props (e.g. the catastrophic-low cases where the model sits far below the base rate), **near kickoff**
+(when lineups publish), **one model**, `max_uses` low — and forward-test the blend as those settle.
