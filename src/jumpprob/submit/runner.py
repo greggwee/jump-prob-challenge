@@ -485,9 +485,10 @@ class Runner:
                 skipped.extend({"match": mname, "question": r["question"], "reason": "teams unresolved"} for r in rows)
                 continue
             anchor = anchors.get(teams) or anchors.get((teams[1], teams[0]))
+            team_set = {canonical(t) for t in teams}   # team-aware parse (player vs team SoT)
             ctx = self.context(*teams, anchor=anchor)
             for r in rows:
-                q = parse_question(r["question"])
+                q = parse_question(r["question"], teams=team_set)
                 if q is None:
                     skipped.append({"match": mname, "question": r["question"], "reason": "unparsed"})
                     continue

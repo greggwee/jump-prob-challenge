@@ -11,6 +11,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from jumpprob.normalize.teams import canonical
+
+# A few archetypes are phrased identically for a player or a team ("... have at
+# least N shots on target"); the regex defaults to the player reading, so when the
+# subject is one of the match's known teams we re-route to the team archetype.
+_PLAYER_TO_TEAM = {"player_sot_ge": "team_sot_ge"}
+
 
 @dataclass
 class ParsedQuestion:
@@ -125,10 +132,19 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
 ]
 
 
-def parse_question(text: str) -> ParsedQuestion | None:
+def parse_question(text: str, teams: set[str] | None = None) -> ParsedQuestion | None:
+    """Parse a market question. If `teams` (canonical names of the match's two
+    teams) is given, a player-prop parse whose subject is actually one of those
+    teams is re-routed to the team archetype — e.g. 'Will Haiti have at least 1
+    shot on target...' is team_sot_ge, not player_sot_ge."""
     text = text.strip()
     for pattern, build in _PATTERNS:
         m = pattern.search(text)
         if m:
-            return build(m)
+            q = build(m)
+            if (teams and q.archetype in _PLAYER_TO_TEAM and q.subject
+                    and canonical(q.subject) in teams):
+                return ParsedQuestion(_PLAYER_TO_TEAM[q.archetype], q.subject,
+                                      threshold=q.threshold, half=q.half)
+            return q
     return None
