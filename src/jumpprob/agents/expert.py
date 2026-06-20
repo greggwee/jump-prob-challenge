@@ -19,12 +19,21 @@ A single model erroring is dropped from the panel, not fatal.
 from __future__ import annotations
 
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel, Field
 
 from jumpprob.agents.panel import clip01, combine_logodds
 from jumpprob.submit.env import load_dotenv
+
+# Server-side web search (Tier 3): lets a panelist pull confirmed lineups, recent
+# form, and injury/pundit news for the specific match past the Jan-2026 cutoff.
+# _20260209 auto-filters results before they hit context (token-efficient). max_uses
+# caps the per-call search count for budget. NOT combined with structured output —
+# web results carry citations, which 400 with output_config.format — so the probability
+# is parsed from the final text instead.
+WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search"}
 
 # Curated multi-MODEL panel (model diversity > prompt diversity). Anthropic-only
 # today; cross-provider is additive (see plan §7). Haiku may end up shadow once
@@ -140,6 +149,60 @@ def forecast_one(question: str, model_pct: float, model: str, role: str = "tacti
     except Exception as e:  # provider hiccup, parse failure, rate limit — drop this panelist
         print(f"  ! {model} failed on {question[:46]!r}: {str(e)[:70]}")
         return None
+
+
+_PROB_RE = re.compile(r"PROBABILITY:\s*([0-9]*\.?[0-9]+)\s*(%?)", re.I)
+
+
+def _parse_prob(text: str) -> float | None:
+    """Pull the final 'PROBABILITY: <x>' the model is instructed to emit. % -> fraction."""
+    matches = _PROB_RE.findall(text or "")
+    if not matches:
+        return None
+    val, pct = matches[-1]                       # last one = the final answer
+    try:
+        p = float(val)
+    except ValueError:
+        return None
+    if pct or p > 1.0:
+        p /= 100.0
+    return clip01(p)
+
+
+def forecast_web(question: str, model_pct: float, grounding: dict | None = None,
+                 model: str = "claude-opus-4-8", role: str = "lineup",
+                 max_uses: int = 3, max_tokens: int = 4000) -> tuple[float | None, str]:
+    """One web-search-grounded forecast: the model searches for the confirmed lineup,
+    recent form, and injury/pundit news for THIS match, then prices the question.
+    Returns (probability|None, rationale_text). max_uses bounds search cost."""
+    c = client()
+    if c is None:
+        return None, ""
+    system = build_system(role) + (
+        " You have a web_search tool. Search for the CONFIRMED starting lineup / team news, "
+        "the player's recent form, and any injury or rotation news for THIS specific match — "
+        "then price the question. If a player is benched, doubtful, or out, weight that heavily. "
+        "Stay strictly pre-match (never use the actual result). End your reply with a final line "
+        "EXACTLY in the form 'PROBABILITY: <p>' where <p> is your calibrated YES probability 0-1."
+    )
+    user = build_user(question, model_pct, grounding)
+    tool = {**WEB_SEARCH_TOOL, "max_uses": max_uses}
+    msgs = [{"role": "user", "content": user}]
+    r = None
+    try:
+        for _ in range(4):  # resume server-tool loop on pause_turn
+            r = c.messages.create(model=model, max_tokens=max_tokens,
+                                  thinking={"type": "adaptive"}, system=system,
+                                  messages=msgs, tools=[tool])
+            if r.stop_reason != "pause_turn":
+                break
+            msgs = [{"role": "user", "content": user}, {"role": "assistant", "content": r.content}]
+    except Exception as e:
+        print(f"  ! {model} web failed on {question[:46]!r}: {str(e)[:70]}")
+        return None, ""
+    text = "\n".join(b.text for b in r.content if getattr(b, "type", None) == "text")
+    searches = sum(1 for b in r.content if getattr(b, "type", None) == "server_tool_use")
+    return _parse_prob(text), text + f"\n[searches={searches}]"
 
 
 def panel_forecast(question: str, model_pct: float, role: str = "tactical",

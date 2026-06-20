@@ -67,3 +67,25 @@ def test_panel_forecast_all_none_is_none(monkeypatch):
 def test_panel_selects_lineup_panel_for_lineup_role():
     assert expert.LINEUP_PANEL == ["claude-opus-4-8", "claude-sonnet-4-6"]
     assert "claude-haiku-4-5" in expert.PANEL  # full panel is 3-wide
+
+
+# --- web-search forecast (Tier 3) — pure parts ---
+
+def test_parse_prob_fraction_percent_and_last():
+    assert expert._parse_prob("...\nPROBABILITY: 0.34") == pytest.approx(0.34)
+    assert expert._parse_prob("PROBABILITY: 42%") == pytest.approx(0.42)
+    assert expert._parse_prob("PROBABILITY: 70") == pytest.approx(0.70)   # >1 -> /100
+    assert expert._parse_prob("PROBABILITY: 0.9\nPROBABILITY: 0.30") == pytest.approx(0.30)  # last wins
+    assert expert._parse_prob("no probability here") is None
+    assert expert._parse_prob("PROBABILITY: 0.99") == pytest.approx(0.97)  # clipped
+
+
+def test_forecast_web_no_key(monkeypatch):
+    monkeypatch.setattr(expert, "_client", None, raising=False)
+    monkeypatch.setattr(expert, "_no_key", True, raising=False)
+    prob, text = expert.forecast_web("Will X score?", 0.3, {"matchup": "A vs B"})
+    assert prob is None and text == ""
+
+
+def test_web_search_tool_shape():
+    assert expert.WEB_SEARCH_TOOL["type"] == "web_search_20260209"
