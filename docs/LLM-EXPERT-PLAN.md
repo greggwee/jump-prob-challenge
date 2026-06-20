@@ -433,3 +433,32 @@ one match at a time, once per match, 1 model default, hard `--max-questions` cap
 nothing. Verified end-to-end on NED vs SWE (Gyökeres 0.15→0.30, Gakpo 0.47→0.45; merged in place;
 submit picked up the web prob). The web weight stays the conservative gate weight until the ledger
 forward-test earns it more — same shadow-then-promote discipline as every prior component.
+
+---
+
+## 14. Backtest (RBP) + weight re-tune (2026-06-20)
+
+`scripts/backtest_expert.py` measures the **offline** expert layer on settled player props in the
+contest metric — RBP = (field_brier − our_brier)·100, using the realized crowd Brier as a
+*conservative* field proxy (the real individual field scores worse, so true RBP is higher). The
+web-search layer is **excluded** — settled matches leak the result, so it's forward-validated via the
+live ledger (`forward_test_web.py`) only.
+
+**As previously armed (player_ga 0.75 / player_sot_ge 0.5), 43 settled player props:** the expert
+layer adds **+64.7 RBP**, almost entirely from rescuing the **catastrophic-low tail** (+70.5 RBP on
+the 5 worst cases) at a trivial −5.8 cost on the body — the intended risk-management profile.
+
+**Weight sweep:** both archetypes improve **monotonically** with weight (genuine calibration, not an
+overfit U-shape). The honest LOO-match CV optimum is 0.75 for both; `player_ga` keeps improving past
+it (the model is structurally blind to assists; the crowd beats us 0.142 vs 0.194). **Re-tuned:**
+
+| Archetype | weight | why |
+|---|---|---|
+| `player_ga` | 0.75 → **0.85** | lean on the ensemble where the model is weakest; *uncapped* — the realized catastrophic rescues were correct (outcome=1) |
+| `player_sot_ge` | 0.5 → **0.75** | CV optimum; the 0.5 was a parsimony discount; the 1.5-logit cap still bounds the SoT over-pull |
+
+**Re-armed backtest:** **+72.2 RBP**, tail Brier 0.796 → **0.607**. Both retain a model anchor; the
+master switch and routing guards are unchanged. Note `player_ga` is uncapped (its ensemble is
+reliable — rich grounding fixes the assist blindness) while `player_sot_ge` keeps its cap (its
+ensemble over-predicts SoT, so the pull must be bounded). The web layer inherits these weights and is
+validated forward as its props settle.
