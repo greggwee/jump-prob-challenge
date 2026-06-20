@@ -66,14 +66,20 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", choices=["settled", "live"], default="settled")
     ap.add_argument("--out", default=str(PREP))
+    ap.add_argument("--gate-only", action="store_true",
+                    help="only archetypes in expert_gate.json — the live-budget path "
+                         "(no spend on shadow archetypes that can't move a submission)")
     args = ap.parse_args()
 
+    gate = set(P.load_gate()) if args.gate_only else None
     items = []
     for mid, question, archetype, our_p, match in _rows(args.source):
         if our_p is None or (isinstance(our_p, float) and math.isnan(our_p)):
             continue
         role, action = P.route(archetype)
         if action == P.EXCLUDE:
+            continue
+        if gate is not None and archetype not in gate:
             continue
         items.append({
             "market_id": str(mid), "question": question, "archetype": archetype,

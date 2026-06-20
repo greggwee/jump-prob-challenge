@@ -44,9 +44,8 @@ def test_unknown_archetype_excluded():
 
 # --- master switch + gate ---
 
-def test_expert_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("AI_EXPERT_ENABLE", raising=False)
-    assert P.expert_enabled() is False
+def test_expert_switch_semantics(monkeypatch):
+    # set explicit values (these win over .env, so the test is hermetic).
     for v in ("0", "false", "no", ""):
         monkeypatch.setenv("AI_EXPERT_ENABLE", v)
         assert P.expert_enabled() is False
@@ -171,7 +170,7 @@ def test_apply_cache_miss_is_pure_model():
 
 def test_apply_master_switch_off_is_pure_model(monkeypatch):
     # the load-bearing safety invariant: even WITH a gate, nothing moves unless armed.
-    monkeypatch.delenv("AI_EXPERT_ENABLE", raising=False)
+    monkeypatch.setenv("AI_EXPERT_ENABLE", "0")
     gate = {"player_ga": {"mode": "blend", "w": 1.0}}
     p, info = P.apply_expert("m1", "player_ga", 0.2, {"m1": {"p_ensemble": 0.6}}, gate)
     assert p == pytest.approx(0.2)                     # disabled -> unchanged

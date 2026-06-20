@@ -89,10 +89,27 @@ def route(archetype: str) -> tuple[str, str]:
     return ROUTING.get(archetype, DEFAULT_ROUTE)
 
 
+_dotenv_loaded = False
+
+
+def _ensure_env() -> None:
+    """Load .env once so AI_EXPERT_ENABLE can live alongside the other keys,
+    regardless of whether the live path has already loaded it (real env wins)."""
+    global _dotenv_loaded
+    if not _dotenv_loaded:
+        try:
+            from jumpprob.submit.env import load_dotenv
+            load_dotenv()
+        except Exception:
+            pass
+        _dotenv_loaded = True
+
+
 def expert_enabled() -> bool:
     """Master kill-switch. The whole expert blend is OFF (pure shadow) unless
-    AI_EXPERT_ENABLE is set truthy in the live env. This is the single arming
-    control: with it unset, no role weight or gate file can change a submission."""
+    AI_EXPERT_ENABLE is set truthy in the live env / .env. This is the single
+    arming control: with it unset, no gate file can change a submission."""
+    _ensure_env()
     return os.environ.get("AI_EXPERT_ENABLE", "0").strip().lower() not in ("", "0", "false", "no")
 
 
