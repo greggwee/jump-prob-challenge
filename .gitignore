@@ -20,3 +20,6 @@ data/*.log
 
 # LLM expert panel — slate-specific, non-deterministic caches (regenerated per slate)
 data/processed/ai_panel*.json
+# Tier-3 web pass: runtime state + forward-test ledger
+data/processed/ai_panel_web_state.json
+data/processed/ai_panel_web_ledger.csv

@@ -89,3 +89,14 @@ def test_forecast_web_no_key(monkeypatch):
 
 def test_web_search_tool_shape():
     assert expert.WEB_SEARCH_TOOL["type"] == "web_search_20260209"
+
+
+def test_web_panel_default_one_wide():
+    assert expert.WEB_PANEL == ["claude-opus-4-8"]  # 1-wide default for budget
+
+
+def test_web_forecast_no_key(monkeypatch):
+    monkeypatch.setattr(expert, "_client", None, raising=False)
+    monkeypatch.setattr(expert, "_no_key", True, raising=False)
+    res = expert.web_forecast("Will X have 1+ SoT?", 0.2, {"matchup": "A vs B"})
+    assert res["p_ensemble"] is None and res["n"] == 0

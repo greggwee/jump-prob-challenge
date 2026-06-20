@@ -205,6 +205,27 @@ def forecast_web(question: str, model_pct: float, grounding: dict | None = None,
     return _parse_prob(text), text + f"\n[searches={searches}]"
 
 
+# Web-search panel: 1-wide (Opus) by default for budget; add Sonnet for a 2-wide
+# ensemble when budget allows (each web call is ~$0.2-0.4).
+WEB_PANEL = ["claude-opus-4-8"]
+
+
+def web_forecast(question: str, model_pct: float, grounding: dict | None = None,
+                 models: list[str] | None = None, role: str = "lineup",
+                 max_uses: int = 3) -> dict:
+    """Web-search ensemble for one question: each model searches live lineup/form/news
+    then prices it; robust-combine. Sequential (web search is slow and few questions
+    run per slate). Returns {'models': {m:p}, 'p_ensemble', 'n', 'texts'}."""
+    models = models or WEB_PANEL
+    out: dict[str, float | None] = {}
+    texts: dict[str, str] = {}
+    for m in models:
+        p, t = forecast_web(question, model_pct, grounding, model=m, role=role, max_uses=max_uses)
+        out[m], texts[m] = p, t
+    probs = [p for p in out.values() if p is not None]
+    return {"models": out, "p_ensemble": combine_logodds(probs), "n": len(probs), "texts": texts}
+
+
 def panel_forecast(question: str, model_pct: float, role: str = "tactical",
                    grounding: dict | None = None, models: list[str] | None = None) -> dict:
     """Fan out across the panel (one thread per model); robust-combine the results.

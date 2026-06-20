@@ -203,6 +203,21 @@ def write_panel(entries: dict, path: Path = PANEL_PATH, meta: dict | None = None
     return path
 
 
+def merge_panel(entries: dict, path: Path = PANEL_PATH, meta: dict | None = None) -> Path:
+    """Update only the given market_ids in an existing panel, preserving the rest.
+    Used by the near-kickoff web pass so refreshing one match's gated player props
+    doesn't clobber the daily baseline for every other match."""
+    path = Path(path)
+    existing = {}
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text()).get("entries", {}) or {}
+        except Exception:
+            existing = {}
+    existing.update(entries)
+    return write_panel(existing, path, meta)
+
+
 def load_panel(path: Path = PANEL_PATH, check_age: bool = True) -> dict:
     """{market_id(str): entry} for fresh entries. Missing/corrupt file -> {} (no-op).
     Entries carry generated_at; stale ones are dropped (guard 6)."""

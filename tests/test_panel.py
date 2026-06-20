@@ -144,6 +144,17 @@ def test_load_missing_file_is_empty():
     assert P.load_panel("does/not/exist.json") == {}
 
 
+def test_merge_panel_preserves_others(tmp_path):
+    path = tmp_path / "ai_panel.json"
+    P.write_panel({"a": {"p_ensemble": 0.1}, "b": {"p_ensemble": 0.2}}, path)
+    P.merge_panel({"b": {"p_ensemble": 0.55, "source": "web"}, "c": {"p_ensemble": 0.3}}, path)
+    loaded = P.load_panel(path, check_age=False)
+    assert loaded["a"]["p_ensemble"] == pytest.approx(0.1)     # untouched
+    assert loaded["b"]["p_ensemble"] == pytest.approx(0.55)    # updated
+    assert loaded["b"]["source"] == "web"
+    assert loaded["c"]["p_ensemble"] == pytest.approx(0.3)     # added
+
+
 def test_stale_entry_filtered(tmp_path, monkeypatch):
     path = tmp_path / "ai_panel.json"
     old = time.time() - 100 * 3600  # 100h old
