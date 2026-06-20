@@ -42,22 +42,45 @@ def test_unknown_archetype_excluded():
     assert P.DEFAULT_ROUTE[1] == P.EXCLUDE
 
 
-# --- weights ---
+# --- master switch + gate ---
 
-def test_role_weight_defaults_zero(monkeypatch):
-    monkeypatch.delenv("AI_TACTICAL_WEIGHT", raising=False)
-    monkeypatch.delenv("AI_LINEUP_WEIGHT", raising=False)
-    assert P.role_weight("tactical") == 0.0
-    assert P.role_weight("lineup") == 0.0
+def test_expert_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("AI_EXPERT_ENABLE", raising=False)
+    assert P.expert_enabled() is False
+    for v in ("0", "false", "no", ""):
+        monkeypatch.setenv("AI_EXPERT_ENABLE", v)
+        assert P.expert_enabled() is False
+    for v in ("1", "true", "yes"):
+        monkeypatch.setenv("AI_EXPERT_ENABLE", v)
+        assert P.expert_enabled() is True
 
 
-def test_role_weight_env_and_clamp(monkeypatch):
-    monkeypatch.setenv("AI_LINEUP_WEIGHT", "0.4")
-    assert P.role_weight("lineup") == pytest.approx(0.4)
-    monkeypatch.setenv("AI_LINEUP_WEIGHT", "5")
-    assert P.role_weight("lineup") == 1.0
-    monkeypatch.setenv("AI_LINEUP_WEIGHT", "-1")
-    assert P.role_weight("lineup") == 0.0
+def test_load_gate_missing_is_empty():
+    assert P.load_gate("does/not/exist.json") == {}
+
+
+def test_load_gate_roundtrip(tmp_path):
+    path = tmp_path / "expert_gate.json"
+    path.write_text('{"player_ga": {"mode": "blend", "w": 0.5}}')
+    g = P.load_gate(path)
+    assert g["player_ga"]["w"] == 0.5
+
+
+# --- ensemble-informed one-sided floor (the player_sot_ge tool) ---
+
+def test_ensemble_floor_lifts_deep_low():
+    # model egregiously below the expert -> lifted to f*expert
+    assert P.ensemble_floor(0.09, 0.55, f=0.5) == pytest.approx(0.275)
+
+
+def test_ensemble_floor_leaves_moderate_untouched():
+    # model already above f*expert -> unchanged (body not disturbed)
+    assert P.ensemble_floor(0.15, 0.25, f=0.5) == pytest.approx(0.15)
+
+
+def test_ensemble_floor_never_lowers():
+    assert P.ensemble_floor(0.8, 0.2, f=0.5) == pytest.approx(0.8)
+    assert P.ensemble_floor(0.3, None, f=0.5) == pytest.approx(0.3)
 
 
 # --- robust aggregation (trim-median in log-odds) ---
@@ -146,28 +169,41 @@ def test_apply_cache_miss_is_pure_model():
     assert info.get("miss") is True
 
 
-def test_apply_shadow_logs_but_never_blends(monkeypatch):
-    monkeypatch.setenv("AI_TACTICAL_WEIGHT", "1.0")  # even fully on,
-    p, info = P.apply_expert("m1", "corners_gt", 0.3, {"m1": {"p_ensemble": 0.8}})
-    assert p == 0.3                                   # shadow is never blended
-    assert info["expert"] == pytest.approx(0.8)       # but it IS logged
+def test_apply_master_switch_off_is_pure_model(monkeypatch):
+    # the load-bearing safety invariant: even WITH a gate, nothing moves unless armed.
+    monkeypatch.delenv("AI_EXPERT_ENABLE", raising=False)
+    gate = {"player_ga": {"mode": "blend", "w": 1.0}}
+    p, info = P.apply_expert("m1", "player_ga", 0.2, {"m1": {"p_ensemble": 0.6}}, gate)
+    assert p == pytest.approx(0.2)                     # disabled -> unchanged
+    assert info["expert"] == pytest.approx(0.6)        # but logged
 
 
-def test_apply_blend_zero_weight_unchanged(monkeypatch):
-    monkeypatch.delenv("AI_LINEUP_WEIGHT", raising=False)
-    p, info = P.apply_expert("m1", "player_ga", 0.2, {"m1": {"p_ensemble": 0.6}})
-    assert p == pytest.approx(0.2)                     # default weight 0 -> unchanged
-    assert info["expert"] == pytest.approx(0.6)
+def test_apply_shadow_never_blends_even_armed(monkeypatch):
+    monkeypatch.setenv("AI_EXPERT_ENABLE", "1")
+    gate = {"corners_gt": {"mode": "blend", "w": 1.0}}  # even with a gate entry,
+    p, info = P.apply_expert("m1", "corners_gt", 0.3, {"m1": {"p_ensemble": 0.8}}, gate)
+    assert p == 0.3                                    # shadow route is protected
+    assert info["expert"] == pytest.approx(0.8)
 
 
-def test_apply_blend_moves_when_weight_on(monkeypatch):
-    monkeypatch.setenv("AI_LINEUP_WEIGHT", "1.0")
-    p, info = P.apply_expert("m1", "player_ga", 0.2, {"m1": {"p_ensemble": 0.6}})
+def test_apply_no_gate_entry_is_pure_model(monkeypatch):
+    monkeypatch.setenv("AI_EXPERT_ENABLE", "1")
+    p, _ = P.apply_expert("m1", "player_ga", 0.2, {"m1": {"p_ensemble": 0.6}}, {})
+    assert p == pytest.approx(0.2)                     # armed but no gate -> unchanged
+
+
+def test_apply_blend_moves_when_armed(monkeypatch):
+    monkeypatch.setenv("AI_EXPERT_ENABLE", "1")
+    gate = {"player_ga": {"mode": "blend", "w": 1.0}}
+    p, info = P.apply_expert("m1", "player_ga", 0.2, {"m1": {"p_ensemble": 0.6}}, gate)
     assert p == pytest.approx(0.6, abs=1e-6)
+    assert info["mode"] == "blend"
 
 
-def test_apply_capped_pull(monkeypatch):
-    monkeypatch.setenv("AI_LINEUP_WEIGHT", "1.0")
-    p, _ = P.apply_expert("m1", "player_sot_ge", 0.11, {"m1": {"p_ensemble": 0.95}})
-    # capped: cannot leap all the way to 0.95
-    assert 0.11 < p < 0.95
+def test_apply_asym_floor_when_armed(monkeypatch):
+    monkeypatch.setenv("AI_EXPERT_ENABLE", "1")
+    gate = {"player_sot_ge": {"mode": "asym_floor", "f": 0.5}}
+    # deep-low gets floored to 0.5*ensemble; nothing else
+    p, info = P.apply_expert("m1", "player_sot_ge", 0.09, {"m1": {"p_ensemble": 0.55}}, gate)
+    assert p == pytest.approx(0.275)
+    assert info["mode"] == "asym_floor"

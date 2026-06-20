@@ -125,6 +125,7 @@ class Runner:
         self.field_sharpness = strategy.load_field_sharpness()  # Phase C
         self.confidence = strategy.load_confidence_gate()       # Phase 1 asym. calibration
         self.panel = panel_mod.load_panel()                     # L0 LLM expert cache (shadow by default)
+        self.expert_gate = panel_mod.load_gate()                # L2 per-archetype blend gate (off unless AI_EXPERT_ENABLE)
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -506,7 +507,7 @@ class Runner:
                 # default env (all role weights 0) apply_expert returns p_a unchanged,
                 # so sub_a is byte-for-byte identical; a cache miss -> pure model. The
                 # expert number is still logged for the forward-test. See LLM-EXPERT-PLAN.
-                p_blend, einfo = panel_mod.apply_expert(r["id"], q.archetype, p_a, self.panel)
+                p_blend, einfo = panel_mod.apply_expert(r["id"], q.archetype, p_a, self.panel, self.expert_gate)
                 p_a = float(np.clip(p_blend, 0.01, 0.99))
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,

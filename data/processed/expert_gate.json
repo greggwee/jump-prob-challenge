@@ -1,0 +1,14 @@
+{
+  "fouls_gt": {
+    "mode": "blend",
+    "w": 0.75
+  },
+  "offsides_ge": {
+    "mode": "blend",
+    "w": 0.6
+  },
+  "player_ga": {
+    "mode": "blend",
+    "w": 0.75
+  }
+}

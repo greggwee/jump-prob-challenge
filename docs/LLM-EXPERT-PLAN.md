@@ -316,3 +316,45 @@ non-deterministic caches → gitignored (regenerated per slate by prep→write).
 **Recommended L2:** promote `player_ga` live at a *regularized* weight (start conservative, e.g. w≈0.5,
 not the CV's aggressive 1.0, given n=10); build the asymmetric `player_sot_ge` tail-rescue; re-fit
 `fouls_gt`/`offsides_ge` weights with regularization. No weight is flipped live without sign-off.
+
+---
+
+## 11. Phase L2 — fitted gate + the `player_sot_ge` verdict (2026-06-20)
+
+`scripts/fit_expert_gate.py` chooses each blendable archetype's parameter by honest LOO-match CV with
+a **parsimony rule** (smallest param within ε of the best OOS Brier, capped at w≤0.75 — never full
+replacement) and an improvement gate. Output `data/processed/expert_gate.json`, **inert until
+`AI_EXPERT_ENABLE=1`**:
+
+| Archetype | mode | param | model → OOS Brier | catastrophic tail | ship? |
+|---|---|---|---|---|---|
+| `player_ga` | blend | w=0.75 | 0.1937 → **0.1834** (+0.0103) | 0.829 → 0.546 | ✅ |
+| `fouls_gt` | blend | w=0.75 | 0.2770 → 0.2721 (+0.0049) | — | ✅ |
+| `offsides_ge` | blend | w=0.60 | 0.2803 → 0.2784 (+0.0020) | 0.706 → 0.649 | ✅ (marginal) |
+| `player_sot_ge` | asym_floor | **f=0** | 0.2006 → 0.2006 (0) | no help | ❌ stay shadow |
+
+**The `player_sot_ge` verdict — the motivating case, and why the discipline mattered.** The intuition
+that launched this work (use the LLM to rescue our catastrophic-low SoT bets, à la Gyökeres 0.11→0.44)
+does **not** generalize:
+- The ensemble systematically **over-predicts** player SoT. An ensemble floor at f=0.5 lifts 12
+  low-model cases — but **9 were outcome=0 (false lifts) vs 3 outcome=1**: wrong more than twice as
+  often as right.
+- Every nonzero floor **monotonically worsens** mean Brier (body Brier 0.134 → 0.160 as f→0.7); the
+  tail rescue (0.775 → 0.729) is marginal and bought at a real body cost.
+- We are already **on par with the crowd** on `player_sot_ge` (0.2006 vs 0.2047) — it is *not* a
+  lagging case. The single Gyökeres anecdote doesn't represent the population.
+- Verdict: keep `player_sot_ge` **shadow**. The Phase-1 flat floor (0.15) is the right, validated
+  risk-management here; the LLM does not improve it. The shadow-first gate protected us from a
+  plausible-but-wrong intervention — exactly its job.
+
+L2 therefore ships precisely where we genuinely lag the crowd (`player_ga`, by 0.052) plus the two
+no-edge count types, and correctly declines the rest. This realises the user's directive — a *weighted*
+move toward the better-calibrated center as risk management, on the uncertain question types — without
+touching anything we're already good at.
+
+**Arming (the only live change, fully reversible):**
+1. Schedule `scripts/ai_panel_live.py` once per slate (after the model numbers exist, before lock) to
+   generate the live panel out of band.
+2. Set `AI_EXPERT_ENABLE=1` in the live scheduler env. Unset it to instantly revert to pure model.
+   The per-archetype gate (`expert_gate.json`) and the routing guards bound *what* can move; the
+   switch bounds *whether* anything moves.

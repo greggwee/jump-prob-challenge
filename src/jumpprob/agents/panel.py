@@ -79,12 +79,8 @@ ROUTING: dict[str, tuple[str, str]] = {
 }
 DEFAULT_ROUTE = ("tactical", EXCLUDE)          # unknown archetype -> pure model
 
-_ROLE_ENV = {
-    "tactical": "AI_TACTICAL_WEIGHT",
-    "lineup": "AI_LINEUP_WEIGHT",
-    "discipline": "AI_DISCIPLINE_WEIGHT",
-}
-DEFAULT_CAP = 1.5            # logit-space pull cap for BLEND_CAPPED (fit in Phase L2)
+GATE_PATH = Path("data/processed/expert_gate.json")
+DEFAULT_CAP = 1.5            # logit-space pull cap for BLEND_CAPPED blends
 DEFAULT_MAX_AGE_H = 36.0
 CLIP_LO, CLIP_HI = 0.03, 0.97
 
@@ -93,17 +89,25 @@ def route(archetype: str) -> tuple[str, str]:
     return ROUTING.get(archetype, DEFAULT_ROUTE)
 
 
-def role_weight(role: str) -> float:
-    """Live blend weight in [0, 1] for a role; read lazily so a .env flip or a
-    restart both take effect. Default 0.0 == shadow mode (logged, not blended)."""
-    env = _ROLE_ENV.get(role)
-    if env is None:
-        return 0.0
+def expert_enabled() -> bool:
+    """Master kill-switch. The whole expert blend is OFF (pure shadow) unless
+    AI_EXPERT_ENABLE is set truthy in the live env. This is the single arming
+    control: with it unset, no role weight or gate file can change a submission."""
+    return os.environ.get("AI_EXPERT_ENABLE", "0").strip().lower() not in ("", "0", "false", "no")
+
+
+def load_gate(path: Path = GATE_PATH) -> dict:
+    """Per-archetype blend config fitted in Phase L2 (scripts/fit_expert_gate.py):
+        {archetype: {"mode": "blend", "w": 0.5}}                 symmetric log-odds blend
+        {archetype: {"mode": "asym_floor", "f": 0.5}}           one-sided ensemble floor
+    Missing file -> {} -> every blendable archetype stays shadow (no-op)."""
+    path = Path(path)
+    if not path.exists():
+        return {}
     try:
-        w = float(os.environ.get(env, "0") or 0)
-    except ValueError:
-        return 0.0
-    return min(1.0, max(0.0, w))
+        return json.loads(path.read_text())
+    except Exception:
+        return {}
 
 
 def _max_age_h() -> float:
@@ -160,6 +164,18 @@ def blend_logodds(p_model: float, p_expert: float | None, w: float, cap: float |
     return _sigmoid(target)
 
 
+def ensemble_floor(p_model: float, p_expert: float | None, f: float) -> float:
+    """One-sided ensemble-informed floor: lift the submission to f * expert ONLY
+    when the model sits egregiously below the expert (the catastrophic-low tail);
+    moderate bets are untouched and nothing is ever lowered. This is the surgical
+    'rescue but don't disturb the body' tool for player_sot_ge, where a UNIFORM
+    blend hurt (the ensemble over-predicts SoT) but the deep-low tail needs lifting.
+    Generalises the Phase-1 flat floor to a per-player, evidence-set floor."""
+    if p_expert is None or f <= 0:
+        return float(p_model)
+    return max(float(p_model), f * clip01(p_expert))
+
+
 # --- cache I/O ---
 
 def write_panel(entries: dict, path: Path = PANEL_PATH, meta: dict | None = None) -> Path:
@@ -193,9 +209,20 @@ def load_panel(path: Path = PANEL_PATH, check_age: bool = True) -> dict:
     return out
 
 
-def apply_expert(market_id, archetype: str, p_model: float, panel: dict) -> tuple[float, dict]:
-    """Return (p_final, info). Pure-model fallback on any miss; info is logged for
-    the forward-test. At the default env (all weights 0) p_final == p_model exactly."""
+def apply_expert(market_id, archetype: str, p_model: float, panel: dict,
+                 gate: dict | None = None) -> tuple[float, dict]:
+    """Return (p_final, info). info is always logged (shadow forward-testing).
+
+    Safety ladder (each rung is a pure-model fallback):
+      * EXCLUDE archetype (sharp)            -> never reads the panel.
+      * cache miss / no ensemble             -> pure model.
+      * SHADOW archetype (proven edge)       -> logged, NEVER blended.
+      * master switch off (AI_EXPERT_ENABLE) -> logged, NEVER blended.
+      * no gate entry / zero param           -> pure model.
+    Only when ALL pass does the per-archetype gate apply its mode:
+      blend       -> symmetric log-odds blend at weight w (cap for blend_capped).
+      asym_floor  -> one-sided ensemble floor at fraction f (player_sot_ge).
+    """
     role, action = route(archetype)
     info = {"role": role, "action": action, "expert": None}
     if action == EXCLUDE:
@@ -206,9 +233,18 @@ def apply_expert(market_id, archetype: str, p_model: float, panel: dict) -> tupl
         info["miss"] = True
         return float(p_model), info
     info["expert"] = round(float(p_expert), 4)
-    if action == SHADOW:
+    if action == SHADOW or not expert_enabled():
         return float(p_model), info          # logged, never blended
-    w = role_weight(role)
-    info["w"] = w
-    cap = DEFAULT_CAP if action == BLEND_CAPPED else None
+    gate = gate if gate is not None else load_gate()
+    g = gate.get(archetype)
+    if not g:
+        return float(p_model), info
+    mode = g.get("mode", "blend")
+    if mode == "asym_floor":
+        f = float(g.get("f", 0.0))
+        info["mode"], info["f"] = "asym_floor", f
+        return ensemble_floor(p_model, p_expert, f), info
+    w = float(g.get("w", 0.0))
+    cap = g.get("cap", DEFAULT_CAP if action == BLEND_CAPPED else None)
+    info["mode"], info["w"] = "blend", w
     return blend_logodds(p_model, p_expert, w, cap), info
