@@ -25,29 +25,41 @@ from jumpprob.agents.grounding import history_implied
 from jumpprob.submit.parser import parse_question
 
 PREP = Path("data/processed/ai_panel_prep.json")
+BASE_RATES = json.loads(Path("data/processed/base_rates.json").read_text())
 PLAYER = {"player_sot_ge", "player_ga", "player_scores"}
-_GKEYS = ("resolved", "league", "minutes", "sot_p90", "shots_p90", "goals_p90",
-          "ga_p90", "assists_p90", "minutes_assumed", "half", "implied")
+# Tier-1 rich grounding: full club profile + matchup + the archetype base rate, so
+# the panel reasons from the player's whole track record and the opponent (inferred
+# from the matchup) and stays anchored to the empirical base rate (curbs over-pricing).
+_GKEYS = ("resolved", "position", "league", "minutes", "sot_p90", "shots_p90",
+          "goals_p90", "npg_p90", "assists_p90", "ga_p90", "xG_p90", "xA_p90",
+          "key_passes_p90", "minutes_assumed", "half", "implied")
 
 
-def _grounding(question: str, archetype: str) -> dict | None:
+def _grounding(question: str, archetype: str, match: str) -> dict | None:
     if archetype not in PLAYER:
-        return None
+        # tactical/team questions: at minimum tell the panel who is playing and the
+        # base rate (previously they got only the question + our prior — fully blind).
+        return {"matchup": match, "base_rate": BASE_RATES.get(archetype)}
     q = parse_question(question)
     if q is None or not q.subject:
         return None
     hi = history_implied(q.subject, archetype, minutes=70, half=(q.half == 2))
+    base = BASE_RATES.get(archetype)
     if hi.get("resolved") is None:
-        return {"resolved": None, "note": "no club-history join -> base rate"}
-    return {k: hi.get(k) for k in _GKEYS}
+        return {"resolved": None, "matchup": match, "base_rate": base,
+                "note": "no club-history join -> lean on base rate + matchup"}
+    g = {k: hi.get(k) for k in _GKEYS}
+    g["matchup"] = match            # both teams; opponent inferred from the player's side
+    g["base_rate"] = base           # empirical prior for this exact market type
+    return g
 
 
 def _rows(source: str):
     if source == "live":
         df = pd.read_csv("data/processed/odds_anchor_run.csv")
-        return [(r.market_id, r.question, r.archetype, float(r.p_bot_a)) for r in df.itertuples()]
+        return [(r.market_id, r.question, r.archetype, float(r.p_bot_a), r.match) for r in df.itertuples()]
     df = pd.read_parquet("data/processed/settled_with_crowd.parquet")
-    return [(r.market_id, r.question, r.archetype, float(r.our_p)) for r in df.itertuples()]
+    return [(r.market_id, r.question, r.archetype, float(r.our_p), r.match) for r in df.itertuples()]
 
 
 def main() -> None:
@@ -57,7 +69,7 @@ def main() -> None:
     args = ap.parse_args()
 
     items = []
-    for mid, question, archetype, our_p in _rows(args.source):
+    for mid, question, archetype, our_p, match in _rows(args.source):
         if our_p is None or (isinstance(our_p, float) and math.isnan(our_p)):
             continue
         role, action = P.route(archetype)
@@ -65,8 +77,8 @@ def main() -> None:
             continue
         items.append({
             "market_id": str(mid), "question": question, "archetype": archetype,
-            "role": role, "action": action, "model_pct": our_p,
-            "grounding": _grounding(question, archetype),
+            "role": role, "action": action, "model_pct": our_p, "match": match,
+            "grounding": _grounding(question, archetype, match),
         })
 
     Path(args.out).write_text(json.dumps(items, indent=2))

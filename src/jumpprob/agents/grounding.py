@@ -56,6 +56,7 @@ def player_history(name: str) -> dict:
     return {
         "query": name, "resolved": match, "method": method,
         "source": row.get("source"), "league": row.get("league"),
+        "position": row.get("position") or None,
         "minutes": int(row.get("minutes") or 0),
         "sot_p90": round(float(sot), 2), "sot_source": sot_src,
         "shots_p90": _r(row.get("shots_p90")), "npg_p90": _r(row.get("npg_p90")),

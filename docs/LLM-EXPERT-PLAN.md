@@ -358,3 +358,36 @@ touching anything we're already good at.
 2. Set `AI_EXPERT_ENABLE=1` in the live scheduler env. Unset it to instantly revert to pure model.
    The per-archetype gate (`expert_gate.json`) and the routing guards bound *what* can move; the
    switch bounds *whether* anything moves.
+
+---
+
+## 12. Tier-1 rich grounding — and `player_sot_ge` reverses (2026-06-20)
+
+L1/L2 ran on **thin** grounding (player career club rates only; team questions got nothing but the
+question + our prior). We enriched the grounding from data we already have: the **matchup** (opponent
+inferred from the player's side), the player's **full** club profile (position, shots/SoT/G/A/xG/xA/
+key-passes per-90, minutes, league), and the archetype's **empirical base rate** as an explicit anchor
+("treat as the anchor; do not over-price a favourite"). Re-ran the player-prop panel (Opus+Sonnet, ~$1.6)
+and re-fit:
+
+| Archetype | thin ens mean | rich ens mean | realized | thin blend | rich blend (gate) |
+|---|---|---|---|---|---|
+| `player_sot_ge` | 0.41 (over-predicts) | **0.34** (calibrated) | 0.31 | 0.2042 (declined) | **0.1995** w=0.5 → ships |
+| `player_ga` | — | — | 0.20 | 0.1758 | **0.1631** w=0.75 |
+| `player_scores` | 0.097 | 0.058 | 0.00 | 0.0297 (w=0) | 0.0297 (w=0, protected) |
+
+**The `player_sot_ge` over-prediction was a thin-context artifact.** With the base-rate anchor +
+opponent + full profile, the rich ensemble calibrates (0.41 → 0.34 vs realized 0.31), its Brier beats
+*both* our model and the crowd (0.1922 vs 0.2006 vs 0.2047), and the capped blend now improves OOS
+(0.1995 < 0.2006) **and** cuts the catastrophic-low tail (0.775 → 0.678). It flips from DECLINED to
+SHIPPED. This validates the original instinct that the panel must reason from rich context, not two
+career numbers — and shows the L1/L2 verdicts were *conditional on the grounding*, as flagged.
+
+**Gate now (rich-validated):** `player_ga` blend w=0.75; `player_sot_ge` capped blend w=0.5.
+`fouls_gt`/`offsides_ge` (thin-fit, marginal +0.005/+0.002) **dropped** pending a rich re-validation —
+the gate ships only what's validated on the grounding the live pipeline generates. Tactical questions
+now also receive the matchup + base rate (were fully blind). Still inert until `AI_EXPERT_ENABLE=1`.
+
+**Not yet built:** Tier 2 — the lineup pass (API-Football confirmed XI / expected minutes); Tier 3 —
+web search for live (post-cutoff) form + online/critic consensus. Budget-managed: the re-test was
+scoped to the player-prop archetypes (the gate-relevant ones), not the full 221.

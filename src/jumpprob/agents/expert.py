@@ -83,18 +83,35 @@ def build_system(role: str) -> str:
 
 
 def build_user(question: str, model_pct: float, grounding: dict | None = None) -> str:
-    lines = [
-        f"Question: {question}",
-        f"A baseline statistical model estimates YES at {model_pct * 100:.0f}%.",
-    ]
-    if grounding:
-        lines.append("Track record (evidence our model under-uses — weigh it):")
-        for k, v in grounding.items():
-            if v is not None and v != "":
-                lines.append(f"  - {k}: {v}")
+    g = grounding or {}
+    matchup = g.get("matchup")
+    base = g.get("base_rate")
+    lines = [f"Question: {question}"]
+    if matchup:
+        lines.append(f"Match: {matchup} (infer the subject's side and the opponent).")
+    lines.append(f"Our statistical model estimates YES at {model_pct * 100:.0f}%.")
+    if base is not None:
+        lines.append(
+            f"Empirical base rate for this exact market type: {base * 100:.0f}%. Treat this as "
+            "the anchor — the track record and the matchup are reasons to move ABOVE or BELOW "
+            "it, but most cases land near the base rate. Do not over-price a favourite."
+        )
+    if g.get("resolved"):
+        lines.append(f"Player: {g['resolved']}"
+                     + (f" ({g.get('position')}, {g.get('league')})" if g.get("position") else ""))
+    prof = {k: v for k, v in g.items()
+            if k not in ("matchup", "base_rate", "note", "resolved", "position", "league")
+            and v is not None and v != ""}
+    if prof:
+        lines.append("Track record (per-90 club form — evidence our model under-uses):")
+        for k, v in prof.items():
+            lines.append(f"  - {k}: {v}")
+    if g.get("note"):
+        lines.append(f"  ({g['note']})")
     lines.append(
-        "Give your single best-calibrated probability (0-1) that the answer is YES, "
-        "and a one-sentence rationale."
+        "Weigh the matchup (opponent strength, game state) against the track record, stay "
+        "calibrated to the base rate, and give your single best probability (0-1) that the "
+        "answer is YES, plus a one-sentence rationale."
     )
     return "\n".join(lines)
 

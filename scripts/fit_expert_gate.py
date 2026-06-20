@@ -34,8 +34,8 @@ TAIL_TOL = 3e-3      # allowed mean-Brier give-up for a tail (risk-mgmt) rescue
 TAIL_LOW = 0.20
 
 
-def _load() -> pd.DataFrame:
-    ent = json.loads(Path(P.PANEL_PATH).read_text())["entries"]
+def _load(panel_path: str) -> pd.DataFrame:
+    ent = json.loads(Path(panel_path).read_text())["entries"]
     panel = pd.DataFrame([{"market_id": str(k), "p_exp": v["p_ensemble"]} for k, v in ent.items()])
     panel = panel[panel["p_exp"].notna()]
     s = pd.read_parquet("data/processed/settled_with_crowd.parquet")
@@ -81,24 +81,34 @@ def _fit(g: pd.DataFrame, mode: str, grid: list, cap):
 
 
 def main() -> None:
-    df = _load()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--panel", default=str(P.PANEL_PATH))
+    args = ap.parse_args()
+
+    df = _load(args.panel)
     gate, report = {}, []
     for arch, g in df.groupby("archetype"):
         g = g.dropna(subset=["p_exp", "outcome", "our_p"])
         role, action = P.route(arch)
         if action not in (P.BLEND, P.BLEND_CAPPED) or len(g) < 4:
             continue
-        if action == P.BLEND_CAPPED:        # player_sot_ge -> asymmetric ensemble floor
-            r = _fit(g, "asym_floor", FLOOR_F, None)
-            mode, key, param = "asym_floor", "f", r["gate_param"]
+        if action == P.BLEND_CAPPED:
+            # player_sot_ge: try a CAPPED symmetric blend (works once the rich
+            # ensemble is calibrated) AND the asymmetric floor; keep whichever is
+            # better OOS. apply_expert auto-caps blend_capped routes.
+            rb, rf = _fit(g, "blend", BLEND_W, P.DEFAULT_CAP), _fit(g, "asym_floor", FLOOR_F, None)
+            if rb["oos"] <= rf["oos"]:
+                r, mode, key, param = rb, "blend", "w", rb["gate_param"]
+            else:
+                r, mode, key, param = rf, "asym_floor", "f", rf["gate_param"]
             beats_mean = r["oos"] < r["b_model"] - MARGIN
-            tail_help = (r["tail_n"] > 0 and r["tail_gate"] < r["tail_model"]
+            tail_help = (mode == "asym_floor" and r["tail_n"] > 0 and r["tail_gate"] < r["tail_model"]
                          and r["oos"] <= r["b_model"] + TAIL_TOL)
             emit = param > 0 and (beats_mean or tail_help)
             reason = "beats-mean" if beats_mean else ("tail-rescue" if tail_help else "no-support")
         else:                               # symmetric blend
-            cap = P.DEFAULT_CAP if action == P.BLEND_CAPPED else None
-            r = _fit(g, "blend", BLEND_W, cap)
+            r = _fit(g, "blend", BLEND_W, None)
             mode, key, param = "blend", "w", r["gate_param"]
             emit = param > 0 and r["oos"] < r["b_model"] - MARGIN
             reason = "beats-mean" if emit else "no-support"
