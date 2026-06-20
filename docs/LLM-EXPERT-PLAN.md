@@ -274,3 +274,45 @@ Each phase is independently shippable and independently reversible (set its weig
 - The Gyökeres-class catastrophic-low tail on `player_sot_ge`/`player_ga` is measurably reduced in
   the L1 report (the user's stated objective), with no regression on `player_scores` or any
   market-priced or proven-edge archetype.
+
+---
+
+## 10. Phase L1 forward-test results (2026-06-20)
+
+Ran the full 3-model panel (Opus 4.8 + Sonnet 4.6 + Haiku 4.5) out of band over all 221 non-sharp
+settled questions (`scripts/ai_panel_write.py`, 603s, 0 failed ensembles), then scored model-vs-blend
+Brier by honest **leave-one-match-out** CV with a grid that includes w=0 (`scripts/forward_test_llm.py`).
+215 questions joined (known-bug excluded), 26 archetypes, 26 matches. The flagged-case verdict:
+
+| Archetype | route | n | model Brier | crowd | blend (CV w) | verdict |
+|---|---|---|---|---|---|---|
+| `player_ga` | blend | 10 | 0.1937 | 0.1418 | **0.1741** (w=1.0) | **PROMOTE** (+0.0196) |
+| `fouls_gt` | blend | 21 | 0.2770 | 0.2609 | 0.2689 (w=1.0) | promote, small (+0.0081) |
+| `offsides_ge` | blend | 22 | 0.2803 | 0.2534 | 0.2737 (w=1.0) | promote, small (+0.0067) |
+| `player_sot_ge` | blend_capped | 29 | 0.2006 | 0.2047 | 0.2189 (w=0.35) | **DO NOT** (−0.0183) |
+| `sot_gt`,`corners_gt`,`team_sot_ge`,`player_scores` | shadow | — | — | — | CV picks w=0 / blend hurts | **stay shadow (vindicated)** |
+
+**Findings — they match every prior (shadow_agents.py, the settled audit):**
+1. **`player_ga` is the clean win.** Assists are the model's blind spot; the full-ensemble blend cuts
+   Brier 0.1937→0.1741, closing ~40% of the gap to the crowd (0.1418). Robust across all 10 LOO folds.
+2. **`player_sot_ge` — the uniform blend HURTS (−0.0183).** The ensemble systematically *over-predicts*
+   SoT (it lifts the correctly-low bets, not just the catastrophic ones — same over-prediction the raw
+   history showed). **But the catastrophic-low tail IS rescued** (we bet <0.20 and it happened: Brier
+   0.775→0.712). Verdict: not a uniform blend — an **asymmetric, tail-only rescue** (pull UP only when
+   the expert sits far above us), mirroring the Phase-1 one-sided floor. That is the L2 refinement.
+3. **The shadow protections are vindicated.** Blending `corners_gt` (−0.0076), `team_sot_ge` (−0.0084),
+   or `player_scores` (would drag our 0.030 edge toward the 0.31 ensemble) all HURT — CV correctly
+   selects w=0. Our proven edges must stay shadow.
+
+**Catastrophic-low tail (we bet <0.20 but it happened) — the user's stated target:**
+`player_ga` 0.829→0.431 (2 cases, massive); `player_sot_ge` 0.775→0.712 (3 cases, helped but
+outweighed by body losses under a uniform blend). The fix the data points to is *targeted*
+(`player_ga` full blend; `player_sot_ge` tail-only rescue), not a blanket pull.
+
+**Operational note:** Haiku 4.5 rejects adaptive thinking (400) — `expert.py` omits it for that model;
+the panel is genuinely 3-wide. `ai_panel.json` / `ai_panel_prep.json` are slate-specific,
+non-deterministic caches → gitignored (regenerated per slate by prep→write).
+
+**Recommended L2:** promote `player_ga` live at a *regularized* weight (start conservative, e.g. w≈0.5,
+not the CV's aggressive 1.0, given n=10); build the asymmetric `player_sot_ge` tail-rescue; re-fit
+`fouls_gt`/`offsides_ge` weights with regularization. No weight is flipped live without sign-off.

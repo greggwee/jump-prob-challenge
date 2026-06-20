@@ -17,3 +17,9 @@ data/processed/clv_ledger.csv
 data/processed/clv_analysis.csv
 data/*.txt
 data/*.log
+
+# LLM expert panel — slate-specific, non-deterministic caches (regenerated per slate)
+data/processed/ai_panel.json
+data/processed/ai_panel_prep.json
+data/processed/ai_panel_prep_mini.json
+data/processed/ai_panel_smoke.json

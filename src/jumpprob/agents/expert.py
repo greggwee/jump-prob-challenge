@@ -32,6 +32,10 @@ from jumpprob.submit.env import load_dotenv
 PANEL = ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
 LINEUP_PANEL = ["claude-opus-4-8", "claude-sonnet-4-6"]  # props fan out 2-wide (cost)
 
+# Adaptive thinking is an Opus/Sonnet-tier feature; Haiku 4.5 returns 400
+# ("adaptive thinking is not supported on this model"). Omit it for those.
+_NO_ADAPTIVE_THINKING = {"claude-haiku-4-5"}
+
 
 class Forecast(BaseModel):
     probability: float = Field(ge=0.0, le=1.0, description="P(answer is YES), 0-1")
@@ -102,14 +106,16 @@ def forecast_one(question: str, model_pct: float, model: str, role: str = "tacti
     if c is None:
         return None
     try:
-        r = c.messages.parse(
+        kwargs = dict(
             model=model,
             max_tokens=max_tokens,
-            thinking={"type": "adaptive"},
             system=build_system(role),
             messages=[{"role": "user", "content": build_user(question, model_pct, grounding)}],
             output_format=Forecast,
         )
+        if model not in _NO_ADAPTIVE_THINKING:
+            kwargs["thinking"] = {"type": "adaptive"}
+        r = c.messages.parse(**kwargs)
         f = r.parsed_output
         if f is None:
             return None
