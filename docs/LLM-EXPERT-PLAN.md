@@ -421,3 +421,15 @@ the lineup/availability + form signal the offline data cannot have.
 **Recommended deployment when budget allows:** run web search only on the **highest-leverage** player
 props (e.g. the catastrophic-low cases where the model sits far below the base rate), **near kickoff**
 (when lineups publish), **one model**, `max_uses` low — and forward-test the blend as those settle.
+
+**WIRED LIVE (2026-06-20, budget topped up to $5).** `scripts/ai_panel_web.py` runs near kickoff
+(window T-80..T-35, polled every 10 min by Task `ProbCup-WebPanel`, once per match via a state file)
+and web-searches **only the gated player props** (`player_ga`/`player_sot_ge`) of the imminent match,
+then `panel.merge_panel`s the web ensembles into `ai_panel.json` (other matches' daily entries
+preserved). The armed gate blends model + web at the same conservative weight. A forward-test ledger
+(`data/processed/ai_panel_web_ledger.csv`) captures every web prob; `scripts/forward_test_web.py`
+scores the web blend vs the pure model once those props settle. Budget guards: gated archetypes only,
+one match at a time, once per match, 1 model default, hard `--max-questions` cap; idle polls cost
+nothing. Verified end-to-end on NED vs SWE (Gyökeres 0.15→0.30, Gakpo 0.47→0.45; merged in place;
+submit picked up the web prob). The web weight stays the conservative gate weight until the ledger
+forward-test earns it more — same shadow-then-promote discipline as every prior component.
