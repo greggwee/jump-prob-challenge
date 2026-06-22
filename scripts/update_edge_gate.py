@@ -45,6 +45,11 @@ def archetype_base_rates() -> dict:
         pooled_count = float(c["outcome"].mean())
         for a in COUNT_ARCHS:
             rates.setdefault(a, pooled_count)
+    # both-teams SoT is a no-edge count with a genuinely HIGH base (~0.70 over the
+    # live settled set); the pooled count rate (~0.525) under-states it, which let the
+    # model's confident 88/24 noise through (the -89 RBP leak, 2026-06-22). Pin it so
+    # the daily regen keeps this risk-gate base aligned with risk_gate.json's shrink.
+    rates["both_teams_sot_ge"] = 0.70
     praw = PROC / "backtest_players_raw.csv"
     if praw.exists():
         p = pd.read_csv(praw)
