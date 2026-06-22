@@ -1,11 +1,299 @@
 market_id,lobby_id,match,question,archetype,p_bot_a,sub_a,p_bot_b,sub_b,p_expert,expert_action,sub_pure,sub_market,delta
-97a16268-4643-4233-85d2-fa59096a149d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
-2f50fa4a-7610-42a8-9c90-f2c8611ff24d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,"In the second half, will Tunisia have more shots on target than Japan?",sot_gt,0.2267,23,0.2267,23,,shadow,22,23,1
-0d01a690-a322-4e48-a0c0-901d9c4f235d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will Japan commit more fouls than Tunisia?,fouls_gt,0.451,45,0.379,38,,blend,45,45,0
-bea3fc3b-df2b-4abe-b65b-d114b818e77c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will Ellyes Skhiri have at least 1 shot on target?,player_sot_ge,0.1439,14,0.0612,6,0.14,blend_capped,14,14,0
-2d3a76f3-9787-4280-adf6-06fa293784ed,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will Japan score in the second half?,team_scores_half,0.6586,66,0.6586,66,,blend,64,66,2
-b6c5f8aa-dbd8-4abe-9aea-4d4853192781,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will there be 5 or more total corner kicks in the second half?,corners_total_ge,0.505,50,0.5256,53,,shadow,51,50,-1
-bedf500c-0540-4b4c-8e94-b90e19042415,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will the match have 2 or fewer total goals?,total_le,0.5206,52,0.5206,52,,exclude,54,52,-2
-c77f6258-f2ab-4bce-a833-77b219f5fee9,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will Tunisia win the match?,win,0.1134,11,0.1134,11,,exclude,14,11,-3
-c7ac9e2b-d0e5-4970-89db-2f8c13e37e9e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will Takefusa Kubo have at least 1 shot on target?,player_sot_ge,0.0613,6,0.1642,16,0.03,blend_capped,6,6,0
-de30341d-095d-4a3c-ad2a-3675b1e90f7d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs JPN,Will Japan be caught offside 2 or more times?,offsides_ge,0.5176,52,0.5103,51,,blend,52,52,0
+edc723ad-ebe1-479d-ba72-fc30f6784aa3,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will Norway have 6 or more shots on target?,team_sot_ge,0.2391,24,0.2391,24,,shadow,27,23,-3
+106011a4-4f60-4a2b-8dc3-7b86e62a91cd,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will there be 9 or more total corner kicks?,corners_total_ge,0.5012,50,0.5126,51,,shadow,51,50,-1
+daa30667-41a8-4d96-89bd-ee02d348dcf7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,"At halftime, will the match be tied?",ht_tied,0.4895,49,0.4912,49,,shadow,51,47,-2
+74361392-bbd2-4537-a6a9-76cb154852c0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will Norway win the match?,win,0.4255,43,0.4255,43,,exclude,46,42,-3
+d7b38061-1368-4af0-8f50-2be4b544189f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will Norway score more goals than Senegal in the second half?,goals_gt_half,0.3224,32,0.3495,35,,blend,37,32,-5
+0cc6a8f7-c900-49c4-a63d-2690d7062aa8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will Senegal be caught offside 2 or more times?,offsides_ge,0.4718,47,0.4192,42,,blend,47,47,0
+d10b7858-0adb-4826-8334-721ba766747b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will Senegal commit more fouls than Norway?,fouls_gt,0.5299,53,0.5348,53,,blend,54,53,-1
+4031237a-a29e-42fb-8015-128b65a0a660,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will a penalty kick be awarded OR a red card be shown in the match?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+93add2e1-ef96-4273-952a-0278a3ec16d9,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will there be 4 or more total shots on target in the second half?,total_sot_half_ge,0.5878,59,0.5977,60,,shadow,59,59,0
+fe636b52-a740-4479-aace-6f45ec2a8b1d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs SEN,Will Sadio Mané score a goal (excluding own goals)?,player_scores,0.1326,13,0.1318,13,,shadow,12,13,1
+4bde0b61-f7be-491d-b904-6f77a66d6324,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will Jordan commit more fouls than Algeria?,fouls_gt,0.5667,57,0.6075,61,,blend,54,57,3
+fb5633a1-f376-4427-915b-8b155f53da1e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will the match have 3 or more total goals?,total_ge,0.4799,48,0.4799,48,,exclude,41,50,7
+67abee3c-e87a-4a8e-ad2a-ec62c36e9b0b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,"At halftime, will the match be tied?",ht_tied,0.46,46,0.4665,47,,shadow,50,45,-4
+95627759-e55e-42b2-b16f-f5ea520179a2,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will Jordan score at least 1 goal?,team_goals_ge,0.5447,54,0.5447,54,,shadow,58,54,-4
+3b3b16e2-8f9f-462b-86a9-395fcf7aecb0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+483d6c6f-df9d-4ff6-822e-c12d2f322999,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will Riyad Mahrez have at least 1 shot on target in the second half?,player_sot_ge,0.1975,20,0.0751,8,0.235,blend_capped,20,20,0
+756f09a8-e08b-4433-8489-061b1445fb40,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will Mousa Al-Taamari have at least 1 shot on target?,player_sot_ge,0.2614,26,0.2102,21,0.2965,blend_capped,25,26,1
+9854c8e3-ac27-44c1-8755-5b7ba6e453c9,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will Algeria be caught offside 2 or more times?,offsides_ge,0.5124,51,0.4997,50,,blend,50,51,1
+7d3c9145-2a6d-4c95-b44c-1cf2f28eddbc,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will Jordan score the first goal of the game and Algeria score in the second half?,first_goal_and_opp_2h,0.1377,14,0.1772,18,,blend,19,13,-5
+0028af24-c404-48a3-93a4-dbaa312873ff,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ALG,Will there be 4 or more total shots on target in the second half?,total_sot_half_ge,0.6051,61,0.6205,62,,shadow,59,61,2
+9315d769-e4e4-4946-a133-de1ea821f6a0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+c68e9b78-6ae8-47c7-861e-6996a2cf8280,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.3063,31,0.3063,31,,blend,34,30,-3
+4ff2435c-e906-4a93-a7a9-a4b3d71746a6,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will Gonçalo Ramos score a goal (excluding own goals)?,player_scores,0.2973,30,0.3028,30,,shadow,26,31,4
+dcfa0649-e8cc-48cd-b4ae-aa5037f3daa4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will Uzbekistan have 4 or more shots on target?,team_sot_ge,0.2162,22,0.2162,22,,shadow,34,20,-12
+2edbae87-e4d0-40f8-9b81-ea52859f26b8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will the second half have 2 or more total goals?,half_total_ge,0.4962,50,0.4962,50,,blend,39,52,11
+a4940da6-3dba-440c-8b9e-580cd50ea272,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will Portugal win the match?,win,0.8004,80,0.8004,80,,exclude,58,83,22
+8dcbcf84-b3ef-4715-bb70-6f2f4e2abd50,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will Uzbekistan be caught offside 2 or more times?,offsides_ge,0.4217,42,0.3248,32,,blend,45,42,-3
+53c6d590-e6d8-4c2b-a0d8-534735de7886,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,"In the second half, will Portugal have more shots on target than Uzbekistan?",sot_gt,0.7729,77,0.7729,77,,shadow,63,79,14
+cbfeb052-0320-4ad3-865d-f384d490544d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will Portugal be caught offside 2 or more times?,offsides_ge,0.5419,54,0.5587,56,,blend,51,55,3
+ccac7769-631a-43d3-8013-4aaedbc9d114,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,POR vs UZB,Will Eldor Shomurodov have at least 1 shot on target in the second half?,player_sot_ge,0.173,17,0.1434,14,0.1898,blend_capped,17,17,0
+e9b10518-8e39-4994-9330-f6d4b43c7a75,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will Antoine Semenyo have at least 1 shot on target?,player_sot_ge,0.4019,40,0.3454,35,0.4449,blend_capped,40,40,0
+4e4cd5fa-2e2e-437b-9f6a-62dead27ec74,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will Ghana have 5 or more corner kicks?,team_corners_ge,0.1751,18,0.1751,18,,shadow,17,18,1
+06e1d4dd-3f44-4ac6-99df-96572c4dd13b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,"At halftime, will both teams have at least 1 shot on target?",both_teams_sot_ge,0.7714,77,0.8747,87,,shadow,77,77,0
+3a6fd001-df6b-46c1-9f9e-4d0e4e4cfd04,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will Ghana commit more fouls than England?,fouls_gt,0.6112,61,0.691,69,,blend,61,61,0
+a8c63bac-b91c-45b4-adf0-2770346ed218,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will both teams have at least 1 shot on target in the second half?,both_teams_sot_ge,0.6948,69,0.6758,68,,shadow,69,69,0
+dd84b0a3-c391-4489-8945-2fac1c7241d1,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.3094,31,0.3094,31,,blend,33,31,-2
+7cc86d32-71c5-4d65-b62a-4ba2f9259469,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+60c9d3f6-4a05-4f45-9f23-9b2e7b0c18be,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will Ghana have more shots on target than England in the second half?,sot_gt,0.1499,15,0.1499,15,,shadow,15,15,0
+1a5f47ed-33e1-48ff-8830-75995570683c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will England win the match?,win,0.8096,81,0.8096,81,,exclude,77,81,4
+089b0204-ca7f-49e3-ba78-f4ac586de982,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ENG vs GHA,Will Harry Kane score or assist a goal (excluding own goals)?,player_ga,0.4771,48,0.4476,45,0.4838,blend,48,48,0
+9cbc3163-74d0-4ee0-a0a3-c555fc3d671e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will José Fajardo have at least 1 shot on target?,player_sot_ge,0.2632,26,0.2891,29,0.245,blend_capped,25,27,1
+91b6fe06-3e47-43bf-a71d-68f30bc20237,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will Panama be caught offside 2 or more times?,offsides_ge,0.4479,45,0.3733,37,,blend,46,45,-1
+6df09370-07bd-4f4f-acf9-298b3935bda4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will Panama have more shots on target than Croatia in the second half?,sot_gt,0.2726,27,0.2726,27,,shadow,35,26,-8
+48443cca-6f5a-4d48-9859-16beedd7a369,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will Croatia score the first goal of the second half?,first_goal_half,0.5472,55,0.5396,54,,blend,45,57,10
+f00dbded-f8cc-4b3b-9beb-ad5fb2da9c5f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will Panama commit more fouls than Croatia?,fouls_gt,0.5675,57,0.609,61,,blend,55,57,2
+6dae6592-394a-47d2-bc96-bd054861c672,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will Croatia receive more cards than Panama?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+47ce8043-bf65-4a37-ae9b-151e5e55ab0a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will Luka Sučić have at least 1 shot on target?,player_sot_ge,0.3771,38,0.3695,37,0.3798,blend_capped,36,38,2
+550962a6-9b64-42d2-b86b-b26a753c70e2,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will Panama have 3 or more shots on target?,team_sot_ge,0.5404,54,0.5404,54,,shadow,61,53,-7
+ef4fcf3d-a487-48f5-9b6d-c8f5b933d1c4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will there be 9 or more total corner kicks?,corners_total_ge,0.5234,52,0.5422,54,,shadow,51,53,1
+8a5bd6ce-c769-42e7-afdc-7804e2404513,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs CRO,Will Panama score at least 1 goal?,team_goals_ge,0.5535,55,0.5535,55,,shadow,57,55,-2
+e0aa9593-c28b-41b0-a1d8-4892ad131109,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will Cédric Bakambu have at least 1 shot on target?,player_sot_ge,0.1748,17,0.1688,17,,blend_capped,18,17,-1
+bd60d68b-2030-4ff8-abe3-bbe90d9d9dda,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will Colombia commit more fouls than DR Congo?,fouls_gt,0.4583,46,0.3931,39,,blend,45,46,1
+d46b2d9a-771e-472d-b922-cb88eb31cc6a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will Colombia have more shots on target than DR Congo in the second half?,sot_gt,0.6666,67,0.6666,67,,shadow,68,66,-1
+c47c8706-e12a-4bee-8981-9debfaa10b8a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will Colombia score more goals than DR Congo in the second half?,goals_gt_half,0.4867,49,0.4889,49,,blend,52,48,-3
+6cc3d2d2-52f1-4d87-8d97-f76be80cee0a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will a penalty kick be awarded OR a red card be shown in the match?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+30f665b2-681e-47c9-a37d-3686ad1acb46,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will Colombia win the match?,win,0.6335,63,0.6335,63,,exclude,65,63,-2
+dadbc83d-64ed-4875-a3ec-6944a44edc0d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,"At halftime, will Colombia be winning?",ht_leading,0.3918,39,0.409,41,,shadow,43,38,-4
+541a410d-204f-48eb-a53f-87f76127c090,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will the match have 2 or fewer total goals?,total_le,0.57,57,0.57,57,,exclude,55,58,2
+638279a7-2997-47f0-ad0e-d04a9cc8af96,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will Colombia have 5 or more corner kicks?,team_corners_ge,0.6664,67,0.6664,67,,shadow,68,66,-1
+e7e62f13-f30a-4f79-871f-60a982e934d9,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs COD,Will Luis Díaz score or assist a goal (excluding own goals)?,player_ga,0.2495,25,0.2432,24,,blend,26,25,-1
+28b480b3-11f0-45e3-b10b-5c52291ebf7d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will Qatar have more shots on target than Bosnia and Herzegovina in the second half?,sot_gt,0.2731,27,0.2731,27,,shadow,39,25,-12
+5b16e857-b2b7-452e-a86b-5bf4949486c8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will Edin Džeko have at least 1 shot on target?,player_sot_ge,0.2281,23,0.229,23,,blend_capped,20,24,3
+5e2e012e-3dcf-432f-82be-8df20b05a15d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will the match have 2 or fewer total goals?,total_le,0.4525,45,0.4525,45,,exclude,60,42,-15
+ea3afc71-5f40-4719-97ef-6e667f31d91a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will Bosnia and Herzegovina win the match?,win,0.6348,63,0.6348,63,,exclude,44,67,19
+6730042d-901f-4271-a946-5fc1b8e67e1d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will Qatar be caught offside 2 or more times?,offsides_ge,0.4479,45,0.3731,37,,blend,47,44,-2
+5f02afdb-e0bf-42fc-bf39-454e14117e79,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will a penalty kick be awarded OR a red card be shown in the match?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+4c602eb6-bb78-42ab-ab63-19f78b237419,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will Bosnia and Herzegovina score more goals than Qatar in the second half?,goals_gt_half,0.5031,50,0.5026,50,,blend,35,54,15
+25b4e89d-d717-428e-8b64-2fa6a74dab66,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,"In the second half, will Bosnia and Herzegovina have more corner kicks than Qatar?",corners_gt,0.6288,63,0.6288,63,,shadow,52,65,11
+28a19286-8e66-4185-80d6-e3376a91603b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will Qatar commit more fouls than Bosnia and Herzegovina?,fouls_gt,0.5673,57,0.6087,61,,blend,53,57,4
+da424c44-408a-482c-8fda-ab8e654fdcf8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,BIH vs QAT,Will Bosnia and Herzegovina receive more cards than Qatar?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+e68fe3bd-51e6-4553-8352-2bb764e18717,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will Jonathan David have at least 1 shot on target?,player_sot_ge,0.2794,28,0.2703,27,,blend_capped,27,28,1
+cade05a8-9696-474b-8cd3-5f9f12b66b48,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will Granit Xhaka have at least 1 shot on target?,player_sot_ge,0.2292,23,0.2215,22,,blend_capped,22,23,1
+e55f0f28-4e7e-448d-96fa-782df77e283f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will the second half have 2 or more total goals?,half_total_ge,0.3858,39,0.3858,39,,blend,37,39,2
+9dd1e577-fd76-4e44-a816-c40851a454c5,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will Switzerland win the match?,win,0.4055,41,0.4055,41,,exclude,43,40,-2
+719f2a7b-75db-4c51-880f-8920c67e01f2,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will Canada commit more fouls than Switzerland?,fouls_gt,0.5278,53,0.5305,53,,blend,53,53,0
+fb138848-cf10-4d98-a44a-c29a35fae5da,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will Switzerland have more shots on target than Canada in the second half?,sot_gt,0.4887,49,0.4887,49,,shadow,50,49,-1
+97dc4881-1079-49b9-8b4b-619afa237844,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will a penalty kick be awarded in the match?,penalty_awarded,0.293,29,0.293,29,,shadow,29,29,0
+f3bdf6c3-bc7b-43b0-886f-8707005a377f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.356,36,0.356,36,,blend,34,36,2
+a7ed371f-188f-4bed-b0d9-7857ca3490f7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will there be 2 or more total cards shown in the second half?,cards_ge,0.5928,59,0.6665,67,,blend,59,59,0
+8e14dfb3-7775-460f-bde4-5b587a89cd2b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SUI vs CAN,Will Switzerland be caught offside 2 or more times?,offsides_ge,0.4865,49,0.4482,45,,blend,49,49,0
+879ad9f6-f7a9-448c-ae04-b82e901df0d3,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+54f18223-5783-4b89-8f43-8e4263bde0b3,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will there be 4 or more total shots on target in the second half?,total_sot_half_ge,0.6459,65,0.6736,67,,shadow,62,65,3
+713e81f0-3f47-408b-a6ea-c0bdc1f39406,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will Haiti score in the second half?,team_scores_half,0.2587,26,0.2587,26,,blend,32,25,-6
+869c505c-ec0b-47d8-8a0c-d0fc3b8546cd,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will Duckens Nazon have at least 1 shot on target?,player_sot_ge,0.2409,24,0.2464,25,,blend_capped,22,25,2
+894a31ee-2fda-4aec-8fe2-7b830f6c47f2,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will Morocco have more shots on target than Haiti in the second half?,sot_gt,0.7741,77,0.7741,77,,shadow,71,78,6
+b9517893-70d7-40ae-bfcc-75fa58d0364b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will Haiti receive more cards than Morocco?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+15f2d060-7b53-4652-ad0c-97688dbd6f06,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,"At halftime, will Haiti have more corner kicks than Morocco?",corners_gt,0.1794,18,0.1794,18,,shadow,23,17,-5
+def3836a-c47e-485b-98a6-d746d1808600,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will Haiti commit more fouls than Morocco?,fouls_gt,0.61,61,0.6888,69,,blend,59,61,2
+4a02f03a-22f6-451e-89a5-a70aaa514ddf,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will Morocco score in the first half?,team_scores_half,0.6844,68,0.6844,68,,blend,58,70,10
+3a0b2520-f5f9-4f91-b160-ff38946d30c5,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,MAR vs Haiti,Will Morocco win the match?,win,0.8121,81,0.8121,81,,exclude,68,83,13
+73248098-9b9e-4778-9bb3-4c756a5ebc64,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will Scotland be caught offside 2 or more times?,offsides_ge,0.4378,44,0.3542,35,,blend,45,44,-1
+da48a8b7-2baf-4a28-9cf6-be7bf3783d5e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will Brazil finish with more corner kicks than Scotland?,corners_gt,0.7799,78,0.7799,78,,shadow,71,79,7
+66f08006-97f8-4750-a8f2-5c62a1eae808,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will Brazil score in the first half?,team_scores_half,0.5954,60,0.5954,60,,blend,52,61,8
+b84635b8-99cf-4781-a0ca-dc01d0e7bfa7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will Scott McTominay have at least 1 shot on target?,player_sot_ge,0.1538,15,0.1527,15,,blend_capped,15,16,0
+6bf4ef09-f9b4-459c-b401-0fa9a339a8e2,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will there be 4 or more total cards shown?,cards_ge,0.5035,50,0.4937,49,,blend,50,50,0
+c2c90c20-269b-414c-ae56-09191fac0d0d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will Brazil score in the second half?,team_scores_half,0.678,68,0.678,68,,blend,59,69,9
+2be23a87-2fee-4f79-a4f8-8360c5a3e302,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will the match have 3 or more total goals?,total_ge,0.5067,51,0.5067,51,,exclude,43,52,8
+549a766a-1816-4d77-b825-e606888bf7be,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will Brazil have more shots on target than Scotland in the second half?,sot_gt,0.6926,69,0.6926,69,,shadow,63,70,6
+3c8d80cf-6644-4bea-889b-bcf4e745e743,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will Scotland score at least 1 goal?,team_goals_ge,0.4848,48,0.4848,48,,shadow,52,48,-4
+1bf8817b-af81-41cb-9411-ae66838ac1b8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SCO vs BRA,Will Scotland score the first goal of the game and Brazil score in the second half?,first_goal_and_opp_2h,0.1152,12,0.1537,15,,blend,17,11,-5
+ff5e80cf-acb3-4051-8910-ded474179041,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will Mexico be caught offside 2 or more times?,offsides_ge,0.5001,50,0.4752,48,,blend,51,50,-1
+d6f306c8-a195-4764-987a-ecb14a9c4b37,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will Mexico finish with more corner kicks than Czechia?,corners_gt,0.6338,63,0.6338,63,,shadow,72,62,-9
+664519ef-75f9-4537-8833-874c3b2767c4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.365,37,0.365,37,,blend,34,37,3
+7202ff14-a689-4ee6-b8a9-a333482ad0f0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will Czechia score in the second half?,team_scores_half,0.4072,41,0.4072,41,,blend,36,42,5
+399c0c0c-dcd0-4e51-a95c-1289efc7aa8d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will Czechia win the match?,win,0.218,22,0.218,22,,exclude,19,23,3
+4e3ead83-ce45-4c5c-9ae6-03f1a5913f48,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will Patrik Schick have at least 1 shot on target?,player_sot_ge,0.625,63,0.6159,62,,blend_capped,62,63,1
+2812323f-bf32-43b4-b9cc-64101cc863b0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will there be 4 or more total cards shown?,cards_ge,0.5035,50,0.4937,49,,blend,50,50,0
+82e3b748-c15c-484a-aa50-46c3773ea827,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will Czechia commit more fouls than Mexico?,fouls_gt,0.5484,55,0.5717,57,,blend,57,54,-2
+f08b2b88-b837-4d00-bea7-4c2bf9815ce7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CZE vs MEX,Will Czechia have more shots on target than Mexico in the second half?,sot_gt,0.3373,34,0.3373,34,,shadow,27,35,7
+81d6f4f9-7098-4339-9c35-f44b808ec7ba,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will Son Heung-min have at least 1 shot on target?,player_sot_ge,0.3753,38,0.3669,37,,blend_capped,37,38,1
+72cf3d7e-e17a-406a-94bd-72c5e4a971c5,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will Oswin Appollis have at least 1 shot on target?,player_sot_ge,0.1897,19,0.185,19,,blend_capped,19,19,0
+efe9ffa6-9c5e-4b4b-8cff-ed1596cf1bbd,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will South Africa have 3 or more shots on target?,team_sot_ge,0.5559,56,0.5559,56,,shadow,55,56,1
+a45c8d03-d20a-494f-9bf7-6b0e0cebcee4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,"At halftime, will the match be tied?",ht_tied,0.472,47,0.4766,48,,shadow,48,47,-1
+7d85ba3b-8446-4e7f-81a9-c8423e4d6281,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will South Africa win the match?,win,0.165,16,0.165,16,,exclude,20,17,-4
+0d3b720d-297d-4cfb-8f20-2cf67665d312,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will South Korea be caught offside 2 or more times?,offsides_ge,0.51,51,0.495,49,,blend,51,51,0
+0cfce1d7-a800-40a7-85df-baf5a7feb252,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will South Korea receive at least 1 card in the second half?,team_cards_ge,0.6036,60,0.6773,68,,blend,60,60,0
+a11f8a6d-fa76-49b8-8d02-f02f2dc7ed35,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.338,34,0.338,34,,blend,34,34,0
+a4ace397-157b-4ff3-9693-9952953ed644,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will South Korea have more shots on target than South Africa in the second half?,sot_gt,0.6207,62,0.6207,62,,shadow,63,62,-1
+77b4602d-c721-4b57-bbf7-4dfddfd876d6,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,RSA vs KOR,Will South Africa commit more fouls than South Korea?,fouls_gt,0.5631,56,0.6005,60,,blend,57,56,-1
+331693f9-d0a8-44ba-9fdd-6cf87c0b87a8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,Will Germany have more shots on target than Ecuador in the second half?,sot_gt,0.5351,54,0.5351,54,,shadow,51,54,3
+8927d501-67b2-408a-a234-94cd8392e267,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,"At halftime, will both teams have at least 1 shot on target?",both_teams_sot_ge,0.7934,79,0.9255,93,,shadow,80,79,-1
+ac33f881-ea23-473b-91d1-861ca8a47112,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,Will Ecuador commit more fouls than Germany?,fouls_gt,0.5401,54,0.5552,56,,blend,53,54,1
+48dd7121-df65-4da5-be13-2407908404af,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,"In the second half, will Ecuador have more corner kicks than Germany?",corners_gt,0.3812,38,0.3812,38,,shadow,40,38,-2
+238c4a80-d82b-49af-ae9b-552df3529fa1,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,Will Germany score more goals than Ecuador in the second half?,goals_gt_half,0.3767,38,0.3962,40,,blend,34,39,4
+64e0306b-93a9-4bad-a1db-7e45937241c4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+a41e8e86-7714-4347-9afa-ab6681796d3b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,Will Ecuador be caught offside 2 or more times?,offsides_ge,0.4651,47,0.4063,41,,blend,47,46,0
+ce748c16-45f0-49ab-9b34-915bc39b59d4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.4209,42,0.4209,42,,blend,34,44,8
+fffde7cb-d69d-49c6-92c3-f311404a0240,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,Will Ecuador score at least 1 goal?,team_goals_ge,0.6703,67,0.6703,67,,shadow,60,68,7
+b386c19f-c40d-4429-9299-7f3577d9645e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ECU vs GER,Will the match have 2 or fewer total goals?,total_le,0.4857,49,0.4857,49,,exclude,60,46,-11
+a10767be-86c6-4284-ac96-1703b3fbc6ff,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Curaçao be caught offside 2 or more times?,offsides_ge,0.4206,42,0.3229,32,,blend,45,42,-3
+ee6db93a-2238-4c40-8a8c-167fc42019d8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Ivory Coast commit more fouls than Curaçao?,fouls_gt,0.4218,42,0.325,32,,blend,47,41,-5
+c84f75f8-c458-4b2f-9cca-b9924f5ad619,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Ivory Coast score the first goal of the second half?,first_goal_half,0.7107,71,0.6796,68,,blend,52,74,19
+cb8c5e9b-814a-4f0e-88a0-3626fe27d561,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will the second half have more goals than the first half?,h2_more_goals_than_h1,0.529,53,0.5243,52,,exclude,46,54,7
+cd6312db-6906-41c7-bdaf-f6e099a403c0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Curaçao have more shots on target than Ivory Coast in the second half?,sot_gt,0.1503,15,0.1503,15,,shadow,28,13,-13
+29d23fce-ea8d-4b73-890d-c12181353a0d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Curaçao receive more cards than Ivory Coast?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+6d41b943-0e83-4a74-873a-9a43e0daff1f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Curaçao score at least 1 goal?,team_goals_ge,0.4115,41,0.4115,41,,shadow,52,39,-11
+9cb3dfb0-5e38-4f52-8036-1de244d276a6,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Ivory Coast have 5 or more corner kicks?,team_corners_ge,0.7753,78,0.7753,78,,shadow,63,80,15
+192c9cf0-9bb3-4b6b-9fbe-58a7e2d82ae4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Leandro Bacuna have at least 1 shot on target?,player_sot_ge,0.2409,24,0.2464,25,,blend_capped,20,25,4
+65a97cc9-1e94-47b0-9b9c-4f619bccde28,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,Curacao vs CIV,Will Ibrahim Sangaré have at least 1 shot on target?,player_sot_ge,0.207,21,0.2119,21,,blend_capped,18,21,3
+bb7f999d-8465-41b3-be43-21a6c6cd5f3a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will Ellyes Skhiri have at least 1 shot on target?,player_sot_ge,0.15,15,0.0759,8,,blend_capped,15,15,0
+56843463-cd19-466d-aed6-bf20ca237f1b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will Tunisia score in the second half?,team_scores_half,0.2249,22,0.2249,22,,blend,31,22,-9
+24b509b2-e109-42a3-9fcc-6945a1d5b7d9,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will Tunisia score at least 1 goal?,team_goals_ge,0.3676,37,0.3676,37,,shadow,45,36,-8
+ca95f4c5-4d97-48ae-9ec6-fe61cd2e99b1,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,"At halftime, will the match be tied?",ht_tied,0.3211,32,0.3483,35,,shadow,44,30,-12
+b880cd6f-b6ec-4e4c-b96b-b91fc589b2b0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will Tunisia commit more fouls than Netherlands?,fouls_gt,0.624,62,0.7135,71,,blend,60,63,2
+7a16466f-531e-4022-9eba-34802ebc5bdf,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will Netherlands receive more cards than Tunisia?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+217bd562-df1a-4823-822f-d27849f03904,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.2968,30,0.2968,30,,blend,33,29,-3
+c43096e6-d2f5-4879-9af7-de2f242829f3,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will both teams have at least 1 shot on target in the second half?,both_teams_sot_ge,0.6915,69,0.6602,66,,shadow,70,69,-1
+59997c37-80d1-4581-b8b5-897f1494509f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will Cody Gakpo score or assist a goal (excluding own goals)?,player_ga,0.3855,39,0.3984,40,,blend,35,39,4
+1e01567a-7a48-4219-a0ce-e6c549172ab8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUN vs NED,Will there be 8 or more total shots on target?,total_sot_ge,0.5699,57,0.6182,62,,shadow,52,58,5
+6acf741f-5327-4cc1-a8ff-aa459d4d3a34,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will Japan win the match?,win,0.5212,52,0.5212,52,,exclude,57,51,-5
+1ad780fa-173e-4f9b-bbfc-b3064a76bc5c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will the match have 2 or fewer total goals?,total_le,0.4871,49,0.4871,49,,exclude,57,47,-8
+f147df3f-af77-4054-8d99-bc71e92d5449,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will Sweden have 5 or more corner kicks?,team_corners_ge,0.3566,36,0.3566,36,,shadow,30,37,6
+bdd0ae28-b4ca-4b9f-9e0d-28298d88fd0b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will Takefusa Kubo score or assist a goal (excluding own goals)?,player_ga,0.15,15,0.1496,15,,blend,15,15,0
+d1aca960-823a-4d5d-8a76-563cdccc9ea3,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will Viktor Gyökeres score a goal (excluding own goals)?,player_scores,0.0772,8,0.078,8,,shadow,7,8,1
+90dbecb7-6465-4f0e-9dfc-cd01a71445d7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+b6d02831-0c03-4a06-80ea-48f0fa52f95e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will Japan have more shots on target than Sweden in the second half?,sot_gt,0.5595,56,0.5595,56,,shadow,63,55,-7
+3f456a6c-fb2c-46c9-bd51-9f64281e11e6,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will Sweden score more goals than Japan in the second half?,goals_gt_half,0.1783,18,0.2178,22,,blend,16,19,2
+0884f633-afdc-40bd-9a92-5e36d74097d0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,"In the second half, will Japan have more shots on target than Sweden?",sot_gt,0.5595,56,0.5595,56,,shadow,63,55,-7
+c7d10968-a2ae-466b-8ca7-0381dcb66bf8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JPN vs SWE,Will Sweden be caught offside 2 or more times?,offsides_ge,0.461,46,0.3983,40,,blend,45,46,1
+d542391d-73f9-4ffa-997f-60fd781954d7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will Türkiye win the match?,win,0.2711,27,0.2711,27,,exclude,34,26,-7
+8578dd00-e2e3-4c2d-b53a-5d58b086db13,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will Türkiye be caught offside 2 or more times?,offsides_ge,0.4673,47,0.4105,41,,blend,47,47,0
+1621f643-023f-476b-89c4-b9756debc982,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will Folarin Balogun score a goal (excluding own goals)?,player_scores,0.22,22,0.2218,22,,shadow,19,23,3
+ba70624d-9a88-4c78-8b22-d907b1353129,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will United States commit more fouls than Türkiye?,fouls_gt,0.4985,50,0.4719,47,,blend,51,50,-1
+02c05f36-5f64-4795-b1ff-6754af7e39a9,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will a penalty kick be awarded OR a red card be shown in the match?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+8d4e79e8-b5ab-47ba-8436-9a5cffb63cc1,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will Türkiye score the first goal of the game and United States score in the second half?,first_goal_and_opp_2h,0.2038,20,0.2423,24,,blend,21,21,-1
+cf1370c2-71c8-4ca7-ba43-6a33f4ebb546,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will the second half have more total goals than the first half?,h2_more_goals_than_h1,0.505,51,0.5042,50,,exclude,45,51,6
+5c00aa2a-b63d-4421-b499-e5934d484660,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will Orkun Kökçü score or assist a goal (excluding own goals)?,player_ga,0.1651,17,0.1669,17,,blend,15,17,2
+1a80bccf-9a17-4f00-9d2f-79691d07f104,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will Türkiye have 5 or more corner kicks?,team_corners_ge,0.3899,39,0.3899,39,,shadow,43,38,-4
+ae075ae1-947a-46e2-8ed4-18970d0d5869,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,TUR vs USA,Will the match have 3 or more total goals?,total_ge,0.5348,53,0.5348,53,,exclude,40,56,13
+b94bad54-14e4-4cf2-8e3e-3475001e5a29,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will there be 4 or more total cards shown?,cards_ge,0.5035,50,0.4937,49,,blend,50,50,0
+3fd7f1f2-0dae-4e3b-a337-0daf41891712,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will the second half have more total goals than the first half?,h2_more_goals_than_h1,0.4168,42,0.4302,43,,exclude,45,42,-3
+74c4c6e4-6366-4cbd-8a65-7de89c06e89a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will Australia have more shots on target than Paraguay in the second half?,sot_gt,0.4204,42,0.4204,42,,shadow,46,41,-4
+a25a386c-2c5a-4ead-82dc-54310230e45e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will Paraguay be caught offside 2 or more times?,offsides_ge,0.4858,49,0.4469,45,,blend,48,49,1
+da55a43a-8185-42f1-93f3-c3a0c9fa1941,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will the second half have 2 or more total goals?,half_total_ge,0.2729,27,0.2729,27,,blend,37,26,-10
+72103e92-79ab-46f5-9655-56c82b11537e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will Paraguay win the match?,win,0.3654,37,0.3654,37,,exclude,36,37,1
+f6ecb810-d634-484f-af2a-05f39f7df8c9,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will Australia commit more fouls than Paraguay?,fouls_gt,0.5258,53,0.5266,53,,blend,52,53,1
+9a7e797b-c891-4939-ba4f-d2452328c1af,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will Australia be caught offside 2 or more times?,offsides_ge,0.4753,48,0.4261,43,,blend,48,47,0
+99a613f2-bdf5-437e-aebf-ff291ad9d288,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAR vs AUS,Will Julio Enciso have at least 1 shot on target?,player_sot_ge,0.421,42,0.3891,39,,blend_capped,46,41,-4
+7a130803-fbae-4e21-a52c-5d69a60ee2d3,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,"In the second half, will Norway have more corner kicks than France?",corners_gt,0.3475,35,0.3475,35,,shadow,35,35,0
+79a582c4-cd85-42c0-96cb-62d02d76df39,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.4103,41,0.4103,41,,blend,34,43,7
+a760be07-bcf4-47a3-9e92-12364ea2c469,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will a penalty kick be awarded OR a red card be shown in the match?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+8b2ac43c-517b-44b7-8417-a8fc3ddc91e4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will France have more shots on target than Norway in the second half?,sot_gt,0.573,57,0.573,57,,shadow,57,57,0
+820b13fd-850c-4e17-a579-c998d84542d6,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will Norway commit more fouls than France?,fouls_gt,0.5503,55,0.5753,58,,blend,55,55,0
+e769d43d-68d7-45da-a2bc-e3952c9b14d4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will Norway win the match?,win,0.2108,21,0.2108,21,,exclude,25,21,-4
+dfec43ab-c159-4e45-927c-91fb23cfd0cb,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will France score in the first half?,team_scores_half,0.5387,54,0.5387,54,,blend,48,55,6
+7d3e7e2f-9431-43b0-8c28-85b85cea10c0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will Norway score at least 1 goal?,team_goals_ge,0.6334,63,0.6334,63,,shadow,56,64,7
+b832694d-f726-411f-8f65-019adcb4300b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will there be 8 or more total shots on target?,total_sot_ge,0.4621,46,0.4761,48,,shadow,47,46,-1
+4b834c82-fa96-4553-b819-406aa4d84e74,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,NOR vs FRA,Will France score in the second half?,team_scores_half,0.6205,62,0.6205,62,,blend,55,63,7
+aaf82bff-2ff9-4dc8-bce6-aceedd49b5f8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will Senegal have more shots on target than Iraq in the second half?,sot_gt,0.7197,72,0.7197,72,,shadow,59,74,13
+8acfae2d-9dfa-441b-bd3c-ccd1b272b208,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will Sadio Mané have at least 1 shot on target in the second half?,player_sot_ge,0.15,15,0.1472,15,,blend_capped,15,15,0
+58a00fb0-57d2-413b-b7d7-294f6ee24144,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will there be 4 or more total shots on target in the second half?,total_sot_half_ge,0.6275,63,0.6498,65,,shadow,60,63,3
+a394d05e-8bae-4a79-8353-d48ca39623d0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will Iraq commit more fouls than Senegal?,fouls_gt,0.592,59,0.6557,66,,blend,56,60,3
+5618e01b-c0f1-4e26-b591-a4642f0a57da,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.307,31,0.307,31,,blend,34,30,-3
+85f51a2a-412f-41ee-b04b-bb0fbf465867,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will Iraq receive more cards than Senegal?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+eec6115c-c5cd-42a2-a464-9833f71d8f6c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will Iraq be caught offside 2 or more times?,offsides_ge,0.4327,43,0.3448,34,,blend,46,43,-3
+98025628-31c6-4c67-aa35-f2d2e707843d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,"At halftime, will Iraq have more corner kicks than Senegal?",corners_gt,0.2238,22,0.2238,22,,shadow,33,21,-11
+8c8c3f98-ee29-44ba-8ce9-668ab7cacf63,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will Mohanad Ali score or assist a goal (excluding own goals)?,player_ga,0.15,15,0.1206,12,,blend,15,15,0
+770ad5f3-f151-4774-8ce8-648ed9fedda4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,SEN vs IRQ,Will Senegal win the match?,win,0.7203,72,0.7203,72,,exclude,54,75,18
+0399ea52-41c2-48b7-b304-5d915cffa527,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,Will the match have 2 or fewer total goals?,total_le,0.4889,49,0.4889,49,,exclude,56,48,-7
+2b098e01-ee28-4740-a472-0e47702583de,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,"At halftime, will the match be tied?",ht_tied,0.4407,44,0.4503,45,,shadow,47,44,-3
+d65224ff-c16d-4f3a-ab5c-e389871cecf1,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,Will Uruguay score at least 1 goal?,team_goals_ge,0.5378,54,0.5378,54,,shadow,50,54,4
+e3b6f5b3-e5f0-4f9c-8453-121aa08d0e9e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,Will Uruguay commit more fouls than Spain?,fouls_gt,0.5722,57,0.6182,62,,blend,57,57,0
+f3ecfd87-4562-4e01-afd7-5e89c3db468b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,"In the second half, will Uruguay have more shots on target than Spain?",sot_gt,0.2574,26,0.2574,26,,shadow,25,26,1
+6dd84759-11e1-408d-8d60-5eb46f13197e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,Will Dani Olmo have at least 1 shot on target in the second half?,player_sot_ge,0.3884,39,0.3856,39,,blend_capped,37,39,2
+9d58ebc6-35db-495e-87a8-82d61798e640,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,Will Darwin Núñez have at least 1 shot on target?,player_sot_ge,0.3681,37,0.3654,37,,blend_capped,35,37,2
+8392278e-6be8-46dc-89c7-456cb123846c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,Will there be 4 or more total cards shown?,cards_ge,0.5035,50,0.4937,49,,blend,50,50,0
+ecdf6acb-eef7-45de-88ad-cab0ecf41882,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,Will there be 9 or more total corner kicks in the match?,corners_total_ge,0.528,53,0.5483,55,,shadow,53,53,0
+cb8219c4-07cd-4d69-8c99-297c9a8c8944,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,URU vs ESP,Will the second half have 2 or more total goals?,half_total_ge,0.4462,45,0.4462,45,,blend,40,45,5
+112dde24-c7b1-4f24-98d3-24860e7b9088,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will Ryan Mendes score or assist a goal (excluding own goals)?,player_ga,0.2401,24,0.2368,24,,blend,22,24,2
+ddb0aebe-cbe0-4040-963a-6096f6b5571f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will Saudi Arabia receive more cards than Cape Verde?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+53d1cfb1-c433-4bf5-bb0e-2d9b82cfec0e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will Cape Verde be caught offside 2 or more times?,offsides_ge,0.4841,48,0.4434,44,,blend,48,48,0
+bab6a5eb-1f7f-4185-b833-86c0335b15a3,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will Saudi Arabia have more shots on target than Cape Verde in the second half?,sot_gt,0.4253,43,0.4253,43,,shadow,45,42,-2
+37561adf-2575-4b0e-946a-3554bf110416,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will Salem Al-Dawsari score a goal (excluding own goals)?,player_scores,0.0734,7,0.073,7,,shadow,7,7,0
+ae22aa51-8a21-4455-9086-ca124c9c2656,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will a penalty kick be awarded in the match?,penalty_awarded,0.293,29,0.293,29,,shadow,29,29,0
+f16fed56-b5a2-4d37-9553-ac4196eac2c0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will Cape Verde commit more fouls than Saudi Arabia?,fouls_gt,0.5109,51,0.4968,50,,blend,52,51,-1
+085e6d40-55c7-4070-b356-fcdba73edb6b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will both teams have at least 1 shot on target in the second half?,both_teams_sot_ge,0.7075,71,0.7317,73,,shadow,71,71,0
+ac0602d9-157b-4f67-a473-7838dbef8c9d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will Cape Verde score in the second half?,team_scores_half,0.5251,53,0.5251,53,,blend,47,54,6
+1e222611-391d-4b26-af5a-0ef123f62151,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CPV vs KSA,Will Cape Verde win the match?,win,0.3936,39,0.3936,39,,exclude,37,40,2
+84aaece6-6111-4a5a-a77a-a97f9ff13afe,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will Belgium have 4 or more shots on target?,team_sot_ge,0.7998,80,0.7998,80,,shadow,70,82,10
+0a58473c-5d91-405d-bc16-cb2de57a9a0c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,"At halftime, will both teams have at least 1 shot on target?",both_teams_sot_ge,0.7749,77,0.8842,88,,shadow,79,77,-2
+9282f983-7e74-48c2-ae92-64d972164a32,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will New Zealand commit more fouls than Belgium?,fouls_gt,0.6023,60,0.6748,67,,blend,57,61,3
+6c1ae3e9-01e0-436a-b4ee-55bd54171708,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will Belgium receive at least 1 card in the second half?,team_cards_ge,0.6036,60,0.6773,68,,blend,60,60,0
+37014a9f-5ab2-43f5-baa4-6bd2dbc1bd97,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.3283,33,0.3283,33,,blend,34,33,-1
+9eabe9c0-6ec7-4702-8540-04ee755c323c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will New Zealand have 2 or more shots on target in the second half?,team_sot_ge,0.4029,40,0.4029,40,,shadow,49,39,-9
+bb023eb2-d88e-4317-a475-2526f87276c3,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will New Zealand receive more cards than Belgium?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+ae0232d1-b5ec-440f-a0aa-fd816ce7550e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will New Zealand score at least 1 goal?,team_goals_ge,0.4365,44,0.4365,44,,shadow,51,42,-7
+ee0f2ad4-846e-43ca-8166-01593619dd44,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will Belgium score in the second half?,team_scores_half,0.7401,74,0.7401,74,,blend,60,76,14
+66ed62a5-c4f6-4938-9287-e17c2743ca64,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,New Zealand vs BEL,Will Youri Tielemans have at least 1 shot on target?,player_sot_ge,0.19,19,0.1928,19,,blend_capped,17,20,2
+528c633c-2c27-484e-aae2-ffd8bfc11274,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will Iran be caught offside 2 or more times?,offsides_ge,0.4724,47,0.4204,42,,blend,48,47,-1
+b78c46e8-557c-4f5e-98b9-cb0774335119,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will Iran have more shots on target than Egypt in the second half?,sot_gt,0.4049,40,0.4049,40,,shadow,48,39,-8
+ac02e3c7-ad61-4f98-85bf-c0b8aa80a3be,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will Iran finish with more corner kicks than Egypt?,corners_gt,0.4264,43,0.4264,43,,shadow,52,41,-9
+9d76af0a-07d6-4e3e-83e7-a7fcfcc5f6c0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will Egypt win the match?,win,0.396,40,0.396,40,,exclude,34,41,6
+b749e570-1132-4c04-ad87-eb084a4f8b2f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will the match have 2 or fewer total goals?,total_le,0.6668,67,0.6668,67,,exclude,60,67,7
+537c8858-c51b-4f52-976a-d4822594f93b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will the second half have 2 or more total goals?,half_total_ge,0.3128,31,0.3128,31,,blend,37,31,-6
+1f08b2aa-1cf4-4f3e-8ac9-a38d13476dd7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will there be 4 or more total cards shown?,cards_ge,0.5035,50,0.4937,49,,blend,50,50,0
+6ae1692b-b794-4d64-8862-f7a42865b5d8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will Egypt have 3 or more shots on target?,team_sot_ge,0.7372,74,0.7372,74,,shadow,68,75,6
+b3442350-1e03-42e0-8310-d83af5f99fdb,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will Mahmoud Trezeguet have at least 1 shot on target?,player_sot_ge,0.1835,18,0.1709,17,,blend_capped,19,18,-1
+9b10408f-a5b9-4586-a4d1-ef3269ad60fc,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,EGY vs IRN,Will Mehdi Taremi have at least 1 shot on target?,player_sot_ge,0.2498,25,0.2331,23,,blend_capped,26,25,-1
+ccbcf840-6275-4403-8791-02c64bdd1893,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will there be 4 or more total shots on target in the second half?,total_sot_half_ge,0.6056,61,0.6212,62,,shadow,61,60,0
+2e61a108-671a-4024-b421-aa67e7b8105d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will Antoine Semenyo have at least 1 shot on target?,player_sot_ge,0.3019,30,0.2941,29,,blend_capped,30,30,0
+43ae8180-e10c-418d-89ab-e5a42e58d702,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will Croatia have 6 or more shots on target?,team_sot_ge,0.3764,38,0.3764,38,,shadow,41,37,-3
+6a29d849-2b3f-4a64-b2b6-3f034b2a5b2b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will there be 9 or more total corner kicks?,corners_total_ge,0.5232,52,0.5419,54,,shadow,53,52,-1
+c499a3e6-92f2-4b44-bac2-751ec61acf56,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will Croatia score in the second half?,team_scores_half,0.617,62,0.617,62,,blend,61,61,1
+0e3f5b26-a800-414a-8c74-d3056ea293c0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will Croatia win the match?,win,0.5995,60,0.5995,60,,exclude,62,59,-2
+3555d723-0ef3-4c1a-86c4-b9bccc02d650,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,"At halftime, will Croatia be winning?",ht_leading,0.366,37,0.3871,39,,shadow,41,36,-4
+bb1836ef-4d8b-4360-8482-e474be117aec,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will Luka Sučić have at least 1 shot on target in the second half?,player_sot_ge,0.2238,22,0.2179,22,,blend_capped,22,22,0
+9c41d950-c256-43af-80db-076ed84dc567,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will a penalty kick be awarded OR a red card be shown in the match?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+33e7f75a-cc38-4762-86f1-32fc2fb975cc,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,CRO vs GHA,Will Ghana be caught offside 2 or more times?,offsides_ge,0.4489,45,0.3751,38,,blend,44,45,1
+6c63350c-f662-44bb-b914-406c60ad3d0c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will Harry Kane have at least 1 shot on target?,player_sot_ge,0.5055,51,0.5112,51,,blend_capped,47,51,4
+aad59e42-0d36-4261-aa3f-8e95a96fcd47,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will José Fajardo have at least 1 shot on target?,player_sot_ge,0.3143,31,0.3188,32,,blend_capped,29,32,2
+91d86b83-bac0-49dd-ba31-bbde0983c2d2,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will there be 5 or more total corner kicks in the second half?,corners_total_ge,0.5209,52,0.5468,55,,shadow,51,52,1
+b394df3c-cd76-4d91-a9e6-d654162adab2,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will the match have 3 or more total goals?,total_ge,0.5853,59,0.5853,59,,exclude,46,60,13
+d793a499-ddd9-4eab-8c07-4be160366653,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,"At halftime, will the match be tied?",ht_tied,0.3759,38,0.3955,40,,shadow,46,36,-8
+90b29cc0-7b7a-4aed-8703-b91967fe6225,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+97a01954-750b-4bfb-8269-ad7e48dec873,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will Panama commit more fouls than England?,fouls_gt,0.5997,60,0.6701,67,,blend,58,60,2
+6913dd4d-f020-4955-b562-c9c5458a32f0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will there be 4 or more total shots on target in the second half?,total_sot_half_ge,0.6339,63,0.658,66,,shadow,62,64,1
+b3b81826-7b60-468a-b71e-43838587f0d7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will Panama score the first goal of the game and England score in the second half?,first_goal_and_opp_2h,0.1004,10,0.1377,14,,blend,15,10,-5
+00f8764b-b25b-4da2-8b8b-2a0e53eede10,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,PAN vs ENG,Will Panama score at least 1 goal?,team_goals_ge,0.4526,45,0.4526,45,,shadow,47,45,-2
+eb47fe91-b920-4acf-9c5a-1009ed7cb33a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will Colombia have 4 or more shots on target?,team_sot_ge,0.4506,45,0.4506,45,,shadow,56,43,-11
+9f7c76ed-e5f2-459b-af43-29e03299257b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will Colombia be caught offside 2 or more times?,offsides_ge,0.4692,47,0.4141,41,,blend,49,47,-2
+c48e143a-ce01-4977-9b79-98077a2e04bc,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,"In the second half, will Colombia have more shots on target than Portugal?",sot_gt,0.3886,39,0.3886,39,,shadow,50,37,-11
+de87022c-d94b-41cc-84c9-096f933d5929,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+3b9f27bf-b9ca-4604-9112-ef8e99dfbe36,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.3659,37,0.3659,37,,blend,34,37,3
+9abcb31a-2213-49d2-a515-43b9cc9a71ab,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will Colombia win the match?,win,0.2779,28,0.2779,28,,exclude,42,26,-14
+c703d31f-77ab-4190-8666-7b334aa1bec8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will Portugal have 4 or more shots on target?,team_sot_ge,0.5714,57,0.5714,57,,shadow,47,59,10
+c5fada39-248b-4118-ae3e-4e6af345fa96,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will there be 5 or more total corner kicks in the second half?,corners_total_ge,0.4793,48,0.4913,49,,shadow,48,48,0
+7e371206-e93a-437d-9a4a-a5451e44012e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will Luis Díaz score a goal (excluding own goals)?,player_scores,0.0719,7,0.071,7,,shadow,7,7,0
+c52cb04a-6fdc-41ce-be3a-e52331e876e4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COL vs POR,Will Gonçalo Ramos have at least 1 shot on target?,player_sot_ge,0.5366,54,0.5254,53,,blend_capped,51,54,3
+12f8261f-89b4-4c59-ab7b-4cea700478a1,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will Uzbekistan commit more fouls than DR Congo?,fouls_gt,0.533,53,0.5409,54,,blend,51,54,2
+2a93e720-962b-43d9-a6de-c595fdf29a0d,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will Uzbekistan be caught offside 2 or more times?,offsides_ge,0.47,47,0.4157,42,,blend,48,47,-1
+57a0208a-b784-4663-aca6-047aadc0fc4b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will both teams have at least 1 shot on target in the second half?,both_teams_sot_ge,0.7073,71,0.731,73,,shadow,71,71,0
+2392f003-e56a-4289-a3b1-b07e7de291b2,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will both teams score AND the match have 3 or more total goals?,btts_and_total_ge,0.367,37,0.367,37,,blend,34,38,3
+3f4a50eb-7a9a-4eba-b913-f3bb14d64ee7,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will a penalty kick be awarded OR a red card be shown?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+bb825e94-a0a4-4ea9-a7f3-9835ecf3bca8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will Uzbekistan have more shots on target than DR Congo in the second half?,sot_gt,0.3931,39,0.3931,39,,shadow,47,38,-8
+cf17a41d-37e3-4979-82aa-81934ce7b121,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will Eldor Shomurodov have at least 1 shot on target in the second half?,player_sot_ge,0.15,15,0.1204,12,,blend_capped,15,15,0
+41bdce13-bfca-4c36-a0bb-12ad94b54db8,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will DR Congo win the match?,win,0.4349,43,0.4349,43,,exclude,36,46,7
+f3962b11-d359-4295-8efb-b9a55c574d3b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will Cédric Bakambu score or assist a goal (excluding own goals)?,player_ga,0.1844,18,0.1807,18,,blend,17,19,1
+b7328c17-3a9c-49fe-a9a0-1eceed96a03a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,COD vs UZB,Will Uzbekistan have 5 or more corner kicks?,team_corners_ge,0.404,40,0.404,40,,shadow,47,39,-7
+36d135a4-2db4-4702-a4f3-e020206a4d9f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will Argentina have more shots on target than Jordan in the second half?,sot_gt,0.7656,77,0.7656,77,,shadow,79,76,-2
+db40a747-94d5-4120-9399-19b8a549c95e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will Argentina have 6 or more shots on target?,team_sot_ge,0.5515,55,0.5515,55,,shadow,59,54,-4
+eaf3a69b-22c2-43f1-bde5-80dc167fd331,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will Jordan score at least 1 goal?,team_goals_ge,0.4295,43,0.4295,43,,shadow,40,44,3
+3d98c4bc-7429-44d1-ba22-f94b9e89a24f,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will the match have 2 or fewer total goals?,total_le,0.3933,39,0.3933,39,,exclude,47,39,-8
+e71cc4d9-cfb2-42d6-a795-93c0ca645882,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will Jordan commit more fouls than Argentina?,fouls_gt,0.6071,61,0.6835,68,,blend,62,61,-1
+9737e196-a037-4bc7-94c7-6afe9ac69463,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will Jordan be caught offside 2 or more times?,offsides_ge,0.423,42,0.3272,33,,blend,42,42,0
+89a055ad-c0e0-4d32-81d3-a697e201d01e,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will Argentina have at least 1 corner kick in the first half?,team_corners_ge,0.9275,93,0.9275,93,,shadow,93,93,0
+64167c13-32d0-4b61-bd0b-f54a331f3336,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will a penalty kick be awarded OR a red card be shown in the match?,pen_or_red,0.339,34,0.339,34,,shadow,34,34,0
+265b0dde-79a3-477b-a989-e86a1bf2b530,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will Mousa Al-Taamari score or assist a goal (excluding own goals)?,player_ga,0.15,15,0.1386,14,,blend,15,15,0
+d246bfc5-f14e-4de2-939f-27d25176efec,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,JOR vs ARG,Will Jordan score in the second half?,team_scores_half,0.268,27,0.268,27,,blend,27,27,0
+65e32b43-e8cc-4a03-9e13-378ab6b950b6,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will there be 9 or more total corner kicks?,corners_total_ge,0.5017,50,0.5133,51,,shadow,50,50,0
+3d4d7f4a-ad8a-43f4-a5a6-f777e18c7c76,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Algeria win the match?,win,0.317,32,0.317,32,,exclude,33,32,-1
+ddb88604-c5b2-41e4-b54c-3a6251ca225a,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Algeria have 3 or more shots on target?,team_sot_ge,0.677,68,0.677,68,,shadow,67,68,1
+0689d420-b2dc-4ad5-bcf7-4f62a43ae956,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Marcel Sabitzer have at least 1 shot on target?,player_sot_ge,0.2071,21,0.1984,20,,blend_capped,20,21,1
+a42becae-4a32-411a-904a-813bb1a2af6b,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Austria have 5 or more shots on target?,team_sot_ge,0.3657,37,0.3657,37,,shadow,38,36,-1
+11105aab-6512-426a-8398-c59c4b8ba8e4,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Austria receive more cards than Algeria?,cards_gt,0.4819,48,0.4391,44,,blend,48,48,0
+37f1e3ff-3bb5-41e3-b1d3-cf9bf02eefa0,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Austria score more goals than Algeria in the second half?,goals_gt_half,0.2895,29,0.3206,32,,blend,33,29,-4
+e7e494aa-0978-4c61-a66e-91876ab893cb,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Austria score the first goal of the second half?,first_goal_half,0.3733,37,0.3933,39,,blend,40,37,-3
+4e2fd55d-652b-4fb5-9375-31e382bada1c,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Austria have more shots on target than Algeria in the second half?,sot_gt,0.4781,48,0.4781,48,,shadow,49,48,-1
+89051d35-6048-480e-a2f7-925ac9346337,8df8038c-fd2c-4a5f-be4e-0e11d5966c05,ALG vs AUT,Will Algeria commit more fouls than Austria?,fouls_gt,0.525,52,0.5249,52,,blend,53,52,-1
