@@ -148,6 +148,13 @@ class Runner:
         from jumpprob.models import strategy
         if anchored and arch not in TIMING_ARCHS and fam == "goal":
             return p  # direct anchored market = calibrated floor
+        # No-edge archetypes belong to the risk gate (stage 8), which shrinks them
+        # toward base. Extremizing them here would amplify the very noise the risk
+        # gate then has to undo, so the two layers fight (e.g. count earns k=1.3 but
+        # offsides/fouls/both_teams have no edge). Leverage only the markets within a
+        # family that actually earned it; leave the no-edge ones for the risk gate.
+        if arch in self.risk:
+            return p
         gate_fam = "timing" if arch in TIMING_ARCHS else fam
         if gate_fam is None:
             return p

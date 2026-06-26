@@ -49,6 +49,24 @@ def test_both_teams_sot_not_mis_parsed_as_player():
     assert parse_question("Will Son Heung-min have at least 1 shot on target?").archetype == "player_sot_ge"
 
 
+def test_extremize_skips_risk_gate_archetypes():
+    """No-edge archetypes (owned by the risk gate) must NOT be extremized, even when
+    their family earns leverage (count k=1.3) — else stage 5 amplifies the very
+    deviation stage 8 then shrinks, and the two layers fight (Flag 2, 2026-06-24)."""
+    from jumpprob.submit.runner import Runner
+    class Stub:  # _extremize only reads self.risk / gate / field_sharpness / aggression
+        risk = {"offsides_ge": 0.5, "fouls_gt": 0.5, "both_teams_sot_ge": 0.3}
+        gate = {"count": 1.3}
+        field_sharpness = {"count": 0.4}
+        aggression = 1.0
+    s = Stub()
+    # a risk-gate archetype is left untouched despite count k=1.3
+    assert Runner._extremize(s, "offsides_ge", "count", 0.70, False) == 0.70
+    assert Runner._extremize(s, "both_teams_sot_ge", "count", 0.80, False) == 0.80
+    # a count archetype WITHOUT a risk-gate entry is still levered (deviation amplified)
+    assert Runner._extremize(s, "sot_gt", "count", 0.70, False) > 0.70
+
+
 def test_platt_recovers_overconfidence():
     """Generate predictions that are systematically overconfident; Platt must
     fit a < 1 (shrink toward 0.5) and improve Brier."""
