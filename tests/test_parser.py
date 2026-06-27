@@ -42,3 +42,26 @@ def test_player_ga_and_scores():
 
 def test_unparseable_returns_none():
     assert parse_question("Some unrelated sentence about nothing.") is None
+
+
+def test_knockout_regulation_suffix_is_stripped():
+    # the platform appends "...in regulation (90 minutes + stoppage time)" on knockout
+    # questions; our models are 90-minute, so the base archetype must still match.
+    assert parse_question("Will France win in regulation (90 minutes + stoppage time)?").archetype == "win"
+    assert parse_question("Will Brazil score 2 or more goals in regulation (90 minutes + stoppage time)?").archetype == "team_goals_ge"
+    assert parse_question("Will there be 4 or more total cards shown in regulation (90 minutes + stoppage time)?").archetype == "cards_ge"
+    assert parse_question("Will there be 8 or more total shots on target in regulation (90 minutes + stoppage time)?").archetype == "total_sot_ge"
+
+
+def test_win_phrasings_and_margin_disambiguation():
+    assert parse_question("Will Argentina win?").archetype == "win"
+    assert parse_question("Will Argentina win the match?").archetype == "win"
+    # "win by N goals" is a MARGIN market, NOT a win — must not be mis-classified as win
+    m = parse_question("Will the United States win by 2 or more goals?")
+    assert m is None or m.archetype != "win"
+
+
+def test_ht_leading_and_full_match_corners_phrasings():
+    assert parse_question("Will Argentina be ahead at halftime?").archetype == "ht_leading"
+    assert parse_question("At halftime, will Spain be winning?").archetype == "ht_leading"
+    assert parse_question("Will Ivory Coast have more corner kicks than Norway?").archetype == "corners_gt"

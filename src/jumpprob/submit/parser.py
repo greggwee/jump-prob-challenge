@@ -48,7 +48,7 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("goals_gt_half", m[1], m[2], half=1 if m[3].lower() == "first" else 2)),
     (re.compile(r"will (.+?) score at least (\d+) goals?", re.I),
      lambda m: ParsedQuestion("team_goals_ge", m[1], threshold=int(m[2]))),
-    (re.compile(r"will (.+?) score (\d+) or more total goals", re.I),
+    (re.compile(r"will (.+?) score (\d+) or more (?:total )?goals", re.I),
      lambda m: ParsedQuestion("team_goals_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will (.+?) have (\d+) or more shots on target in the (first|second) half", re.I),
      lambda m: ParsedQuestion("team_sot_ge", m[1], threshold=int(m[2]), half=1 if m[3].lower() == "first" else 2)),
@@ -74,6 +74,8 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("ht_tied")),
     (re.compile(r"at halftime, will (.+?) be winning", re.I),
      lambda m: ParsedQuestion("ht_leading", m[1])),
+    (re.compile(r"will (.+?) be (?:ahead|winning|leading) at halftime", re.I),
+     lambda m: ParsedQuestion("ht_leading", m[1])),
     (re.compile(r"will the second half have more (?:total )?goals than the first", re.I),
      lambda m: ParsedQuestion("h2_more_goals_than_h1")),
     (re.compile(r"will (.+?) score or assist a goal", re.I),
@@ -93,6 +95,8 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("team_corners_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"at halftime.*will (.+?) have more corner kicks than (.+?)\?", re.I),
      lambda m: ParsedQuestion("corners_gt", m[1], m[2], half=1)),
+    (re.compile(r"will (.+?) have more corner kicks than (.+?)\?", re.I),
+     lambda m: ParsedQuestion("corners_gt", m[1], m[2], half=None)),
     (re.compile(r"will (.+?) be caught offside (\d+) or more times", re.I),
      lambda m: ParsedQuestion("offsides_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will there be (\d+) or more total cards .*second half", re.I),
@@ -107,7 +111,7 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=2)),
     (re.compile(r"will (.+?) have more shots on target than (.+?) in the first half", re.I),
      lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=1)),
-    (re.compile(r"will (.+?) win the match", re.I),
+    (re.compile(r"will (.+?) win(?: the match)?\b(?! by)", re.I),
      lambda m: ParsedQuestion("win", m[1])),
     (re.compile(r"will (.+?) score in the second half", re.I),
      lambda m: ParsedQuestion("team_scores_half", m[1], half=2)),
@@ -138,6 +142,9 @@ def parse_question(text: str, teams: set[str] | None = None) -> ParsedQuestion |
     teams is re-routed to the team archetype — e.g. 'Will Haiti have at least 1
     shot on target...' is team_sot_ge, not player_sot_ge."""
     text = text.strip()
+    # Knockout-stage phrasing appends "... in regulation (90 minutes + stoppage time)";
+    # our models are all 90-minute, so strip the qualifier so the base archetype matches.
+    text = re.sub(r"\s*\bin regulation \(90 minutes \+ stoppage time\)", "", text, flags=re.I)
     for pattern, build in _PATTERNS:
         m = pattern.search(text)
         if m:
