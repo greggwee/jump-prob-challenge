@@ -55,13 +55,22 @@ all_markets = [m for m in client.markets(LOBBY)
 print(f"{len(all_markets)} open markets" + (f" (filtered to {matches_filter})" if matches_filter else ""))
 market_rows = [{**m, "match": m["match"]} for m in all_markets]
 
+# player-prop market anchor (verified live: SoT / scorer / assist). Fetch on a full run;
+# reuse the cached snapshot on a targeted scheduler tick (per-event prop credits add up).
+try:
+    player_props = odds_api.fetch_player_props() if matches_filter is None else odds_api.load_latest_props()
+    print(f"player props: {len(player_props)} fixtures")
+except Exception as e:
+    print(f"player props unavailable ({str(e)[:50]}) -> model-only")
+    player_props = {}
+
 # three passes for CLV (improvement #1): pure model (w=0, no anchors), the
 # odds-anchored blend we submit (w=0.85), and the pure closing line (w=1).
 pure, _ = runner.predictions_for(market_rows)
-anchored, skipped = runner.predictions_for(market_rows, anchors=anchors)
+anchored, skipped = runner.predictions_for(market_rows, anchors=anchors, player_props=player_props)
 blend_w = runner.w_market
 runner.w_market = 1.0
-market, _ = runner.predictions_for(market_rows, anchors=anchors)
+market, _ = runner.predictions_for(market_rows, anchors=anchors, player_props=player_props)
 runner.w_market = blend_w  # restore the blend weight
 pure_by_mkt = {r["market_id"]: r for r in pure}
 mkt_by_mkt = {r["market_id"]: r for r in market}

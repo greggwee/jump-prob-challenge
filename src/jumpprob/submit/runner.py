@@ -34,6 +34,7 @@ from jumpprob.normalize.teams import canonical
 from jumpprob.normalize.players import build_index as _club_index_fn, resolve as _club_resolve
 from jumpprob.simulate import markets as mk
 from jumpprob.simulate import mc_engine
+from jumpprob.ingest.odds_api import norm_player
 from jumpprob.submit.parser import ParsedQuestion, parse_question
 from jumpprob.agents import panel as panel_mod  # out-of-band LLM blend (daemon reads cache only)
 
@@ -472,7 +473,8 @@ class Runner:
 
     # ------------------------------------------------------------------
     def predictions_for(self, market_rows: list[dict],
-                        anchors: dict[tuple[str, str], MatchAnchor] | None = None
+                        anchors: dict[tuple[str, str], MatchAnchor] | None = None,
+                        player_props: dict | None = None,
                         ) -> tuple[list[dict], list[dict]]:
         """Returns (payload rows with p for both bots, unanswered rows).
 
@@ -481,6 +483,7 @@ class Runner:
         answer directly (no shrink toward base — the market is already the
         conservative estimate)."""
         anchors = anchors or {}
+        player_props = player_props or {}
         by_match: dict[str, list[dict]] = {}
         for m in market_rows:
             by_match.setdefault(m["match"]["name"], []).append(m)
@@ -492,6 +495,7 @@ class Runner:
                 skipped.extend({"match": mname, "question": r["question"], "reason": "teams unresolved"} for r in rows)
                 continue
             anchor = anchors.get(teams) or anchors.get((teams[1], teams[0]))
+            pp = player_props.get(teams) or player_props.get((teams[1], teams[0])) or {}
             team_set = {canonical(t) for t in teams}   # team-aware parse (player vs team SoT)
             ctx = self.context(*teams, anchor=anchor)
             for r in rows:
@@ -508,16 +512,25 @@ class Runner:
                 p = self.calibrate(q.archetype, p, ctx.anchored)
                 p = float(np.clip(p, 0.01, 0.99))
                 fam = self._family(q.archetype)
-                if ctx.anchored and fam == "goal":
+                # Market anchor for player props (verified live: player_shots_on_target /
+                # _goal_scorer_anytime / _assists). Blend the de-vigged book like a direct
+                # market and SKIP the model's base-blend, extremize and confidence floor —
+                # those patch the model we're now anchoring away from. See
+                # docs/MARKET-FIRST-ARCHITECTURE.md.
+                pm = pp.get(norm_player(q.subject), {}).get(q.archetype) if (fam == "player" and q.subject) else None
+                if pm is not None:
+                    p_a = float(np.clip(blend([p, pm], [1 - self.w_market, self.w_market]), 0.01, 0.99))
+                elif ctx.anchored and fam == "goal":
                     p_a = p  # market is already calibrated/conservative — don't shrink
                 else:
                     p_base = self.answer(q, self._base_ctx)
                     p_a = blend([p_base, p], [BOT_A_BASE_WEIGHT, 1 - BOT_A_BASE_WEIGHT]) if p_base else p
-                # rec #2: evidence-gated extremizing (no-op until a family earns k>1)
-                p_a = float(np.clip(self._extremize(q.archetype, fam, p_a, ctx.anchored), 0.01, 0.99))
-                # Phase 1: asymmetric confidence calibration — floor confident-low bets on
-                # the archetypes where betting below the crowd loses catastrophically.
-                p_a = float(np.clip(self._confidence(q.archetype, p_a), 0.01, 0.99))
+                if pm is None:
+                    # rec #2: evidence-gated extremizing (no-op until a family earns k>1)
+                    p_a = float(np.clip(self._extremize(q.archetype, fam, p_a, ctx.anchored), 0.01, 0.99))
+                    # Phase 1: asymmetric confidence calibration — floor confident-low bets on
+                    # the archetypes where betting below the crowd loses catastrophically.
+                    p_a = float(np.clip(self._confidence(q.archetype, p_a), 0.01, 0.99))
                 # L0 LLM expert layer (out-of-band panel; shadow by default). At the
                 # default env (all role weights 0) apply_expert returns p_a unchanged,
                 # so sub_a is byte-for-byte identical; a cache miss -> pure model. The

@@ -57,10 +57,11 @@ def main() -> None:
         mfilter = set(sys.argv[sys.argv.index("--matches") + 1].split("||"))
     client = SportsPredictClient("SPORTSPREDICT_KEY_B", dry_run=not live)
 
-    anchors = {}
+    anchors, player_props = {}, {}
     try:
         from jumpprob.ingest import odds_api
         anchors = odds_api.build_anchors(odds_api.fetch_events())
+        player_props = odds_api.load_latest_props()   # reuse the full-run snapshot (no extra credits)
     except Exception as e:
         print(f"odds unavailable ({str(e)[:50]}) -> model-only goal markets", file=sys.stderr)
 
@@ -72,7 +73,8 @@ def main() -> None:
 
     mkts = [m for m in client.markets(LOBBY) if m.get("status") == "open"
             and (mfilter is None or m["match"]["name"] in mfilter)]
-    preds, _ = runner.predictions_for([{**m, "match": m["match"]} for m in mkts], anchors=anchors)
+    preds, _ = runner.predictions_for([{**m, "match": m["match"]} for m in mkts],
+                                      anchors=anchors, player_props=player_props)
     plan = [{"market_id": r["market_id"], "lobby_id": r["lobby_id"], "match": r["match"],
              "question": r["question"], "archetype": r["archetype"], "tier": tier(r["archetype"]),
              "submit": int(np.clip(round(size_v2(r["p_bot_a"], r["archetype"]) * 100), 1, 99))}

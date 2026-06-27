@@ -67,6 +67,21 @@ def test_extremize_skips_risk_gate_archetypes():
     assert Runner._extremize(s, "sot_gt", "count", 0.70, False) > 0.70
 
 
+def test_player_prop_name_join_and_devig():
+    """Player-prop market anchor: subject<->book name join + Over/Under de-vig."""
+    from jumpprob.ingest.odds_api import norm_player, _parse_player_event
+    # team suffix + accents normalize to the same key as the bare name
+    assert norm_player("Kai Havertz (Germany)") == norm_player("Kai Havertz") == "kai havertz"
+    assert norm_player("Viktor Gyökeres") == "viktor gyokeres"
+    # de-vig a SoT Over/Under 0.5 into P(>=1 SoT)  (1.25 ~ 80%, less the vig)
+    event = {"bookmakers": [{"key": "pinnacle", "markets": [
+        {"key": "player_shots_on_target", "outcomes": [
+            {"description": "Ante Budimir", "name": "Over", "point": 0.5, "price": 1.25},
+            {"description": "Ante Budimir", "name": "Under", "point": 0.5, "price": 4.0}]}]}]}
+    p = _parse_player_event(event)["ante budimir"]["player_sot_ge"]
+    assert 0.7 < p < 0.85
+
+
 def test_platt_recovers_overconfidence():
     """Generate predictions that are systematically overconfident; Platt must
     fit a < 1 (shrink toward 0.5) and improve Brier."""
