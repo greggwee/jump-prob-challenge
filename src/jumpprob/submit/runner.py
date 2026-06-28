@@ -422,7 +422,12 @@ class Runner:
         if a == "sub_before_ht":
             return float(self.event_base["sub_before_ht"])          # ~injury base rate
         if a == "substitute_scores":
-            return float(self.event_base["substitute_scores"])
+            # subs come on ~72' and score ~17% of all goals (WC2022 events, lineup-verified),
+            # so the chance a sub scores tracks the match's goal expectation -> scale the base
+            # rate by this match's total goals vs the league average (blowout > tight game).
+            lam0 = 2.0 * float(np.exp(self.pl.goal_model.b0))   # league-average total goals
+            s = -np.log(1.0 - self.event_base["substitute_scores"]) / lam0
+            return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * s))
         if a == "any_player_goals_ge":   # "any player score 2+ goals" — over the goal grid
             def _team_any(marg):
                 return float(sum(marg[g] * (BRACE_BY_TEAM_GOALS[g] if g < len(BRACE_BY_TEAM_GOALS) else 1.0)

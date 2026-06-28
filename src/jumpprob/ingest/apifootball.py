@@ -112,6 +112,20 @@ def fetch_fixture_events(fixture_id: int, force: bool = False, raw_dir: Path = R
     return json.loads(dest.read_text(encoding="utf-8"))
 
 
+def fetch_fixture_lineups(fixture_id: int, force: bool = False, raw_dir: Path = RAW) -> list[dict]:
+    """`/fixtures/lineups?fixture=` — per-team startXI + substitutes. Lets us identify
+    subs by the rigorous definition (a scorer NOT in the startXI is a substitute), rather
+    than trusting the subst-event `assist` field. Cached by fixture id. One request."""
+    raw_dir = raw_dir / "lineups"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    dest = raw_dir / f"fx{fixture_id}.json"
+    if force or not dest.exists():
+        d = _get("/fixtures/lineups", {"fixture": fixture_id})
+        dest.write_text(json.dumps(d.get("response", [])))
+        time.sleep(THROTTLE)
+    return json.loads(dest.read_text(encoding="utf-8"))
+
+
 def fetch_fixture_stats(fixture_id: int, force: bool = False, raw_dir: Path = RAW) -> list[dict]:
     """`/fixtures/statistics?fixture=` — per-team stats incl Total Shots, Offsides.
     Cached by fixture id. One request."""
