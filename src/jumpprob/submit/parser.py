@@ -96,6 +96,11 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("half_total_ge", threshold=int(m[2]), half=1 if m[1].lower() == "first" else 2)),
     (re.compile(r"will the second half produce more goals than the first", re.I),
      lambda m: ParsedQuestion("h2_more_goals_than_h1")),
+    # knockout advancement = win THIS tie (incl. extra time + penalties); the round
+    # named doesn't change the handler. Subject is the team; runner derives it from
+    # the 90-min market + an ET/shootout model (see runner.answer "advance").
+    (re.compile(r"will (.+?) advance to the (?:round of \d+|quarter[- ]?finals?|semi[- ]?finals?|final)", re.I),
+     lambda m: ParsedQuestion("advance", m[1])),
     (re.compile(r"will a card be shown in the (first|second) half", re.I),
      lambda m: ParsedQuestion("cards_ge", threshold=1, half=1 if m[1].lower() == "first" else 2)),
     (re.compile(r"will a red card be shown", re.I),

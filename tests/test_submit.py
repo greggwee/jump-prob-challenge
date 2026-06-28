@@ -138,6 +138,31 @@ def test_hydration_window_markets():
         assert 0.0 < frac < 1.0, arch          # a real probability mass, not all/none
 
 
+def test_advance_estimator():
+    """advance = win THIS knockout tie incl. ET/pens. Even match -> 0.5; a favorite
+    sits between its 90-min win prob and 1; and the two teams' advance probs sum to
+    1 (exactly one advances) -- a coherence property of the decomposition."""
+    import pandas as pd
+    import jumpprob.simulate.markets as mk
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+
+    assert parse_question("Will Japan advance to the Round of 16?").archetype == "advance"
+    assert parse_question("Will Spain advance to the quarterfinals?").archetype == "advance"
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+
+    def adv(ta, tb):
+        ctx = r.context(ta, tb)
+        return r.answer(parse_question(f"Will {ta} advance to the Round of 16?"), ctx), mk.p_win(ctx.grid, "a")
+
+    p_even, _ = adv("Brazil", "Brazil")
+    assert abs(p_even - 0.5) < 1e-6                     # symmetry
+    p_fav, w_fav = adv("Brazil", "Haiti")
+    assert w_fav < p_fav < 1.0                          # draw share lifts the favorite above win90
+    p_dog, _ = adv("Haiti", "Brazil")
+    assert abs((p_fav + p_dog) - 1.0) < 1e-6            # exactly one team advances
+
+
 def test_canonical_strips_definite_article():
     """'the United States' / 'the Netherlands' subjects must resolve to the same
     canonical as the bare name, else the side is unresolved and the market drops."""

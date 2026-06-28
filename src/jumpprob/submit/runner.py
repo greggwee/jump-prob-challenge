@@ -47,7 +47,8 @@ TIMING_ARCHS = {"ht_tied", "ht_leading", "h2_more_goals_than_h1", "first_goal_ha
                 "first_goal_and_win", "first_goal_and_opp_2h", "goals_gt_half"}
 GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge",
               "team_scores_half", "half_total_ge", "team_goals_ge",
-              "first_goal_match", "win_margin", "clean_sheet", "score_both_halves"} | TIMING_ARCHS
+              "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
+              "advance"} | TIMING_ARCHS
 COUNT_ARCHS = {"corners_gt", "sot_gt", "fouls_gt", "cards_gt", "team_corners_ge",
                "team_sot_ge", "team_cards_ge", "cards_ge", "corners_total_ge",
                "total_sot_half_ge", "total_sot_ge", "offsides_ge", "both_teams_sot_ge"}
@@ -86,6 +87,12 @@ CLUB_RATES = Path("data/processed/player_rates_combined.parquet")
 SOT_PER_SHOT = 0.37   # Understat has no SoT -> estimate from total shots
 P_RED_MATCH = 0.065   # P(>=1 red): 0.067 reds/match measured, 6 tournaments
 P_PEN_MATCH = 0.293   # A6
+# Knockout advancement (advance to next round = win THIS tie, incl. extra time + penalties).
+# Grounded on martj42: ET goals run 0.30/30min = 0.34x pro-rated regulation (unbiased over
+# 839 ET matches), and 81% of ET matches STILL go to penalties; shootouts are ~a coin flip
+# with a mild favorite tilt (0.49 even -> 0.57 big-favorite over 678 historical shootouts).
+ET_TEMPO = 0.35       # extra-time scoring as a fraction of pro-rated regulation
+PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
 BOT_A_BASE_WEIGHT = 0.25
 
 H1 = 1 - mk.SECOND_HALF_SHARE
@@ -414,6 +421,23 @@ class Runner:
                 return None
             lt, _ = lams(side)
             return float(mk.p_scores_in_half(lt, 1) * mk.p_scores_in_half(lt, 2))
+        if a == "advance":
+            # advance to the next round = win THIS knockout tie:
+            #   P(adv) = P(win 90) + P(draw 90) * P(advance | drawn after 90),
+            #   P(advance | draw) = P(win ET) + P(ET also drawn) * P(win shootout).
+            # ET = a low-tempo 30-min grid off the same (anchored) intensities; the
+            # shootout is ~a coin flip with a mild favorite tilt (see ET_TEMPO/PEN_TILT).
+            if side is None:
+                return None
+            other = "b" if side == "a" else "a"
+            p_win90, p_draw90, p_lose90 = mk.p_win(ctx.grid, side), mk.p_draw(ctx.grid), mk.p_win(ctx.grid, other)
+            lt, lo = lams(side)
+            et = dc_grid(ET_TEMPO / 3 * lt, ET_TEMPO / 3 * lo, ctx.rho_dc)
+            p_win_et, p_et_draw = mk.p_win(et, "a"), mk.p_draw(et)
+            r = p_win90 / (p_win90 + p_lose90) if (p_win90 + p_lose90) > 0 else 0.5
+            s_pen = 0.5 + PEN_TILT * (r - 0.5)
+            q = p_win_et + p_et_draw * s_pen
+            return float(p_win90 + p_draw90 * q)
         if a == "btts":
             return mk.p_btts(ctx.grid)
         if a == "total_ge":
