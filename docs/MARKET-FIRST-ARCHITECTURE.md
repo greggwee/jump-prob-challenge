@@ -37,18 +37,34 @@ or stay on the model.
 Auditing the **544 distinct** platform questions exposed **56 unparsed → silently dropped → no
 prediction from either bot** (all currently open). Cause: knockout phrasing.
 
-- **Fixed this pass (56 → 37):** strip the `"... in regulation (90 minutes + stoppage time)"` qualifier
+- **Pass 1 (56 → 37):** strip the `"... in regulation (90 minutes + stoppage time)"` qualifier
   (our models are 90-minute), and add tolerant patterns for `win` (was "win the match" only), full-match
   `more corners than`, `score N+ goals`, and `be ahead/winning at halftime`. Recovered 19 known
-  archetypes (win, team_goals, corners_gt, ht_leading, cards_ge, total_sot) — all with working models;
-  13 parser tests pass; `win by N` is correctly **not** mis-read as `win`.
-- **Still dropped (37):** genuinely *new* archetypes — winning margin, clean sheet, total shots
-  (on+off), score-in-both-halves, first-goal-of-**match**, red-card-alone, draw, **hydration-break**
-  timing, stoppage-time goals, substitution timing, **advance to Round of 16**, any-player props.
+  archetypes; `win by N` is correctly **not** mis-read as `win`.
+- **Pass 2 (37 → 22), the 2026-06-28 drop audit:** the residual was *not* mostly new physics — 15 were
+  derivable from the already-calibrated, market-anchored **goal grid**, so they cost no new fitted
+  parameters (no overfitting) and were pure forfeit-recovery:
+  - `first_goal_match` (×7), `win_margin`, `clean_sheet`, `score_both_halves`, `draw` (was in
+    `GOAL_ARCHS` but had **no handler**!), `half_total_ge`/`h2_more_goals` (existing handlers, new
+    "produce" phrasing), `cards_ge`-in-half, `red_card` (constant).
+  - All inherit the market view when goals are anchored; anchored goal markets skip extremize, so no
+    risk-gate entanglement. Also fixed a general `canonical()` bug — a leading definite article ("the
+    United States" / "the Netherlands") left the side unresolved and dropped *any* "the X" subject.
+- **Still dropped (22), triaged:**
+  - **Count-extendable (~5):** total shots (on+off ≈ SoT/0.37), total offside calls, both-teams-cards.
+    *Cheap, but they introduce new no-edge count archetypes that need risk-gate entries to avoid the
+    "layers fighting" extremize issue — do them with the risk-gate refresh, not ad hoc.*
+  - **MC minute-resolution (~10):** goal/card before/after a **hydration break**, first/second-half
+    **stoppage-time** goals, **substitution before halftime**. The v2 MC engine + minute dynamics is the
+    right tool (query a minute window), not a base-rate guess.
+  - **Market/ambiguous (~4):** **advance to Round of 16** (group-stage progression depends on *other*
+    matches, not just this one → needs the outright/to-qualify line, not our match model), any-player
+    SoT/multi-goal (max-over-players).
+  - **Truly low-information (~3):** substitute scores, etc. — last-resort base rate or leave dropped.
 
-**The lesson:** the regex parser is brittle — the platform keeps adding knockout-specific phrasings and
-the system *silently drops* what it can't match. **Question understanding must be made robust**, or
-~10 % of every knockout match is forfeit.
+**The lesson:** the regex parser is brittle and the system *silently drops* what it can't match, but the
+durable fix is **route, don't regex** — most "new" archetypes are existing models in disguise, and the
+genuine residual is small enough to triage by data source (grid / MC / market / base rate).
 
 ## D. The architecture
 
@@ -65,12 +81,17 @@ This inverts today's "model everything, anchor only goals."
 
 ## E. Build sequence
 
-1. **Commit the parser fix** (recovers 19 live markets on both bots — do first, it's RBP bleeding now).
-2. **Anchor player props** — extend `market_anchor.py` to fetch `player_shots_on_target` /
-   `player_goal_scorer_anytime` / `player_assists`, de-vig, blend into `player_sot_ge` /
-   `player_scores` / `player_ga`. Highest model-improvement per unit effort; verified available.
-3. **LLM classifier fallback** for unmatched questions → stop the silent drop; route the 37 new types to
-   model/market/LLM instead of `None`.
+1. ✅ **Parser fix** (recovered 19 live markets on both bots) — done, commit `4be810f`.
+2. ✅ **Anchor player props** — `fetch_player_props` de-vigs `player_shots_on_target` /
+   `player_goal_scorer_anytime` / `player_assists`, blended into `player_sot_ge` / `player_scores` /
+   `player_ga` (skips the base-blend/extremize/confidence steps that patched the model we anchor away
+   from). Done, commit `125aeaf`. Coverage grows as matches enter the 36h prop-fetch window.
+3. ◑ **Stop the silent drop** — the 2026-06-28 audit recovered 15 of 37 by *routing to existing
+   grid/count handlers* (commit `0ea7ef0`), which turned out lower-risk and more durable than an LLM
+   classifier for the bulk. **Remaining work:** (a) MC minute-resolution for the ~10 hydration/stoppage
+   timing questions, (b) count-archetype extensions *with* risk-gate entries (~5), (c) an out-of-band
+   LLM classifier as the final catch-all so *nothing* drops — populated like the existing panel
+   (daemon reads a cache; never an LLM call in the near-kickoff submit path).
 4. **(Optional, paid) corners/cards feed** — only if an OpticOdds/OddsJam trial confirms WC-2026 coverage
    at usable vig; else keep the model (offsides/fouls/corners are already well-calibrated).
 
