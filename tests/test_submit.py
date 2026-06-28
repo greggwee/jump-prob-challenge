@@ -189,6 +189,22 @@ def test_event_and_any_player_markets():
             r.answer(parse_question("Will a goal be scored in first-half stoppage (added) time?"), ctx))
 
 
+def test_uncertain_markets_routed_to_llm_shadow():
+    """The 2026-06-29 recovered uncertain markets are wired to the LLM as BLEND
+    (logged in shadow now, promotable to live via a gate weight). Market-anchored
+    goal markets stay EXCLUDE so the LLM can never move them."""
+    from jumpprob.agents import panel as P
+    for a in ["substitute_scores", "goal_2h_stoppage", "any_player_goals_ge",
+              "total_shots_ge", "both_teams_cards", "cards_post_hb2", "sub_before_ht"]:
+        assert P.route(a)[1] == P.BLEND, a
+    assert P.route("win")[1] == P.EXCLUDE          # sharp, market-priced
+    assert P.route("advance")[1] == P.EXCLUDE      # derived from the sharp 90-min line
+    # shadow contract: with no gate weight, the expert is logged but never blended
+    panel = {"m1": {"p_ensemble": 0.90, "archetype": "substitute_scores"}}
+    p_final, info = P.apply_expert("m1", "substitute_scores", 0.32, panel, gate={})
+    assert p_final == 0.32 and info["expert"] == 0.9
+
+
 def test_advance_estimator():
     """advance = win THIS knockout tie incl. ET/pens. Even match -> 0.5; a favorite
     sits between its 90-min win prob and 1; and the two teams' advance probs sum to

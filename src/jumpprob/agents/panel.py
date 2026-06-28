@@ -76,6 +76,24 @@ ROUTING: dict[str, tuple[str, str]] = {
     "player_ga": ("lineup", BLEND),            # assists are model-invisible; history helps
     "player_sot_ge": ("lineup", BLEND_CAPPED), # catastrophic-low tail — rescue but cap the pull
     "player_scores": ("lineup", SHADOW),       # we have edge; raw history HURTS — protect it
+    # --- 2026-06-29 recoveries: uncertain / base-rate markets where the LLM may add
+    #     game-state, referee, or player-quality context. BLEND = logged in shadow now
+    #     (weight 0), promotable to live by setting a gate weight once score_shadow
+    #     proves OOS edge. NOT the market-anchored goal markets (those stay EXCLUDE). ---
+    "total_shots_ge": ("tactical", BLEND),
+    "offsides_total_ge": ("tactical", BLEND),
+    "both_teams_cards": ("tactical", BLEND),
+    "goal_pre_hb1": ("tactical", BLEND),
+    "goal_post_hb2": ("tactical", BLEND),
+    "cards_post_hb2": ("tactical", BLEND),
+    "corners_pre_hb1": ("tactical", BLEND),
+    "offsides_pre_hb1": ("tactical", BLEND),
+    "goal_1h_stoppage": ("tactical", BLEND),
+    "goal_2h_stoppage": ("tactical", BLEND),
+    "sub_before_ht": ("tactical", BLEND),
+    "substitute_scores": ("tactical", BLEND),
+    "any_player_sot_ge": ("lineup", BLEND),    # player-quality context (a prolific striker -> brace)
+    "any_player_goals_ge": ("lineup", BLEND),
 }
 DEFAULT_ROUTE = ("tactical", EXCLUDE)          # unknown archetype -> pure model
 
