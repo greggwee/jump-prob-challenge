@@ -28,7 +28,7 @@ import pandas as pd
 from scipy.optimize import minimize
 from scipy.stats import nbinom, poisson
 
-FAMILIES = ["corners", "cards", "offsides", "shots_on_target", "fouls"]
+FAMILIES = ["corners", "cards", "offsides", "shots_on_target", "fouls", "shots"]
 MAX_COUNT = 30
 REF_SHRINKAGE = 40.0  # pseudo team-halves of global rate mixed into each referee
 # NOTE: cross-tournament backtest showed referee factors with light shrinkage
@@ -75,6 +75,8 @@ def fit_count_model(train: pd.DataFrame) -> CountModel:
     [family columns..., lam_team, lam_opp, referee]."""
     model = CountModel()
     for family in FAMILIES:
+        if family not in train.columns:
+            continue  # caller's training frame doesn't carry this family — skip it
         y = train[family].to_numpy(dtype=float)
         h2 = (train["period"] == 2).to_numpy(dtype=float)
         lt = np.log(train["lam_team"].to_numpy(dtype=float))

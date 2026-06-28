@@ -550,6 +550,14 @@ class Runner:
             return pa * pb
         if a == "offsides_ge":
             return None if side is None else float(side_pmf("offsides", side)[q.threshold:].sum())
+        if a == "total_shots_ge":      # total shots (on+off) — modeled from real data, not SoT/0.37
+            return p_sum_ge(side_pmf("shots", "a"), side_pmf("shots", "b"), q.threshold)
+        if a == "offsides_total_ge":   # both teams' offside calls combined
+            return p_sum_ge(side_pmf("offsides", "a"), side_pmf("offsides", "b"), q.threshold)
+        if a == "both_teams_cards":    # P(A>=thr cards AND B>=thr cards), independence given intensities
+            pa = float(side_pmf("cards", "a")[q.threshold:].sum())
+            pb = float(side_pmf("cards", "b")[q.threshold:].sum())
+            return pa * pb
         if a in ("player_scores", "player_sot_ge", "player_ga"):
             rate_sot, rate_goal, rate_ga = self.player_rate(q.subject)
             rate = {"player_sot_ge": rate_sot, "player_scores": rate_goal, "player_ga": rate_ga}[a]

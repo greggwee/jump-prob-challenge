@@ -116,6 +116,14 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("cards_post_hb2")),
     (re.compile(r"will either team be ruled offside before the first hydration break", re.I),
      lambda m: ParsedQuestion("offsides_pre_hb1")),
+    # count markets summed over both teams (modeled from the existing count families;
+    # total shots uses real team_half_counts.shots, not a SoT ratio)
+    (re.compile(r"will there be (\d+) or more total shots \(on and off target\)", re.I),
+     lambda m: ParsedQuestion("total_shots_ge", threshold=int(m[1]))),
+    (re.compile(r"will there be (\d+) or more offside calls", re.I),
+     lambda m: ParsedQuestion("offsides_total_ge", threshold=int(m[1]))),
+    (re.compile(r"will both teams receive at least one card", re.I),
+     lambda m: ParsedQuestion("both_teams_cards", threshold=1)),
     # --- archetypes observed in live WC2026 markets (2026-06-12) ---
     (re.compile(r"will (.+?) commit more fouls than (.+?)\?", re.I),
      lambda m: ParsedQuestion("fouls_gt", m[1], m[2])),

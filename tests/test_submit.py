@@ -138,6 +138,32 @@ def test_hydration_window_markets():
         assert 0.0 < frac < 1.0, arch          # a real probability mass, not all/none
 
 
+def test_total_count_markets_from_real_data():
+    """Total shots (real team_half_counts.shots, NOT SoT/0.37), total offsides, and
+    both-team cards parse and answer off the count model."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+
+    assert parse_question("Will there be 20 or more total shots (on and off target)?").archetype == "total_shots_ge"
+    assert parse_question("Will there be 3 or more offside calls?").archetype == "offsides_total_ge"
+    assert parse_question("Will both teams receive at least one card?").archetype == "both_teams_cards"
+    pipe = Pipeline()
+    assert "shots" in pipe.count_model.params          # real total-shots family was fit
+    r = Runner(pipe, pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    ctx = r.context("Brazil", "Japan")
+    for q in ["Will there be 20 or more total shots (on and off target)?",
+              "Will there be 3 or more offside calls?",
+              "Will both teams receive at least one card?"]:
+        p = r.answer(parse_question(q), ctx)
+        assert p is not None and 0.0 < p < 1.0, q
+    # modeling total shots from real data is not the SoT/0.37 underestimate (true ratio 0.315)
+    cm = pipe.count_model
+    mu_real = cm.mu("shots", 1, 1.5, 1.3) + cm.mu("shots", 2, 1.5, 1.3)
+    mu_est = (cm.mu("shots_on_target", 1, 1.5, 1.3) + cm.mu("shots_on_target", 2, 1.5, 1.3)) / 0.37
+    assert mu_real > mu_est
+
+
 def test_advance_estimator():
     """advance = win THIS knockout tie incl. ET/pens. Even match -> 0.5; a favorite
     sits between its 90-min win prob and 1; and the two teams' advance probs sum to
