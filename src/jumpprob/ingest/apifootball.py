@@ -86,6 +86,45 @@ def _get(path: str, params: dict, retries: int = 4) -> dict:
     raise RuntimeError(f"api-football still rate-limited after {retries} retries: {path}")
 
 
+def fetch_fixtures(league: int, season: int, force: bool = False, raw_dir: Path = RAW) -> list[dict]:
+    """`/fixtures?league=&season=` — fixture list (id, teams, date, status). Cached.
+    World Cup league id = 1. One request."""
+    raw_dir = raw_dir / "fixtures"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    dest = raw_dir / f"league{league}_{season}.json"
+    if force or not dest.exists():
+        d = _get("/fixtures", {"league": league, "season": season})
+        dest.write_text(json.dumps(d.get("response", [])))
+        time.sleep(THROTTLE)
+    return json.loads(dest.read_text(encoding="utf-8"))
+
+
+def fetch_fixture_events(fixture_id: int, force: bool = False, raw_dir: Path = RAW) -> list[dict]:
+    """`/fixtures/events?fixture=` — match timeline: goals/cards/subs with minute
+    (time.elapsed + time.extra for stoppage). Cached by fixture id. One request."""
+    raw_dir = raw_dir / "events"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    dest = raw_dir / f"fx{fixture_id}.json"
+    if force or not dest.exists():
+        d = _get("/fixtures/events", {"fixture": fixture_id})
+        dest.write_text(json.dumps(d.get("response", [])))
+        time.sleep(THROTTLE)
+    return json.loads(dest.read_text(encoding="utf-8"))
+
+
+def fetch_fixture_stats(fixture_id: int, force: bool = False, raw_dir: Path = RAW) -> list[dict]:
+    """`/fixtures/statistics?fixture=` — per-team stats incl Total Shots, Offsides.
+    Cached by fixture id. One request."""
+    raw_dir = raw_dir / "stats"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    dest = raw_dir / f"fx{fixture_id}.json"
+    if force or not dest.exists():
+        d = _get("/fixtures/statistics", {"fixture": fixture_id})
+        dest.write_text(json.dumps(d.get("response", [])))
+        time.sleep(THROTTLE)
+    return json.loads(dest.read_text(encoding="utf-8"))
+
+
 def _search_token(name: str) -> str:
     """api-sports `search` needs >=4 chars; use the longest name token (usually the
     surname), which is the most distinctive and accent-folded for the URL."""

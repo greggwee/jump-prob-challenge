@@ -1,0 +1,11 @@
+{
+ "source": "WorldCup2022 (api-football, free-tier 2022-2024)",
+ "n_matches": 59,
+ "n_goals": 158,
+ "goal_share_1h_stoppage": 0.03164556962025317,
+ "goal_share_2h_stoppage": 0.08860759493670886,
+ "sub_before_ht": 0.13559322033898305,
+ "substitute_scores": 0.3220338983050847,
+ "p_1h_stoppage_goal_raw": 0.06779661016949153,
+ "p_2h_stoppage_goal_raw": 0.2033898305084746
+}

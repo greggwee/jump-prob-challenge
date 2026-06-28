@@ -164,6 +164,31 @@ def test_total_count_markets_from_real_data():
     assert mu_real > mu_est
 
 
+def test_event_and_any_player_markets():
+    """Stoppage goals (lambda-scaled share), sub base rates, and any-player markets
+    (team distribution x concentration) parse and behave monotonically."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    for text, arch in [
+        ("Will a goal be scored in first-half stoppage (added) time?", "goal_1h_stoppage"),
+        ("Will a goal be scored in second-half stoppage time?", "goal_2h_stoppage"),
+        ("Will a substitution be made before halftime?", "sub_before_ht"),
+        ("Will a substitute score a goal in regulation (90 minutes + stoppage time)?", "substitute_scores"),
+        ("Will any player record 2 or more shots on target?", "any_player_sot_ge"),
+        ("Will any player score more than 1 goal (excluding own goals)?", "any_player_goals_ge"),
+    ]:
+        assert parse_question(text).archetype == arch, text
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    brace_q = parse_question("Will any player score more than 1 goal (excluding own goals)?")
+    strong = r.answer(brace_q, r.context("Brazil", "Haiti"))
+    weak = r.answer(brace_q, r.context("Haiti", "Qatar"))
+    assert strong > weak                          # more expected goals -> brace more likely
+    ctx = r.context("Brazil", "Japan")
+    assert (r.answer(parse_question("Will a goal be scored in second-half stoppage time?"), ctx) >
+            r.answer(parse_question("Will a goal be scored in first-half stoppage (added) time?"), ctx))
+
+
 def test_advance_estimator():
     """advance = win THIS knockout tie incl. ET/pens. Even match -> 0.5; a favorite
     sits between its 90-min win prob and 1; and the two teams' advance probs sum to

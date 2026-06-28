@@ -93,6 +93,23 @@ P_PEN_MATCH = 0.293   # A6
 # with a mild favorite tilt (0.49 even -> 0.57 big-favorite over 678 historical shootouts).
 ET_TEMPO = 0.35       # extra-time scoring as a fraction of pro-rated regulation
 PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
+
+# Event markets our 90-min minute profile can't reach. Stoppage goals scale with the
+# match's scoring (lambda_W = lambda_tot * goal-share); subs are ~fixed base rates.
+# Defaults are football norms, overridden by data/processed/event_baselines.json
+# (api-football WC2022, scripts/build_event_baselines.py).
+EVENT_BASE_DEFAULTS = {
+    "goal_share_1h_stoppage": 0.02, "goal_share_2h_stoppage": 0.08,
+    "sub_before_ht": 0.12, "substitute_scores": 0.18,
+}
+_EVENT_BASE_PATH = Path("data/processed/event_baselines.json")
+
+# any-player markets: P(some player has >=2 of the team's goals | team scored g) and the
+# same for SoT — the "concentration" of a team's output onto one player (player_match,
+# 314 matches, monotone-cleaned). any-player rides the team goal/SoT distribution we
+# already model, so it lambda-scales (more team output -> more likely someone gets 2+).
+BRACE_BY_TEAM_GOALS = [0.0, 0.0, 0.156, 0.42, 0.77, 0.85, 1.0, 1.0, 1.0, 1.0, 1.0]
+SOTCONC_BY_TEAM_SOT = [0.0, 0.0, 0.13, 0.33, 0.58, 0.71, 0.88, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 BOT_A_BASE_WEIGHT = 0.25
 
 H1 = 1 - mk.SECOND_HALF_SHARE
@@ -138,6 +155,11 @@ class Runner:
         # minute profile for the hydration/stoppage window markets (reuse the MC's, or
         # load standalone so the analytic window handlers work even without an engine)
         self.dyn = mc.dyn if mc is not None else (Dynamics.from_json(_DYN_PATH) if _DYN_PATH.exists() else None)
+        # stoppage/sub base rates (api-football WC2022, default to football norms)
+        self.event_base = dict(EVENT_BASE_DEFAULTS)
+        if _EVENT_BASE_PATH.exists():
+            _d = json.loads(_EVENT_BASE_PATH.read_text())
+            self.event_base.update({k: float(_d[k]) for k in EVENT_BASE_DEFAULTS if _d.get(k) is not None})
         self.calib = calibration if calibration is not None else self._load_calibration()
         from jumpprob.models.market_anchor import W_MARKET
         self.w_market = W_MARKET if w_market is None else w_market  # odds-blend weight (CLV passes set 0/1)
@@ -392,6 +414,20 @@ class Runner:
         a = q.archetype
         if a in _WINDOW:
             return self._window_event(ctx, *_WINDOW[a], q.threshold or 1)
+        if a in ("goal_1h_stoppage", "goal_2h_stoppage"):
+            # stoppage goals beyond the 90-min profile: lambda_W = lambda_tot * goal-share
+            share = self.event_base["goal_share_1h_stoppage" if a == "goal_1h_stoppage"
+                                    else "goal_share_2h_stoppage"]
+            return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * share))
+        if a == "sub_before_ht":
+            return float(self.event_base["sub_before_ht"])          # ~injury base rate
+        if a == "substitute_scores":
+            return float(self.event_base["substitute_scores"])
+        if a == "any_player_goals_ge":   # "any player score 2+ goals" — over the goal grid
+            def _team_any(marg):
+                return float(sum(marg[g] * (BRACE_BY_TEAM_GOALS[g] if g < len(BRACE_BY_TEAM_GOALS) else 1.0)
+                                 for g in range(len(marg))))
+            return float(1 - (1 - _team_any(ctx.grid.sum(axis=1))) * (1 - _team_any(ctx.grid.sum(axis=0))))
         if a == "win":
             return None if side is None else mk.p_win(ctx.grid, side)
         if a == "draw":
@@ -558,6 +594,12 @@ class Runner:
             pa = float(side_pmf("cards", "a")[q.threshold:].sum())
             pb = float(side_pmf("cards", "b")[q.threshold:].sum())
             return pa * pb
+        if a == "any_player_sot_ge":   # "any player 2+ SoT" — over each team's SoT distribution
+            def _team_any_sot(s):
+                pmf = side_pmf("shots_on_target", s)
+                return float(sum(pmf[t] * (SOTCONC_BY_TEAM_SOT[t] if t < len(SOTCONC_BY_TEAM_SOT) else 1.0)
+                                 for t in range(len(pmf))))
+            return float(1 - (1 - _team_any_sot("a")) * (1 - _team_any_sot("b")))
         if a in ("player_scores", "player_sot_ge", "player_ga"):
             rate_sot, rate_goal, rate_ga = self.player_rate(q.subject)
             rate = {"player_sot_ge": rate_sot, "player_scores": rate_goal, "player_ga": rate_ga}[a]

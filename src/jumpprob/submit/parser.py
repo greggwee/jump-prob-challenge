@@ -124,6 +124,20 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("offsides_total_ge", threshold=int(m[1]))),
     (re.compile(r"will both teams receive at least one card", re.I),
      lambda m: ParsedQuestion("both_teams_cards", threshold=1)),
+    # stoppage-time goals + substitutions (base rates from api-football WC2022, runner.event_base)
+    (re.compile(r"will a goal be scored in first-half stoppage", re.I),
+     lambda m: ParsedQuestion("goal_1h_stoppage")),
+    (re.compile(r"will a goal be scored in second-half stoppage", re.I),
+     lambda m: ParsedQuestion("goal_2h_stoppage")),
+    (re.compile(r"will a substitution be made before halftime", re.I),
+     lambda m: ParsedQuestion("sub_before_ht")),
+    (re.compile(r"will a substitute score a goal", re.I),
+     lambda m: ParsedQuestion("substitute_scores")),
+    # any-player markets (>=2): ride the team goal/SoT distribution x a concentration factor
+    (re.compile(r"will any player record (\d+) or more shots on target", re.I),
+     lambda m: ParsedQuestion("any_player_sot_ge", threshold=int(m[1]))),
+    (re.compile(r"will any player score more than (\d+) goals?", re.I),
+     lambda m: ParsedQuestion("any_player_goals_ge", threshold=int(m[1]) + 1)),
     # --- archetypes observed in live WC2026 markets (2026-06-12) ---
     (re.compile(r"will (.+?) commit more fouls than (.+?)\?", re.I),
      lambda m: ParsedQuestion("fouls_gt", m[1], m[2])),
