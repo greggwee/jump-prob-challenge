@@ -50,17 +50,23 @@ prediction from either bot** (all currently open). Cause: knockout phrasing.
   - All inherit the market view when goals are anchored; anchored goal markets skip extremize, so no
     risk-gate entanglement. Also fixed a general `canonical()` bug — a leading definite article ("the
     United States" / "the Netherlands") left the side unresolved and dropped *any* "the X" subject.
-- **Still dropped (22), triaged:**
+- **Pass 3 (22 → 14):** the **hydration / cooling-break** window markets ("goal before the first / after
+  the second break", "≥2 corners / a card / an offside" in those windows) are answerable *analytically* —
+  the MC `SimResult` discards per-minute times, but the minute-profile bucket weights give each window's
+  share of the family's intensity, so `λ_window = μ_total · share` (goals Poisson, counts via the count
+  model's dispersion). Breaks ~30'/75' → slots [0,30)/[75,90). No engine change. Verified live (goal-in-
+  first-30' ~45 %, card-after-75' 66 % from the late-card spike). These archetypes are deliberately left
+  out of the family sets → no extremize / risk-gate entanglement.
+- **Still dropped (14), triaged:**
   - **Count-extendable (~5):** total shots (on+off ≈ SoT/0.37), total offside calls, both-teams-cards.
     *Cheap, but they introduce new no-edge count archetypes that need risk-gate entries to avoid the
     "layers fighting" extremize issue — do them with the risk-gate refresh, not ad hoc.*
-  - **MC minute-resolution (~10):** goal/card before/after a **hydration break**, first/second-half
-    **stoppage-time** goals, **substitution before halftime**. The v2 MC engine + minute dynamics is the
-    right tool (query a minute window), not a base-rate guess.
+  - **Beyond-90 / no model (~5):** first/second-half **stoppage-time** goals (the 6-bucket profile stops
+    at 90' — need minute-resolved stoppage data for a base rate), **substitution before halftime** /
+    **substitute scores** (no substitution data in the model at all).
   - **Market/ambiguous (~4):** **advance to Round of 16** (group-stage progression depends on *other*
     matches, not just this one → needs the outright/to-qualify line, not our match model), any-player
-    SoT/multi-goal (max-over-players).
-  - **Truly low-information (~3):** substitute scores, etc. — last-resort base rate or leave dropped.
+    SoT/multi-goal (max-over-players — derivable from the player table but low-value, thin).
 
 **The lesson:** the regex parser is brittle and the system *silently drops* what it can't match, but the
 durable fix is **route, don't regex** — most "new" archetypes are existing models in disguise, and the
@@ -86,12 +92,13 @@ This inverts today's "model everything, anchor only goals."
    `player_goal_scorer_anytime` / `player_assists`, blended into `player_sot_ge` / `player_scores` /
    `player_ga` (skips the base-blend/extremize/confidence steps that patched the model we anchor away
    from). Done, commit `125aeaf`. Coverage grows as matches enter the 36h prop-fetch window.
-3. ◑ **Stop the silent drop** — the 2026-06-28 audit recovered 15 of 37 by *routing to existing
-   grid/count handlers* (commit `0ea7ef0`), which turned out lower-risk and more durable than an LLM
-   classifier for the bulk. **Remaining work:** (a) MC minute-resolution for the ~10 hydration/stoppage
-   timing questions, (b) count-archetype extensions *with* risk-gate entries (~5), (c) an out-of-band
-   LLM classifier as the final catch-all so *nothing* drops — populated like the existing panel
-   (daemon reads a cache; never an LLM call in the near-kickoff submit path).
+3. ◑ **Stop the silent drop** — the 2026-06-28 audit took 37 → **14** by *routing to existing
+   handlers*, not an LLM classifier: 15 to the goal grid (`0ea7ef0`) + the hydration-break window
+   markets recovered analytically (`0fc7b9a`). **Remaining work:** (a) count-archetype extensions
+   *with* risk-gate entries (~5: total shots/offsides, both-teams-cards), (b) stoppage-time goals (need
+   beyond-90 minute data) + substitution markets (no sub data), (c) advance-to-R16 via the to-qualify
+   line, (d) an out-of-band LLM classifier as the final catch-all so *nothing* drops — populated like
+   the existing panel (daemon reads a cache; never an LLM call in the near-kickoff submit path).
 4. **(Optional, paid) corners/cards feed** — only if an OpticOdds/OddsJam trial confirms WC-2026 coverage
    at usable vig; else keep the model (offsides/fouls/corners are already well-calibrated).
 
