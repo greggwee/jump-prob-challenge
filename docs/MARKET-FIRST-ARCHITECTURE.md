@@ -58,16 +58,18 @@ prediction from either bot** (all currently open). Cause: knockout phrasing.
   No engine change. These archetypes are deliberately left out of the family sets → no extremize / risk-
   gate entanglement. (The wider [67,90) post-window calibrates the after-second-break goal market that
   the earlier [75,90) guess under-predicted — backtest §G.)
-- **Still dropped (14), triaged:**
+- **Pass 4 (14 → 12):** **advance to Round of 16** = win the R32 tie (incl. ET + penalties), derived
+  from the 90-min 1X2 we already anchor + a small ET/shootout model grounded on 839 ET matches & 678
+  shootouts. Coherent (P(A adv)+P(B adv)=1). See `docs/KNOCKOUT-AND-TIMING-ESTIMATION.md`.
+- **Still dropped (12), triaged:**
   - **Count-extendable (~5):** total shots (on+off ≈ SoT/0.37), total offside calls, both-teams-cards.
     *Cheap, but they introduce new no-edge count archetypes that need risk-gate entries to avoid the
     "layers fighting" extremize issue — do them with the risk-gate refresh, not ad hoc.*
   - **Beyond-90 / no model (~5):** first/second-half **stoppage-time** goals (the 6-bucket profile stops
     at 90' — need minute-resolved stoppage data for a base rate), **substitution before halftime** /
     **substitute scores** (no substitution data in the model at all).
-  - **Market/ambiguous (~4):** **advance to Round of 16** (group-stage progression depends on *other*
-    matches, not just this one → needs the outright/to-qualify line, not our match model), any-player
-    SoT/multi-goal (max-over-players — derivable from the player table but low-value, thin).
+  - **Thin/low-value (~2):** any-player SoT/multi-goal (max-over-players — derivable from the player
+    table but thin).
 
 **The lesson:** the regex parser is brittle and the system *silently drops* what it can't match, but the
 durable fix is **route, don't regex** — most "new" archetypes are existing models in disguise, and the
