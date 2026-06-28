@@ -99,8 +99,8 @@ def derive_outcomes(hk, ak, hs, asc, goals) -> dict[tuple[str, str | None], floa
         ("draw", None): float(hs == asc),
         ("half_total_ge", None): float(len(h1) >= 2),     # "first half produce 2+"
         ("h2_more_goals_than_h1", None): float(len(h2) > len(h1)),
-        ("goal_pre_hb1", None): float(any(g["min"] <= 30 for g in goals)),
-        ("goal_post_hb2", None): float(any(g["min"] > 75 for g in goals)),
+        ("goal_pre_hb1", None): float(any(g["min"] <= 22 for g in goals)),     # break at 22'
+        ("goal_post_hb2", None): float(any(g["min"] > 67 for g in goals)),     # 2nd break at 45+22=67'
     }
     for t, opp in ((hk, ak), (ak, hk)):
         o[("clean_sheet", t)] = float(score[opp] == 0)

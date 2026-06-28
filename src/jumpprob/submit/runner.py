@@ -91,14 +91,15 @@ BOT_A_BASE_WEIGHT = 0.25
 H1 = 1 - mk.SECOND_HALF_SHARE
 H2 = mk.SECOND_HALF_SHARE
 
-# Hydration/cooling-break windows: break #1 ~30', #2 ~75' (FIFA cooling breaks).
-# Match-level P(>=thr family events in the minute window), integrated analytically
-# from the minute-profile (no MC change) -- recovers the 2026-06-28 drop-audit timing
-# markets. archetype -> (dynamics family, slot_lo, slot_hi).
+# Hydration/cooling-break windows: breaks at the 22' mark of EACH half, i.e. match
+# minute 22 and 45+22=67 (platform definition). "before the first break" = [0,22);
+# "after the second break" = [67,90) (+ stoppage). Match-level P(>=thr family events
+# in the minute window), integrated analytically from the minute-profile (no MC
+# change). archetype -> (dynamics family, slot_lo, slot_hi).
 _WINDOW = {
-    "goal_pre_hb1": ("goal", 0, 30), "goal_post_hb2": ("goal", 75, 90),
-    "corners_pre_hb1": ("corner", 0, 30), "cards_post_hb2": ("card", 75, 90),
-    "offsides_pre_hb1": ("offside", 0, 30),
+    "goal_pre_hb1": ("goal", 0, 22), "goal_post_hb2": ("goal", 67, 90),
+    "corners_pre_hb1": ("corner", 0, 22), "cards_post_hb2": ("card", 67, 90),
+    "offsides_pre_hb1": ("offside", 0, 22),
 }
 _DYN_PATH = Path("data/processed/minute_dynamics.json")
 

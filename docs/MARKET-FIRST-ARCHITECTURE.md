@@ -54,9 +54,10 @@ prediction from either bot** (all currently open). Cause: knockout phrasing.
   the second break", "≥2 corners / a card / an offside" in those windows) are answerable *analytically* —
   the MC `SimResult` discards per-minute times, but the minute-profile bucket weights give each window's
   share of the family's intensity, so `λ_window = μ_total · share` (goals Poisson, counts via the count
-  model's dispersion). Breaks ~30'/75' → slots [0,30)/[75,90). No engine change. Verified live (goal-in-
-  first-30' ~45 %, card-after-75' 66 % from the late-card spike). These archetypes are deliberately left
-  out of the family sets → no extremize / risk-gate entanglement.
+  model's dispersion). Breaks at the 22' mark of each half → match min 22 and 67 → slots [0,22)/[67,90).
+  No engine change. These archetypes are deliberately left out of the family sets → no extremize / risk-
+  gate entanglement. (The wider [67,90) post-window calibrates the after-second-break goal market that
+  the earlier [75,90) guess under-predicted — backtest §G.)
 - **Still dropped (14), triaged:**
   - **Count-extendable (~5):** total shots (on+off ≈ SoT/0.37), total offside calls, both-teams-cards.
     *Cheap, but they introduce new no-edge count archetypes that need risk-gate entries to avoid the
@@ -117,19 +118,20 @@ carries match-specific information (the prerequisite for beating the noisy field
 | first_goal_match (×7 live) | 108 | .44 | +.050 | **+.044** |
 | score_both_halves | 108 | .22 | +.026 | **+.032** |
 | draw | 54 | .30 | +.001 | **+.014** |
-| goal_pre_hb1 | 54 | .54 | −.010 | **+.013** |
 | clean_sheet | 108 | .30 | +.022 | **+.011** |
 | half_total_ge | 54 | .31 | −.000 | **+.009** |
-| goal_post_hb2 | 54 | .56 | −.017 | **−.003** |
+| goal_post_hb2 (67–90) | 54 | .57 | −.006 | **+.009** |
+| goal_pre_hb1 (0–22) | 54 | .43 | −.008 | **+.005** |
 | h2_more_goals_than_h1 | 54 | .44 | −.001 | **−.007** |
-| **POOLED** | **702** | | **+.0215** | **+.0234** |
+| **POOLED** | **702** | | **+.0225** | **+.0237** |
 
-**Read:** real skill overall (+.023 anchored), carried by the high-volume recoveries.
+**Read:** real skill overall (+.024 anchored), carried by the high-volume recoveries.
 The anchor does its job — WC26 runs hot (**3.00** actual goals/match vs **2.49** pure
 model), so `draw` and the goal windows are negative/zero on pure model and flip positive
-once anchored. `goal_post_hb2` still mildly under-predicts (the [75,90) window misses 90'+
-stoppage goals) and `h2_more` is a true coin-flip — both within noise on 54 matches, and
-both were *forfeited entirely* before, so neutral skill is still recovered ground.
+once anchored. Both hydration windows now calibrate (the breaks are at 22'/67', so the
+post-window is [67,90) — the wider, correct window; the earlier [75,90) guess under-
+predicted). `h2_more` remains a true coin-flip — within noise on 54 matches, and it was
+*forfeited entirely* before, so neutral skill is still recovered ground.
 
 **Not in this backtest (stated):** the player-prop anchor (no stored historical prop odds),
 and the card/corner/offside hydration windows + red_card (martj42 has only goals). Compared

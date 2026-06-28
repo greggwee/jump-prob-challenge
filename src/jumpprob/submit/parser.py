@@ -100,7 +100,7 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("cards_ge", threshold=1, half=1 if m[1].lower() == "first" else 2)),
     (re.compile(r"will a red card be shown", re.I),
      lambda m: ParsedQuestion("red_card")),
-    # hydration / cooling-break windows (break #1 ~30', #2 ~75') -> analytic minute-window
+    # hydration / cooling-break windows (breaks at 22' of each half: match min 22 and 67) -> analytic
     (re.compile(r"will a goal be scored before the first hydration break", re.I),
      lambda m: ParsedQuestion("goal_pre_hb1")),
     (re.compile(r"will a goal be scored after the second hydration break", re.I),
