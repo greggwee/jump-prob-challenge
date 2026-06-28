@@ -102,6 +102,39 @@ This inverts today's "model everything, anchor only goals."
 4. **(Optional, paid) corners/cards feed** — only if an OpticOdds/OddsJam trial confirms WC-2026 coverage
    at usable vig; else keep the model (offsides/fouls/corners are already well-calibrated).
 
+## G. Backtest validation (settled WC26, `scripts/backtest_recovered.py`)
+
+The recovered archetypes were *dropped* at submission, so the platform recorded no
+outcome for them. We reconstruct the truth from **martj42** (final score + goal minutes,
+which run through the live WC26 dates) and score the new handlers on **58 settled
+matches** — pure-model and anchored to each match's **closing line** (latest on-disk
+odds snapshot). Skill = climatology(base-rate) Brier − model Brier; >0 means the handler
+carries match-specific information (the prerequisite for beating the noisy field).
+
+| archetype | n | base | pure skill | anchored skill |
+|---|--:|--:|--:|--:|
+| win_margin | 108 | .19 | +.055 | **+.053** |
+| first_goal_match (×7 live) | 108 | .44 | +.050 | **+.044** |
+| score_both_halves | 108 | .22 | +.026 | **+.032** |
+| draw | 54 | .30 | +.001 | **+.014** |
+| goal_pre_hb1 | 54 | .54 | −.010 | **+.013** |
+| clean_sheet | 108 | .30 | +.022 | **+.011** |
+| half_total_ge | 54 | .31 | −.000 | **+.009** |
+| goal_post_hb2 | 54 | .56 | −.017 | **−.003** |
+| h2_more_goals_than_h1 | 54 | .44 | −.001 | **−.007** |
+| **POOLED** | **702** | | **+.0215** | **+.0234** |
+
+**Read:** real skill overall (+.023 anchored), carried by the high-volume recoveries.
+The anchor does its job — WC26 runs hot (**3.00** actual goals/match vs **2.49** pure
+model), so `draw` and the goal windows are negative/zero on pure model and flip positive
+once anchored. `goal_post_hb2` still mildly under-predicts (the [75,90) window misses 90'+
+stoppage goals) and `h2_more` is a true coin-flip — both within noise on 54 matches, and
+both were *forfeited entirely* before, so neutral skill is still recovered ground.
+
+**Not in this backtest (stated):** the player-prop anchor (no stored historical prop odds),
+and the card/corner/offside hydration windows + red_card (martj42 has only goals). Compared
+to base-rate, not the unavailable crowd — a conservative floor on the relative-Brier metric.
+
 ## F. Caveats / uncertainty
 
 - **Thin books on props** (SoT 2, assists 1) — soft lines, higher vig, missing for minor players →
