@@ -45,7 +45,8 @@ from jumpprob.agents import panel as panel_mod  # out-of-band LLM blend (daemon 
 TIMING_ARCHS = {"ht_tied", "ht_leading", "h2_more_goals_than_h1", "first_goal_half",
                 "first_goal_and_win", "first_goal_and_opp_2h", "goals_gt_half"}
 GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge",
-              "team_scores_half", "half_total_ge", "team_goals_ge"} | TIMING_ARCHS
+              "team_scores_half", "half_total_ge", "team_goals_ge",
+              "first_goal_match", "win_margin", "clean_sheet", "score_both_halves"} | TIMING_ARCHS
 COUNT_ARCHS = {"corners_gt", "sot_gt", "fouls_gt", "cards_gt", "team_corners_ge",
                "team_sot_ge", "team_cards_ge", "cards_ge", "corners_total_ge",
                "total_sot_half_ge", "total_sot_ge", "offsides_ge", "both_teams_sot_ge"}
@@ -350,6 +351,33 @@ class Runner:
         a = q.archetype
         if a == "win":
             return None if side is None else mk.p_win(ctx.grid, side)
+        if a == "draw":
+            return mk.p_draw(ctx.grid)
+        if a == "first_goal_match":
+            # P(side scores the match's first goal) = P(side scores first | any goal)
+            # x P(>=1 goal). Inherits the market view via the (anchored) intensities.
+            if side is None:
+                return None
+            lt, _ = lams(side)
+            tot = ctx.lam_a + ctx.lam_b
+            return float(lt / tot * (1 - np.exp(-tot)))
+        if a == "win_margin":
+            if side is None:
+                return None
+            n = q.threshold or 1
+            idx = np.arange(ctx.grid.shape[0])
+            margin = np.subtract.outer(idx, idx)            # rows(a) - cols(b)
+            mask = (margin >= n) if side == "a" else (margin <= -n)
+            return float(ctx.grid[mask].sum())
+        if a == "clean_sheet":                              # opponent scores 0
+            if side is None:
+                return None
+            return float(ctx.grid[:, 0].sum()) if side == "a" else float(ctx.grid[0, :].sum())
+        if a == "score_both_halves":
+            if side is None:
+                return None
+            lt, _ = lams(side)
+            return float(mk.p_scores_in_half(lt, 1) * mk.p_scores_in_half(lt, 2))
         if a == "btts":
             return mk.p_btts(ctx.grid)
         if a == "total_ge":
@@ -372,6 +400,8 @@ class Runner:
             return P_PEN_MATCH
         if a == "pen_or_red":
             return 1 - (1 - P_PEN_MATCH) * (1 - P_RED_MATCH)
+        if a == "red_card":
+            return P_RED_MATCH
         if a == "total_le":
             return 1.0 - mk.p_total_ge(ctx.grid, q.threshold + 1)
         if a == "team_goals_ge":

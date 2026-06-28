@@ -80,6 +80,26 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("h2_more_goals_than_h1")),
     (re.compile(r"will (.+?) score or assist a goal", re.I),
      lambda m: ParsedQuestion("player_ga", m[1])),
+    # --- knockout / derived goal archetypes (recovered from the 2026-06-28 drop audit);
+    #     all answerable straight from the (market-anchored) goal grid — see runner.answer ---
+    (re.compile(r"will (.+?) score the first goal of the match", re.I),
+     lambda m: ParsedQuestion("first_goal_match", m[1])),
+    (re.compile(r"will (.+?) win by (\d+) or more goals", re.I),
+     lambda m: ParsedQuestion("win_margin", m[1], threshold=int(m[2]))),
+    (re.compile(r"will (.+?) keep a clean sheet", re.I),
+     lambda m: ParsedQuestion("clean_sheet", m[1])),
+    (re.compile(r"will (.+?) score in both halves", re.I),
+     lambda m: ParsedQuestion("score_both_halves", m[1])),
+    (re.compile(r"end in a (?:tie|draw)", re.I),
+     lambda m: ParsedQuestion("draw")),
+    (re.compile(r"will the (first|second) half produce (\d+) or more goals", re.I),
+     lambda m: ParsedQuestion("half_total_ge", threshold=int(m[2]), half=1 if m[1].lower() == "first" else 2)),
+    (re.compile(r"will the second half produce more goals than the first", re.I),
+     lambda m: ParsedQuestion("h2_more_goals_than_h1")),
+    (re.compile(r"will a card be shown in the (first|second) half", re.I),
+     lambda m: ParsedQuestion("cards_ge", threshold=1, half=1 if m[1].lower() == "first" else 2)),
+    (re.compile(r"will a red card be shown", re.I),
+     lambda m: ParsedQuestion("red_card")),
     # --- archetypes observed in live WC2026 markets (2026-06-12) ---
     (re.compile(r"will (.+?) commit more fouls than (.+?)\?", re.I),
      lambda m: ParsedQuestion("fouls_gt", m[1], m[2])),
@@ -144,7 +164,7 @@ def parse_question(text: str, teams: set[str] | None = None) -> ParsedQuestion |
     text = text.strip()
     # Knockout-stage phrasing appends "... in regulation (90 minutes + stoppage time)";
     # our models are all 90-minute, so strip the qualifier so the base archetype matches.
-    text = re.sub(r"\s*\bin regulation \(90 minutes \+ stoppage time\)", "", text, flags=re.I)
+    text = re.sub(r"\s*\b(?:in|of) regulation \(\d+ minutes \+ stoppage time\)", "", text, flags=re.I)
     for pattern, build in _PATTERNS:
         m = pattern.search(text)
         if m:

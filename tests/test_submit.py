@@ -82,6 +82,48 @@ def test_player_prop_name_join_and_devig():
     assert 0.7 < p < 0.85
 
 
+def test_drop_audit_recovered_archetypes():
+    """2026-06-28 drop audit: knockout/derived archetypes that were silently dropped
+    (no prediction from either bot) now parse. The goal ones are grid-derivable in
+    runner.answer; cards-in-half reuses cards_ge; red_card is a constant."""
+    cases = [
+        ("Will Argentina score the first goal of the match?", "first_goal_match", "Argentina", None, None),
+        ("Will the United States win by 2 or more goals in regulation (90 minutes + stoppage time)?",
+         "win_margin", "the United States", 2, None),
+        ("Will Argentina keep a clean sheet in regulation (90 minutes + stoppage time)?",
+         "clean_sheet", "Argentina", None, None),
+        ("Will Brazil score in both halves of regulation (90 minutes + stoppage time)?",
+         "score_both_halves", "Brazil", None, None),
+        ("Will regulation (90 minutes + stoppage time) end in a tie?", "draw", None, None, None),
+        ("Will the first half produce 2 or more goals?", "half_total_ge", None, 2, 1),
+        ("Will the second half produce more goals than the first half in regulation (90 minutes + stoppage time)?",
+         "h2_more_goals_than_h1", None, None, None),
+        ("Will a card be shown in the first half?", "cards_ge", None, 1, 1),
+        ("Will a red card be shown in the match?", "red_card", None, None, None),
+    ]
+    for text, arch, subj, thr, half in cases:
+        q = parse_question(text)
+        assert q is not None and q.archetype == arch, text
+        if subj:
+            assert q.subject == subj, text
+        if thr:
+            assert q.threshold == thr, text
+        if half:
+            assert q.half == half, text
+    # margin must not be mis-read as a plain win (the win regex excludes "win by")
+    assert parse_question("Will Spain win the match?").archetype == "win"
+
+
+def test_canonical_strips_definite_article():
+    """'the United States' / 'the Netherlands' subjects must resolve to the same
+    canonical as the bare name, else the side is unresolved and the market drops."""
+    from jumpprob.normalize.teams import canonical
+    assert canonical("the United States") == canonical("United States") == "United States"
+    assert canonical("the Netherlands") == "Netherlands"
+    assert canonical("USA") == "United States"   # alias still applies after strip
+    assert canonical("Germany") == "Germany"     # a normal name is untouched
+
+
 def test_platt_recovers_overconfidence():
     """Generate predictions that are systematically overconfident; Platt must
     fit a < 1 (shrink toward 0.5) and improve Brier."""
