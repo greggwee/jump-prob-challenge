@@ -34,6 +34,7 @@ from jumpprob.normalize.teams import canonical
 from jumpprob.normalize.players import build_index as _club_index_fn, resolve as _club_resolve
 from jumpprob.simulate import markets as mk
 from jumpprob.simulate import mc_engine
+from jumpprob.models.dynamics import Dynamics, BUCKET
 from jumpprob.ingest.odds_api import norm_player
 from jumpprob.submit.parser import ParsedQuestion, parse_question
 from jumpprob.agents import panel as panel_mod  # out-of-band LLM blend (daemon reads cache only)
@@ -90,6 +91,17 @@ BOT_A_BASE_WEIGHT = 0.25
 H1 = 1 - mk.SECOND_HALF_SHARE
 H2 = mk.SECOND_HALF_SHARE
 
+# Hydration/cooling-break windows: break #1 ~30', #2 ~75' (FIFA cooling breaks).
+# Match-level P(>=thr family events in the minute window), integrated analytically
+# from the minute-profile (no MC change) -- recovers the 2026-06-28 drop-audit timing
+# markets. archetype -> (dynamics family, slot_lo, slot_hi).
+_WINDOW = {
+    "goal_pre_hb1": ("goal", 0, 30), "goal_post_hb2": ("goal", 75, 90),
+    "corners_pre_hb1": ("corner", 0, 30), "cards_post_hb2": ("card", 75, 90),
+    "offsides_pre_hb1": ("offside", 0, 30),
+}
+_DYN_PATH = Path("data/processed/minute_dynamics.json")
+
 
 def _norm_name(s: str) -> str:
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
@@ -115,6 +127,9 @@ class Runner:
         self.player_transfer = PLAYER_TRANSFER
         self._load_club_rates()  # club-history priors for player props (data fix)
         self.mc = mc                    # optional v2 MCEngine for timing markets (rec #3)
+        # minute profile for the hydration/stoppage window markets (reuse the MC's, or
+        # load standalone so the analytic window handlers work even without an engine)
+        self.dyn = mc.dyn if mc is not None else (Dynamics.from_json(_DYN_PATH) if _DYN_PATH.exists() else None)
         self.calib = calibration if calibration is not None else self._load_calibration()
         from jumpprob.models.market_anchor import W_MARKET
         self.w_market = W_MARKET if w_market is None else w_market  # odds-blend weight (CLV passes set 0/1)
@@ -177,6 +192,24 @@ class Runner:
         """Phase R: shrink no-edge archetypes toward the base rate (no-op otherwise)."""
         from jumpprob.models import strategy
         return strategy.apply_risk(p, arch, self.risk, self.base_rates)
+
+    def _window_event(self, ctx: MatchContext, fam: str, lo: int, hi: int, thr: int) -> float | None:
+        """Match-level P(>=thr `fam` events in slots [lo,hi)). The minute profile's
+        bucket weights give the window's share of the family's intensity; scale the
+        match's expected total by that share. Goals are Poisson; counts inherit the
+        count model's dispersion via cm.pmf."""
+        if self.dyn is None or fam not in self.dyn.alpha:
+            return None
+        w = np.exp(np.asarray(self.dyn.alpha[fam])[BUCKET])
+        frac = float(w[lo:hi].sum() / w.sum())
+        if fam == "goal":
+            return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * frac))   # all are "a goal" (thr=1)
+        cm = self.pl.count_model
+        if cm is None:
+            return None
+        cf = mc_engine.COUNT_FAMILY[fam]
+        mu_tot = sum(cm.mu(cf, h, ctx.lam_a, ctx.lam_b) + cm.mu(cf, h, ctx.lam_b, ctx.lam_a) for h in (1, 2))
+        return float(cm.pmf(cf, mu_tot * frac)[thr:].sum())
 
     def _family(self, arch: str) -> str | None:
         # offsides get their OWN calibration: a StatsBomb→SportsPredict definition
@@ -349,6 +382,8 @@ class Runner:
             return np.convolve(cpmf(fam, 1, s), cpmf(fam, 2, s))
 
         a = q.archetype
+        if a in _WINDOW:
+            return self._window_event(ctx, *_WINDOW[a], q.threshold or 1)
         if a == "win":
             return None if side is None else mk.p_win(ctx.grid, side)
         if a == "draw":

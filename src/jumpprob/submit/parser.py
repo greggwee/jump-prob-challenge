@@ -100,6 +100,17 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("cards_ge", threshold=1, half=1 if m[1].lower() == "first" else 2)),
     (re.compile(r"will a red card be shown", re.I),
      lambda m: ParsedQuestion("red_card")),
+    # hydration / cooling-break windows (break #1 ~30', #2 ~75') -> analytic minute-window
+    (re.compile(r"will a goal be scored before the first hydration break", re.I),
+     lambda m: ParsedQuestion("goal_pre_hb1")),
+    (re.compile(r"will a goal be scored after the second hydration break", re.I),
+     lambda m: ParsedQuestion("goal_post_hb2")),
+    (re.compile(r"will (\d+) or more corner kicks be taken before the first hydration break", re.I),
+     lambda m: ParsedQuestion("corners_pre_hb1", threshold=int(m[1]))),
+    (re.compile(r"will a card be shown after the second hydration break", re.I),
+     lambda m: ParsedQuestion("cards_post_hb2")),
+    (re.compile(r"will either team be ruled offside before the first hydration break", re.I),
+     lambda m: ParsedQuestion("offsides_pre_hb1")),
     # --- archetypes observed in live WC2026 markets (2026-06-12) ---
     (re.compile(r"will (.+?) commit more fouls than (.+?)\?", re.I),
      lambda m: ParsedQuestion("fouls_gt", m[1], m[2])),

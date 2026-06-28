@@ -114,6 +114,30 @@ def test_drop_audit_recovered_archetypes():
     assert parse_question("Will Spain win the match?").archetype == "win"
 
 
+def test_hydration_window_markets():
+    """Hydration/cooling-break window markets parse, and each window is a proper
+    sub-share of its family's minute-intensity profile (the analytic recovery)."""
+    import numpy as np
+    from pathlib import Path
+    from jumpprob.models.dynamics import Dynamics, BUCKET
+    from jumpprob.submit.runner import _WINDOW
+    for text, arch in [
+        ("Will a goal be scored before the first hydration break?", "goal_pre_hb1"),
+        ("Will a goal be scored after the second hydration break in regulation (90 minutes + stoppage time)?",
+         "goal_post_hb2"),
+        ("Will 2 or more corner kicks be taken before the first hydration break?", "corners_pre_hb1"),
+        ("Will a card be shown after the second hydration break, including any extra time?", "cards_post_hb2"),
+        ("Will either team be ruled offside before the first hydration break?", "offsides_pre_hb1"),
+    ]:
+        q = parse_question(text)
+        assert q is not None and q.archetype == arch, text
+    dyn = Dynamics.from_json(Path("data/processed/minute_dynamics.json"))
+    for arch, (fam, lo, hi) in _WINDOW.items():
+        w = np.exp(np.asarray(dyn.alpha[fam])[BUCKET])
+        frac = float(w[lo:hi].sum() / w.sum())
+        assert 0.0 < frac < 1.0, arch          # a real probability mass, not all/none
+
+
 def test_canonical_strips_definite_article():
     """'the United States' / 'the Netherlands' subjects must resolve to the same
     canonical as the bare name, else the side is unresolved and the market drops."""
