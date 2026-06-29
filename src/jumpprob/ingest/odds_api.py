@@ -276,3 +276,40 @@ def load_latest_props(sport: str = SPORT) -> dict:
         return {}
     ser = json.loads(snaps[-1].read_text())
     return {tuple(k.split("|", 1)): v for k, v in ser.items()}
+
+
+def refresh_props_targeted(pairs: list[tuple[str, str]], regions: str = "eu,uk",
+                           sport: str = SPORT) -> dict:
+    """Refresh player props for ONLY the given (canonical_home, canonical_away) pairs and
+    MERGE into the latest snapshot. The near-kickoff, low-credit refresh: SoT/scorer lines
+    publish close to KO, so the scheduler can top up just the imminent match(es) without
+    re-fetching the whole board. Returns the merged snapshot; writes it so the cached path
+    (load_latest_props) picks it up before the live submit."""
+    key = _key()
+    evs = requests.get(f"{BASE}/sports/{sport}/events", params={"apiKey": key}, timeout=30).json()
+    want = {frozenset(p) for p in pairs}
+    merged = load_latest_props()
+    changed = False
+    for ev in evs if isinstance(evs, list) else []:
+        ch, ca = canonical(ev["home_team"]), canonical(ev["away_team"])
+        if frozenset([ch, ca]) not in want:
+            continue
+        try:
+            r = requests.get(
+                f"{BASE}/sports/{sport}/events/{ev['id']}/odds",
+                params={"apiKey": key, "regions": regions, "markets": PLAYER_MARKETS, "oddsFormat": "decimal"},
+                timeout=60)
+            if r.status_code != 200:
+                continue
+            props = _parse_player_event(r.json())
+        except Exception:
+            continue
+        if props:
+            merged[(ch, ca)] = props
+            changed = True
+    if changed:
+        RAW_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        (RAW_DIR / f"props_{sport}_{stamp}.json").write_text(
+            json.dumps({f"{h}|{a}": v for (h, a), v in merged.items()}))
+    return merged

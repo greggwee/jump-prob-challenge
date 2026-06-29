@@ -30,7 +30,18 @@ from pathlib import Path
 
 from jumpprob.agents import panel as P
 from jumpprob.agents.expert import client, web_forecast
+from jumpprob.ingest import odds_api
+from jumpprob.normalize.teams import canonical
 from jumpprob.submit.api_client import SportsPredictClient
+from jumpprob.submit.runner import CODE_MAP
+
+
+def _name_to_pair(name: str) -> tuple[str, str] | None:
+    """'BRA vs JPN' -> (canonical home, canonical away) for the targeted prop fetch."""
+    parts = name.split(" vs ")
+    if len(parts) != 2:
+        return None
+    return tuple(canonical(CODE_MAP.get(p.strip(), p.strip())) for p in parts)
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
@@ -129,7 +140,16 @@ def main() -> None:
         return
     log(f"web pass for: {names}")
 
-    # refresh model numbers for just these matches, prep GATE-ONLY player props
+    # refresh the BOOK player props for just these imminent match(es), targeted + low
+    # credit (SoT/scorer lines publish close to KO) so the player-prop anchor is current
+    # at the live submit. Then refresh model numbers + prep GATE-ONLY player props.
+    try:
+        pairs = [p for n in names if (p := _name_to_pair(n))]
+        if pairs:
+            odds_api.refresh_props_targeted(pairs)
+            log(f"refreshed book props for {len(pairs)} match(es)")
+    except Exception as e:
+        log(f"prop refresh failed ({str(e)[:60]}); using cached props")
     _run(["scripts/run_matchday_odds.py", "--matches", "||".join(names)])
     _run(["scripts/ai_panel_prep.py", "--source", "live", "--gate-only"])
     items = json.loads(PREP.read_text())
