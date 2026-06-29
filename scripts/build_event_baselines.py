@@ -50,10 +50,17 @@ def main():
             goals_by_min["2h_stop"] += g2
             goals_by_min["total"] += len(goals)
             sub_pre = any((s["time"]["elapsed"] or 0) < 45 for s in subs)
-            # api-football subst event: player = the one going OFF, assist = the one coming ON.
-            # The substitute is `assist` — reading `player` counted starters and 2x-inflated this.
-            came_on = {(s.get("assist") or {}).get("id") for s in subs}
-            sub_scored = any((g.get("player") or {}).get("id") in came_on for g in goals)
+            # SUBSTITUTE SCORES — the rigorous, lineup-based definition: a scorer who was
+            # NOT in the starting XI is a substitute. Uses cached /fixtures/lineups only (no
+            # new requests). Verified equal to the subst-`assist` method (40/40 matches), but
+            # the lineup method is the source of truth and needs no field-semantics trust.
+            lu_path = Path(f"data/raw/apifootball/lineups/fx{fid}.json")
+            if not lu_path.exists():
+                continue                              # only count matches we can do rigorously
+            lu = json.loads(lu_path.read_text())
+            start_ids = {(p.get("player") or {}).get("id") for t in lu for p in t.get("startXI", [])}
+            sub_scored = any((g.get("player") or {}).get("id") not in start_ids
+                             for g in goals if (g.get("player") or {}).get("id"))
             rows.append({"fid": fid, "goals": len(goals), "g1": g1, "g2": g2,
                          "sub_pre_ht": sub_pre, "sub_scored": sub_scored})
 

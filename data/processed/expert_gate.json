@@ -6,5 +6,75 @@
   "player_sot_ge": {
     "mode": "blend",
     "w": 0.6
+  },
+  "substitute_scores": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "sub_before_ht": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "goal_1h_stoppage": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "goal_2h_stoppage": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "any_player_sot_ge": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "any_player_goals_ge": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "both_teams_cards": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "total_shots_ge": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "offsides_total_ge": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "cards_post_hb2": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "goal_pre_hb1": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "goal_post_hb2": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "corners_pre_hb1": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
+  },
+  "offsides_pre_hb1": {
+    "mode": "blend",
+    "w": 0.4,
+    "cap": 1.0
   }
 }

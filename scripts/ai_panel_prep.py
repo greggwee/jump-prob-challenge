@@ -27,6 +27,26 @@ from jumpprob.submit.parser import parse_question
 PREP = Path("data/processed/ai_panel_prep.json")
 BASE_RATES = json.loads(Path("data/processed/base_rates.json").read_text())
 PLAYER = {"player_sot_ge", "player_ga", "player_scores"}
+
+# real model data for the LLM: each match's expected goals + team Elo, so a panelist
+# reasons from our numbers (tempo, who's stronger) rather than the question alone.
+_PIPE = None
+
+
+def _match_data(match: str) -> dict | None:
+    global _PIPE
+    try:
+        from jumpprob.normalize.teams import canonical
+        from jumpprob.pipeline import Pipeline
+        from jumpprob.submit.runner import CODE_MAP
+        if _PIPE is None:
+            _PIPE = Pipeline()
+        a, b = [canonical(CODE_MAP.get(t.strip(), t.strip())) for t in match.split(" vs ")]
+        la, lb = _PIPE.goal_model.intensities(_PIPE.ratings[a], _PIPE.ratings[b])
+        return {"exp_goals": f"{a} {la:.2f} vs {b} {lb:.2f} (total {la + lb:.2f})",
+                "elo": f"{a} {_PIPE.ratings[a]:.0f} vs {b} {_PIPE.ratings[b]:.0f}"}
+    except Exception:
+        return None
 # Tier-1 rich grounding: full club profile + matchup + the archetype base rate, so
 # the panel reasons from the player's whole track record and the opponent (inferred
 # from the matchup) and stays anchored to the empirical base rate (curbs over-pricing).
@@ -37,9 +57,13 @@ _GKEYS = ("resolved", "position", "league", "minutes", "sot_p90", "shots_p90",
 
 def _grounding(question: str, archetype: str, match: str) -> dict | None:
     if archetype not in PLAYER:
-        # tactical/team questions: at minimum tell the panel who is playing and the
-        # base rate (previously they got only the question + our prior — fully blind).
-        return {"matchup": match, "base_rate": BASE_RATES.get(archetype)}
+        # tactical/team questions: who is playing, the base rate, AND our real model
+        # numbers (expected goals + Elo) so the panel reasons from the same evidence.
+        g = {"matchup": match, "base_rate": BASE_RATES.get(archetype)}
+        md = _match_data(match)
+        if md:
+            g.update(md)
+        return g
     q = parse_question(question)
     if q is None or not q.subject:
         return None

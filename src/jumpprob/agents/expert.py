@@ -105,11 +105,16 @@ def build_user(question: str, model_pct: float, grounding: dict | None = None) -
             "the anchor — the track record and the matchup are reasons to move ABOVE or BELOW "
             "it, but most cases land near the base rate. Do not over-price a favourite."
         )
+    if g.get("exp_goals"):
+        lines.append(f"Our model's expected goals: {g['exp_goals']}.")
+    if g.get("elo"):
+        lines.append(f"Team strength (Elo): {g['elo']}.")
     if g.get("resolved"):
         lines.append(f"Player: {g['resolved']}"
                      + (f" ({g.get('position')}, {g.get('league')})" if g.get("position") else ""))
     prof = {k: v for k, v in g.items()
-            if k not in ("matchup", "base_rate", "note", "resolved", "position", "league")
+            if k not in ("matchup", "base_rate", "note", "resolved", "position", "league",
+                         "exp_goals", "elo")
             and v is not None and v != ""}
     if prof:
         lines.append("Track record (per-90 club form — evidence our model under-uses):")
