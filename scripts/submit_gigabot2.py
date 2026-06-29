@@ -25,14 +25,31 @@ from jumpprob.submit.runner import COUNT_ARCHS, PLAYER_ARCHS, TIMING_ARCHS, Runn
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
 
-# --- v2 reliability-gated sizing (mirror of scripts/gigalint_size.py) -----------------
-SHARP = {"goal": 0.85, "player": 0.45, "count": 0.40, "timing": 0.35}
-TIER_A = {"team_sot_ge", "sot_gt", "team_corners_ge", "pen_or_red", "ht_leading",
-          "team_scores_half", "goals_gt_half", "first_goal_half"}
-TIER_C = {"offsides_ge", "fouls_gt", "cards_ge", "cards_gt", "team_cards_ge",
-          "both_teams_sot_ge", "corners_gt", "total_sot_ge", "total_sot_half_ge",
-          "corners_total_ge", "player_ga", "player_sot_ge", "player_scores",
-          "btts_and_total_ge"}
+# --- v3 edge-gated sizing (re-tiered 2026-06-30 on Bot A's validated edge map) --------
+# Top-match-RBP = amplify variance ONLY where we are directionally RIGHT vs the noisy
+# field (sharp market anchors + validated-skill markets); stay flat where we are a
+# coin-flip (no-edge counts/timing/base-rate markets) -- extremizing those is pure
+# variance with no directional edge and just bleeds expected RBP.
+TIER_A = {  # sharpest edge -> extremize hardest (k=3.0, cap 3/97)
+    # market-anchored goal markets: matching the sharp line beats the field; push the favourite
+    "win", "draw", "btts", "total_ge", "total_le", "team_goals_ge",
+    # knockout recoveries with validated OOS skill (backtest_recovered +.03-.05 Brier)
+    "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
+    # half-state goal markets off the (anchored) grid + proven-edge SoT
+    "ht_leading", "team_scores_half", "goals_gt_half", "first_goal_half",
+    "first_goal_and_win", "team_sot_ge", "sot_gt",
+}
+TIER_C = {  # NO directional edge -> keep near the calibrated value (do NOT gamble)
+    "offsides_ge", "offsides_total_ge", "fouls_gt", "cards_ge", "cards_gt",
+    "team_cards_ge", "both_teams_sot_ge", "both_teams_cards", "total_shots_ge",
+    "btts_and_total_ge", "pen_or_red", "penalty_awarded", "red_card",
+    "goal_pre_hb1", "goal_post_hb2", "cards_post_hb2", "corners_pre_hb1",
+    "offsides_pre_hb1", "goal_1h_stoppage", "goal_2h_stoppage",
+    "sub_before_ht", "substitute_scores", "any_player_sot_ge", "any_player_goals_ge",
+}
+# TIER_B (default): book-anchored PLAYER PROPS (sharp but mid base-rate -> moderate push)
+#   player_sot_ge/_scores/_ga, the moderate-edge counts (corners, total SoT), and the
+#   forward-validated knockout markets (advance, ht_tied, h2_more_goals, half_total_ge).
 KCAP = {"A": (3.0, 0.03, 0.97), "B": (1.8, 0.10, 0.90), "C": (1.0, 0.12, 0.88)}
 
 
