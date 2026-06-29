@@ -21,7 +21,7 @@ def test_market_priced_excluded():
 
 
 def test_proven_edge_shadowed():
-    for arch in ("corners_gt", "sot_gt", "team_sot_ge", "player_scores"):
+    for arch in ("corners_gt", "sot_gt", "team_sot_ge"):
         role, action = P.route(arch)
         assert action == P.SHADOW
 
@@ -29,6 +29,9 @@ def test_proven_edge_shadowed():
 def test_flagged_player_props_routing():
     assert P.route("player_ga") == ("lineup", P.BLEND)
     assert P.route("player_sot_ge") == ("lineup", P.BLEND_CAPPED)
+    # player_scores rescues no-book underprices (the runner pm-guard keeps the book when
+    # one exists, so the LLM only lifts the shrinkage model when no book prices the scorer)
+    assert P.route("player_scores") == ("lineup", P.BLEND_CAPPED)
 
 
 def test_weak_counts_blend():

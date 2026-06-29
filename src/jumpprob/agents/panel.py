@@ -75,7 +75,9 @@ ROUTING: dict[str, tuple[str, str]] = {
     # --- player props (the user's flagged cases): lineup pass ---
     "player_ga": ("lineup", BLEND),            # assists are model-invisible; history helps
     "player_sot_ge": ("lineup", BLEND_CAPPED), # catastrophic-low tail — rescue but cap the pull
-    "player_scores": ("lineup", SHADOW),       # we have edge; raw history HURTS — protect it
+    "player_scores": ("lineup", BLEND_CAPPED),  # rescue no-book underprices — the pm-guard
+    #   (runner) skips the LLM whenever a book prices the scorer, so the book wins when present
+    #   and the LLM only lifts the shrinkage model's under-priced forwards when no book exists.
     # --- 2026-06-29 recoveries: uncertain / base-rate markets where the LLM may add
     #     game-state, referee, or player-quality context. BLEND = logged in shadow now
     #     (weight 0), promotable to live by setting a gate weight once score_shadow

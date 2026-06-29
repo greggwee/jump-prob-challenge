@@ -76,5 +76,9 @@
     "mode": "blend",
     "w": 0.4,
     "cap": 1.0
+  },
+  "player_scores": {
+    "mode": "blend",
+    "w": 0.6
   }
 }

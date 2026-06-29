@@ -676,12 +676,14 @@ class Runner:
                     # Phase 1: asymmetric confidence calibration — floor confident-low bets on
                     # the archetypes where betting below the crowd loses catastrophically.
                     p_a = float(np.clip(self._confidence(q.archetype, p_a), 0.01, 0.99))
-                # L0 LLM expert layer (out-of-band panel; shadow by default). At the
-                # default env (all role weights 0) apply_expert returns p_a unchanged,
-                # so sub_a is byte-for-byte identical; a cache miss -> pure model. The
-                # expert number is still logged for the forward-test. See LLM-EXPERT-PLAN.
-                p_blend, einfo = panel_mod.apply_expert(r["id"], q.archetype, p_a, self.panel, self.expert_gate)
-                p_a = float(np.clip(p_blend, 0.01, 0.99))
+                # L0 LLM expert layer (out-of-band panel; shadow by default). Only when
+                # there is NO sharp book anchor (pm is None): a matched player prop is the
+                # sharpest signal and the LLM must not override it (else a stale panel opinion
+                # fights a fresh book line). For book-anchored props the book stands.
+                einfo: dict = {}
+                if pm is None:
+                    p_blend, einfo = panel_mod.apply_expert(r["id"], q.archetype, p_a, self.panel, self.expert_gate)
+                    p_a = float(np.clip(p_blend, 0.01, 0.99))
                 # Phase R risk management: shrink no-edge archetypes toward the base
                 # rate (don't bet over-confidently where we have no validated edge).
                 # Off unless RISK_GATE_ENABLE; no-op for archetypes not in the gate.

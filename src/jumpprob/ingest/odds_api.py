@@ -170,6 +170,19 @@ def _two_way(books: list[tuple[str, list[float]]]) -> float | None:
         return None
 
 
+def _over_prob(books: list[tuple[str, list[float]]]) -> float | None:
+    """P(Over) from SoT/assist books: prefer a two-way (Over/Under) Shin de-vig; fall
+    back to a vig-haircut on ONE-SIDED (Over-only) books — many books quote only the
+    Over for the 0.5 line, which the two-way path silently dropped (the SoT-coverage bug)."""
+    two = _two_way([b for b in books if len(b[1]) == 2])
+    if two is not None:
+        return two
+    one = [b for b in books if len(b[1]) == 1 and b[1][0] > 1.0]
+    if one:
+        return float(np.clip(np.mean([1.0 / b[1][0] for b in one]) / 1.08, 0.01, 0.97))
+    return None
+
+
 def _parse_player_event(event: dict) -> dict:
     """One event's player markets -> {norm_player: {archetype: prob}} (de-vigged)."""
     sot, ast, scorer = {}, {}, {}
@@ -186,6 +199,8 @@ def _parse_player_event(event: dict) -> dict:
                 for pl, ou in byp.items():
                     if "Over" in ou and "Under" in ou:
                         tgt.setdefault(pl, []).append((bk, [ou["Over"], ou["Under"]]))
+                    elif "Over" in ou:
+                        tgt.setdefault(pl, []).append((bk, [ou["Over"]]))  # one-sided (Over-only)
             elif k == "player_goal_scorer_anytime":
                 byp = {}
                 for o in m["outcomes"]:
@@ -199,7 +214,7 @@ def _parse_player_event(event: dict) -> dict:
     out: dict = {}
     for pl in set(sot) | set(ast) | set(scorer):
         d: dict = {}
-        p_sot = _two_way(sot.get(pl, []))
+        p_sot = _over_prob(sot.get(pl, []))
         if p_sot is not None:
             d["player_sot_ge"] = p_sot
         sc = scorer.get(pl, [])
@@ -212,7 +227,7 @@ def _parse_player_event(event: dict) -> dict:
             p_sc = None
         if p_sc is not None:
             d["player_scores"] = p_sc
-        p_ast = _two_way(ast.get(pl, []))
+        p_ast = _over_prob(ast.get(pl, []))
         if p_sc is not None or p_ast is not None:   # score OR assist (independence approx)
             d["player_ga"] = float(1.0 - (1.0 - (p_sc or 0.0)) * (1.0 - (p_ast or 0.0)))
         if d:

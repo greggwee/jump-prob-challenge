@@ -80,6 +80,14 @@ def test_player_prop_name_join_and_devig():
             {"description": "Ante Budimir", "name": "Under", "point": 0.5, "price": 4.0}]}]}]}
     p = _parse_player_event(event)["ante budimir"]["player_sot_ge"]
     assert 0.7 < p < 0.85
+    # ONE-SIDED Over-only SoT (many books quote only the Over for the 0.5 line) must STILL
+    # de-vig — the bug was dropping these, which zeroed SoT coverage for whole matches.
+    one_sided = {"bookmakers": [{"key": "onexbet", "markets": [
+        {"key": "player_shots_on_target", "outcomes": [
+            {"description": "Neymar", "name": "Over", "point": 0.5, "price": 1.30},
+            {"description": "Neymar", "name": "Over", "point": 1.5, "price": 2.40}]}]}]}
+    pn = _parse_player_event(one_sided)
+    assert "neymar" in pn and 0.65 < pn["neymar"]["player_sot_ge"] < 0.80   # 1/1.30/1.08 ~ 0.71
 
 
 def test_drop_audit_recovered_archetypes():
