@@ -50,10 +50,18 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("team_goals_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will (.+?) score (\d+) or more (?:total )?goals", re.I),
      lambda m: ParsedQuestion("team_goals_ge", m[1], threshold=int(m[2]))),
+    # "N or more shots on target" mirrors the "at least N" block below: both-teams FIRST
+    # (else the greedy (.+?) swallows "both teams"), then DEFAULT to player_sot_ge so a
+    # player subject ("Musiala (Germany) ... 2 or more shots on target") is priced as a
+    # prop; _PLAYER_TO_TEAM re-routes to team_sot_ge when the subject is one of the teams.
+    (re.compile(r"will both teams have (\d+) or more shots on target in the (first|second) half", re.I),
+     lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]), half=1 if m[2].lower() == "first" else 2)),
+    (re.compile(r"will both teams have (\d+) or more shots on target", re.I),
+     lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]))),
     (re.compile(r"will (.+?) have (\d+) or more shots on target in the (first|second) half", re.I),
-     lambda m: ParsedQuestion("team_sot_ge", m[1], threshold=int(m[2]), half=1 if m[3].lower() == "first" else 2)),
+     lambda m: ParsedQuestion("player_sot_ge", m[1], threshold=int(m[2]), half=1 if m[3].lower() == "first" else 2)),
     (re.compile(r"will (.+?) have (\d+) or more shots on target", re.I),
-     lambda m: ParsedQuestion("team_sot_ge", m[1], threshold=int(m[2]))),
+     lambda m: ParsedQuestion("player_sot_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will (.+?) receive at least (\d+) cards? in the (first|second) half", re.I),
      lambda m: ParsedQuestion("team_cards_ge", m[1], threshold=int(m[2]), half=1 if m[3].lower() == "first" else 2)),
     (re.compile(r"will (.+?) receive at least (\d+) cards?", re.I),

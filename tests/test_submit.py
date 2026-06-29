@@ -37,6 +37,20 @@ def test_unknown_question_returns_none():
     assert parse_question("Will the referee wear gloves?") is None
 
 
+def test_sot_n_or_more_phrasing_routes_like_at_least():
+    """Knockout phrasing 'N or more shots on target' must route exactly like 'at least N':
+    player by default (book-anchorable prop), team via re-route, both-teams caught first.
+    Bug: it defaulted to team_sot_ge, so a player subject failed to resolve -> dropped."""
+    from jumpprob.normalize.teams import canonical
+    teams = {canonical("Germany"), canonical("Paraguay")}
+    assert parse_question("Will Jamal Musiala (Germany) have 2 or more shots on target in "
+                          "regulation (90 minutes + stoppage time)?", teams=teams).archetype == "player_sot_ge"
+    assert parse_question("Will Germany have 2 or more shots on target?", teams=teams).archetype == "team_sot_ge"
+    assert parse_question("Will both teams have 1 or more shots on target?", teams=teams).archetype == "both_teams_sot_ge"
+    q = parse_question("Will Kylian Mbappé (France) have 2 or more shots on target?")
+    assert q.archetype == "player_sot_ge" and q.threshold == 2
+
+
 def test_both_teams_sot_not_mis_parsed_as_player():
     """Regression: 'both teams' must not be swallowed by the greedy player-SoT
     regex (was mis-priced ~9% vs ~75% fair, a per-match point bleed)."""
