@@ -25,8 +25,12 @@ def test_both_teams_sot_precedes_player():
 
 
 def test_player_vs_team_threshold_phrasing():
-    assert parse_question("Will Croatia have 6 or more shots on target?").archetype == "team_sot_ge"
-    assert parse_question("Will Son have at least 2 shots on target?").archetype == "player_sot_ge"
+    # the live path always passes the match teams; "N or more" / "at least N" both default
+    # to player_sot_ge and re-route to team_sot_ge when the subject is one of the teams.
+    from jumpprob.normalize.teams import canonical
+    teams = {canonical("Croatia"), canonical("Brazil")}
+    assert parse_question("Will Croatia have 6 or more shots on target?", teams=teams).archetype == "team_sot_ge"
+    assert parse_question("Will Son have at least 2 shots on target?", teams=teams).archetype == "player_sot_ge"
 
 
 def test_no_edge_archetypes_parse():
