@@ -211,6 +211,42 @@ def test_event_and_any_player_markets():
             r.answer(parse_question("Will a goal be scored in first-half stoppage (added) time?"), ctx))
 
 
+def test_player_sot_threshold_not_the_one_plus_line():
+    """Regression for the Brobbey 60%-off-a-66%-1+line bug. 'N or more shots on target'
+    must be P(>=N), strictly below the '1 or more' (book Over-0.5) line; and a book SoT
+    anchor (only ever the 0.5 line) must be DROPPED for a >=2 question rather than stamped
+    onto it. Both the model handler and the book-anchor path were threshold-blind."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    from jumpprob.normalize.teams import canonical
+    from jumpprob.ingest.odds_api import norm_player
+
+    teams = {canonical("Netherlands"), canonical("Morocco")}
+    t1 = "Will Brian Brobbey have at least 1 shot on target in regulation (90 minutes + stoppage time)?"
+    t2 = "Will Brian Brobbey have 2 or more shots on target in regulation (90 minutes + stoppage time)?"
+    q1, q2 = parse_question(t1, teams=teams), parse_question(t2, teams=teams)
+    assert q1.archetype == q2.archetype == "player_sot_ge"
+    assert (q1.threshold or 1) == 1 and q2.threshold == 2
+
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    ctx = r.context("Netherlands", "Morocco")
+    p1, p2 = r.answer(q1, ctx), r.answer(q2, ctx)        # P(>=1 SoT) vs P(>=2 SoT)
+    assert p1 is not None and p2 is not None
+    assert p2 < p1 - 0.03, (p1, p2)                      # was IDENTICAL before the fix
+
+    # book anchor = the Over-0.5 (>=1 SoT) price; anchors the >=1 line, dropped for >=2
+    book = 0.662
+    pp = {(canonical("Netherlands"), canonical("Morocco")):
+          {norm_player("Brian Brobbey"): {"player_sot_ge": book}}}
+    rows = [{"id": "m1", "lobby_id": "L", "match": {"name": "Netherlands vs Morocco"}, "question": t1},
+            {"id": "m2", "lobby_id": "L", "match": {"name": "Netherlands vs Morocco"}, "question": t2}]
+    by_q = {o["question"]: o["p_bot_a"] for o in r.predictions_for(rows, player_props=pp)[0]}
+    assert by_q[t1] > p1 + 0.05                          # >=1 IS pulled up toward the 0.66 book
+    assert by_q[t2] < by_q[t1] - 0.15                    # >=2 is NOT (anchor dropped)
+    assert by_q[t2] < 0.45                               # and tracks the low threshold-aware model
+
+
 def test_uncertain_markets_routed_to_llm_shadow():
     """The 2026-06-29 recovered uncertain markets are wired to the LLM as BLEND
     (logged in shadow now, promotable to live via a gate weight). Market-anchored

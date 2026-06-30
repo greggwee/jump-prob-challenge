@@ -613,7 +613,12 @@ class Runner:
             # half-specific player questions: exposure = minutes x half share
             if q.half:
                 scale *= H1 if q.half == 1 else H2
-            return float(sum(w * (1 - np.exp(-rate * scale * m)) for w, m in MINUTE_SCENARIOS))
+            # threshold-aware: "2 or more shots on target" -> P(>=k), not P(>=1).
+            # scores/ga are >=1 questions (k defaults to 1, where 1 - Poisson.cdf(0, mu)
+            # == 1 - exp(-mu), i.e. identical to the prior formula -> no behaviour change).
+            from scipy.stats import poisson
+            k = q.threshold or 1
+            return float(sum(w * (1.0 - poisson.cdf(k - 1, rate * scale * m)) for w, m in MINUTE_SCENARIOS))
         return None
 
     # ------------------------------------------------------------------
@@ -663,6 +668,12 @@ class Runner:
                 # those patch the model we're now anchoring away from. See
                 # docs/MARKET-FIRST-ARCHITECTURE.md.
                 pm = pp.get(norm_player(q.subject), {}).get(q.archetype) if (fam == "player" and q.subject) else None
+                # The book player_sot_ge value is the Over-0.5 (>=1 SoT) price. It must NOT
+                # anchor a ">=2 shots on target" question (that stamps ~P(>=1) onto a >=2
+                # market -> Brobbey 2+ SoT submitted 60% off a 66% 1+ line). Drop the anchor
+                # so the threshold-aware model + LLM (now un-guarded) handle the >=2 line.
+                if pm is not None and q.archetype == "player_sot_ge" and (q.threshold or 1) >= 2:
+                    pm = None
                 if pm is not None:
                     p_a = float(np.clip(blend([p, pm], [1 - self.w_market, self.w_market]), 0.01, 0.99))
                 elif ctx.anchored and fam == "goal":
