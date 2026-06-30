@@ -18,6 +18,37 @@ def test_forecast_schema_bounds():
         Forecast(probability=1.5)  # out of [0,1]
 
 
+def test_forecast_review_fields_default_inert():
+    # the review fields are additive: an old-style forecast (no factors) is still valid
+    # and reads as "agrees with the model" (none evidence, empty factor list).
+    f = Forecast(probability=0.3)
+    assert f.evidence_strength == "none" and f.factors == []
+    f2 = Forecast(probability=0.8, evidence_strength="hard",
+                  factors=[expert.Factor(name="starter ruled out", direction="down",
+                                         evidence="official team sheet")])
+    assert f2.evidence_strength == "hard" and f2.factors[0].direction == "down"
+
+
+def test_agg_evidence_takes_strongest():
+    assert expert.agg_evidence(["none", "soft", "hard"]) == "hard"
+    assert expert.agg_evidence(["none", "soft"]) == "soft"
+    assert expert.agg_evidence([]) == "none"
+    assert expert.agg_evidence(["bogus", "none"]) == "none"   # unknown -> none
+
+
+def test_parse_evidence_strength_from_web_text():
+    assert expert._parse_evidence_strength("...\nPROBABILITY: 0.2\nEVIDENCE_STRENGTH: hard") == "hard"
+    assert expert._parse_evidence_strength("EVIDENCE_STRENGTH: SOFT") == "soft"
+    assert expert._parse_evidence_strength("no marker here") == "none"
+
+
+def test_review_role_system_prompt_frames_as_reviewer():
+    s = build_system("lineup")
+    assert "REVIEWING" in s
+    assert "evidence_strength" in s            # the hard/soft discipline is stated
+    assert "UNCHANGED" in s                    # the "no concrete reason -> don't move" rule
+
+
 def test_system_prompt_pre_match_and_strict():
     for role in ("tactical", "lineup"):
         s = build_system(role)

@@ -104,6 +104,19 @@ DEFAULT_CAP = 1.5            # logit-space pull cap for BLEND_CAPPED blends
 DEFAULT_MAX_AGE_H = 36.0
 CLIP_LO, CLIP_HI = 0.03, 0.97
 
+# --- Phase 2 deconfliction VERIFIER ---
+# On a LARGE model-vs-expert disagreement we do NOT blend toward the divergence: we follow
+# the expert ONLY when it cites HARD, verifiable evidence (confirmed XI / suspension / injury
+# ruling) AND the market is a player/lineup prop where that fact is decisive; otherwise we keep
+# the statistical model. Small disagreements fall through to the normal gated blend.
+CONFLICT_TAU = 0.8          # |logit(model) - logit(expert)| above this = "large disagreement"
+FOLLOW_CAP = 2.5            # max logit move when FOLLOWING a hard-evidence expert on conflict
+VERIFY_FOLLOW = {           # props where a lineup/injury/suspension fact can decisively move truth
+    "player_scores", "player_ga", "player_sot_ge",
+    "any_player_sot_ge", "any_player_goals_ge",
+    "substitute_scores", "sub_before_ht",
+}
+
 
 def route(archetype: str) -> tuple[str, str]:
     return ROUTING.get(archetype, DEFAULT_ROUTE)
@@ -201,6 +214,31 @@ def blend_logodds(p_model: float, p_expert: float | None, w: float, cap: float |
     return _sigmoid(target)
 
 
+def _conflict_tau() -> float:
+    try:
+        return float(os.environ.get("AI_CONFLICT_TAU", CONFLICT_TAU))
+    except ValueError:
+        return CONFLICT_TAU
+
+
+def _follow_cap() -> float:
+    try:
+        return float(os.environ.get("AI_FOLLOW_CAP", FOLLOW_CAP))
+    except ValueError:
+        return FOLLOW_CAP
+
+
+def follow_capped(p_model: float, p_expert: float, cap: float) -> float:
+    """Follow the expert (move to its log-odds), capping the move from the model. Used ONLY
+    when a HARD, verifiable fact justifies overriding the statistical model on a large conflict."""
+    lm = _logit(clip01(p_model))
+    target = _logit(clip01(p_expert))
+    delta = target - lm
+    if abs(delta) > cap:
+        target = lm + math.copysign(cap, delta)
+    return _sigmoid(target)
+
+
 def ensemble_floor(p_model: float, p_expert: float | None, f: float) -> float:
     """One-sided ensemble-informed floor: lift the submission to f * expert ONLY
     when the model sits egregiously below the expert (the catastrophic-low tail);
@@ -285,11 +323,24 @@ def apply_expert(market_id, archetype: str, p_model: float, panel: dict,
         info["miss"] = True
         return float(p_model), info
     info["expert"] = round(float(p_expert), 4)
+    evidence = str(entry.get("evidence_strength", "none")).lower()
+    info["evidence"] = evidence
     if action == SHADOW or not expert_enabled():
         return float(p_model), info          # logged, never blended
     gate = gate if gate is not None else load_gate()
     g = gate.get(archetype)
     if not g:
+        return float(p_model), info
+    # Phase 2 VERIFIER: on a LARGE disagreement, deconflict rather than blend. Follow the
+    # expert only on HARD evidence and only for the player/lineup props; otherwise keep the
+    # model (never blend toward, or de-extremize toward base on, an unsubstantiated divergence).
+    delta = abs(_logit(clip01(p_model)) - _logit(clip01(p_expert)))
+    if delta > _conflict_tau():
+        info["conflict"], info["delta"] = True, round(delta, 3)
+        if archetype in VERIFY_FOLLOW and evidence == "hard":
+            info["verdict"] = "follow_hard"
+            return follow_capped(p_model, p_expert, _follow_cap()), info
+        info["verdict"] = "keep_model"
         return float(p_model), info
     mode = g.get("mode", "blend")
     if mode == "asym_floor":

@@ -169,12 +169,15 @@ def main() -> None:
         entries[str(it["market_id"])] = {
             "p_model": it["model_pct"], "p_ensemble": ens, "models": res["models"],
             "n": res["n"], "role": it["role"], "action": it["action"],
-            "archetype": it["archetype"], "source": "web", "generated_at": time.time(),
+            "archetype": it["archetype"], "source": "web",
+            "evidence_strength": res.get("evidence_strength", "none"),
+            "generated_at": time.time(),
         }
         rows.append({"ts": datetime.now(timezone.utc).isoformat(), "market_id": it["market_id"],
                      "match": it["match"], "archetype": it["archetype"],
                      "question": it["question"], "model_pct": it["model_pct"],
-                     "web_prob": ens, "n_models": res["n"]})
+                     "web_prob": ens, "n_models": res["n"],
+                     "evidence_strength": res.get("evidence_strength", "none")})
         log(f"  {i}/{len(items)} {it['archetype']:14s} model={it['model_pct']:.2f} web={ens}")
 
     P.merge_panel(entries, P.PANEL_PATH, meta={"web": names, "n": len(entries)})

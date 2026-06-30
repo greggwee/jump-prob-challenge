@@ -206,17 +206,48 @@ def test_apply_no_gate_entry_is_pure_model(monkeypatch):
 
 
 def test_apply_blend_moves_when_armed(monkeypatch):
+    # in the AGREE region (Δ <= τ) an armed gate blends model -> expert as before.
     monkeypatch.setenv("AI_EXPERT_ENABLE", "1")
     gate = {"player_ga": {"mode": "blend", "w": 1.0}}
-    p, info = P.apply_expert("m1", "player_ga", 0.2, {"m1": {"p_ensemble": 0.6}}, gate)
-    assert p == pytest.approx(0.6, abs=1e-6)
+    p, info = P.apply_expert("m1", "player_ga", 0.45, {"m1": {"p_ensemble": 0.62}}, gate)
+    assert p == pytest.approx(0.62, abs=1e-6)
     assert info["mode"] == "blend"
+    assert not info.get("conflict")
 
 
-def test_apply_asym_floor_when_armed(monkeypatch):
+def test_ensemble_floor_math():
+    # the asym_floor math in isolation: deep-low model lifted to f*ensemble, nothing else.
+    # (A *binding* floor is a large gap, which apply_expert now routes to the verifier instead.)
+    assert P.ensemble_floor(0.09, 0.55, 0.5) == pytest.approx(0.275)
+    assert P.ensemble_floor(0.40, 0.55, 0.5) == pytest.approx(0.40)   # already above floor
+    assert P.ensemble_floor(0.09, None, 0.5) == pytest.approx(0.09)   # no expert -> unchanged
+
+
+def test_verifier_keeps_model_on_soft_conflict(monkeypatch):
+    # LARGE disagreement + non-hard evidence: do NOT blend toward the divergence, keep model.
     monkeypatch.setenv("AI_EXPERT_ENABLE", "1")
-    gate = {"player_sot_ge": {"mode": "asym_floor", "f": 0.5}}
-    # deep-low gets floored to 0.5*ensemble; nothing else
-    p, info = P.apply_expert("m1", "player_sot_ge", 0.09, {"m1": {"p_ensemble": 0.55}}, gate)
-    assert p == pytest.approx(0.275)
-    assert info["mode"] == "asym_floor"
+    gate = {"player_ga": {"mode": "blend", "w": 1.0}}
+    entry = {"p_ensemble": 0.6, "evidence_strength": "soft"}
+    p, info = P.apply_expert("m1", "player_ga", 0.2, {"m1": entry}, gate)
+    assert p == pytest.approx(0.2)
+    assert info["conflict"] and info["verdict"] == "keep_model"
+
+
+def test_verifier_follows_hard_evidence_capped(monkeypatch):
+    # LARGE disagreement + HARD evidence on a player prop ("ruled out"): follow expert, capped.
+    monkeypatch.setenv("AI_EXPERT_ENABLE", "1")
+    monkeypatch.setenv("AI_FOLLOW_CAP", "2.5")
+    gate = {"player_sot_ge": {"mode": "blend", "w": 0.6}}
+    entry = {"p_ensemble": 0.05, "evidence_strength": "hard"}
+    p, info = P.apply_expert("m1", "player_sot_ge", 0.5, {"m1": entry}, gate)
+    assert info["verdict"] == "follow_hard"
+    assert 0.05 <= p < 0.2            # moved hard toward the expert, but bounded by the cap
+
+
+def test_verifier_no_follow_for_non_player_archetype(monkeypatch):
+    # a tactical market is not in VERIFY_FOLLOW: even hard evidence on a large conflict keeps model.
+    monkeypatch.setenv("AI_EXPERT_ENABLE", "1")
+    gate = {"cards_ge": {"mode": "blend", "w": 0.5}}
+    entry = {"p_ensemble": 0.85, "evidence_strength": "hard"}
+    p, info = P.apply_expert("m1", "cards_ge", 0.2, {"m1": entry}, gate)
+    assert info["verdict"] == "keep_model" and p == pytest.approx(0.2)

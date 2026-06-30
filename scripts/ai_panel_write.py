@@ -52,6 +52,8 @@ def main() -> None:
                 "p_model": it["model_pct"], "p_ensemble": res["p_ensemble"],
                 "models": res["models"], "n": res["n"], "role": it["role"],
                 "action": it["action"], "archetype": it["archetype"],
+                "evidence_strength": res.get("evidence_strength", "none"),
+                "factors": res.get("factors", []),
                 "generated_at": time.time(),
             }
             done += 1

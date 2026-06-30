@@ -46,9 +46,34 @@ LINEUP_PANEL = ["claude-opus-4-8", "claude-sonnet-4-6"]  # props fan out 2-wide 
 _NO_ADAPTIVE_THINKING = {"claude-haiku-4-5"}
 
 
+class Factor(BaseModel):
+    """One nuance the statistical model is blind to — the reason to move off it."""
+    name: str = Field(description="the factor, e.g. 'starter ruled out', 'manager change', 'derby intensity'")
+    direction: str = Field(default="none", description="'up', 'down', or 'none' — which way it moves P(YES)")
+    evidence: str = Field(default="", description="the concrete, checkable basis (source/fact); empty if none")
+
+
 class Forecast(BaseModel):
-    probability: float = Field(ge=0.0, le=1.0, description="P(answer is YES), 0-1")
+    probability: float = Field(ge=0.0, le=1.0, description="your reviewed P(answer is YES), 0-1")
+    evidence_strength: str = Field(
+        default="none",
+        description="'hard' = a verifiable match-specific fact moved you (confirmed XI, suspension, "
+                    "injury/ruled out); 'soft' = opinion/form/narrative; 'none' = nothing the model misses",
+    )
+    factors: list[Factor] = Field(
+        default_factory=list,
+        description="the specific nuances that moved you off the model's estimate (empty if you agree)",
+    )
     rationale: str = Field(default="", description="one-sentence justification")
+
+
+_EVIDENCE_RANK = {"hard": 2, "soft": 1, "none": 0}
+
+
+def agg_evidence(strengths) -> str:
+    """Panel-level evidence strength = the strongest any panelist claimed (hard > soft > none)."""
+    best = max((_EVIDENCE_RANK.get(str(s).lower().strip(), 0) for s in strengths), default=0)
+    return {2: "hard", 1: "soft", 0: "none"}[best]
 
 
 _client = None
@@ -73,21 +98,31 @@ def client():
 
 def build_system(role: str) -> str:
     base = (
-        "You are a sharp, well-calibrated football forecaster for the FIFA World Cup 2026. "
-        "Reason strictly PRE-MATCH: never assume any result has occurred. Comparative "
-        "questions are STRICT — a tie counts as NO. Return a single calibrated probability "
-        "that the answer is YES."
+        "You are a sharp, well-calibrated football forecaster REVIEWING a statistical model's "
+        "estimate for a FIFA World Cup 2026 question. The model already captures team strength "
+        "(Elo), expected goals, and historical per-90 rates — do NOT re-derive those. Your job is "
+        "to adjust its estimate ONLY for real, match-specific nuance the model is blind to, such as: "
+        "a key player doubtful / suspended / rested or a confirmed lineup; recent form swings, "
+        "injuries, or fatigue; locker-room or managerial controversy; a coaching or tactical change; "
+        "underdog motivation or dead-rubber apathy. This list is not exhaustive. If you have no "
+        "concrete reason the model is wrong, RETURN ITS ESTIMATE UNCHANGED — most questions need no "
+        "move. Reason strictly PRE-MATCH (never assume a result). Comparative questions are STRICT (a "
+        "tie counts as NO). Claim 'hard' evidence_strength ONLY for a verifiable, match-specific FACT "
+        "(a confirmed team sheet, an official suspension or injury ruling) — never for a hunch or "
+        "general narrative."
     )
     if role == "lineup":
         return base + (
-            " You specialise in player props. Weigh the player's historical per-90 rate, "
-            "his expected minutes given the (confirmed, if provided) lineup, and the opponent's "
-            "defensive strength. A rotated or obscure player should regress toward the base rate; "
-            "a proven high-volume player must NOT be underpriced just because a naive model is shy."
+            " This is a PLAYER prop. The single biggest thing the model misses is availability and "
+            "minutes: whether the player actually starts, is benched, rotated, doubtful, or ruled out. "
+            "Weigh his expected minutes and role against his per-90 track record and the opponent's "
+            "defensive strength. A rotated or obscure player should regress toward the base rate; a "
+            "proven high-volume starter must NOT be underpriced; a player confirmed to not start should "
+            "drop hard toward zero."
         )
     return base + (
-        " You reason tactically about team styles, the matchup, game-state and motivation for "
-        "whole-match, half-specific and compound questions."
+        " This is a team / match question. Adjust for matchup-specific tactics, game-state, and "
+        "motivation the goal and count models can't see."
     )
 
 
@@ -123,16 +158,19 @@ def build_user(question: str, model_pct: float, grounding: dict | None = None) -
     if g.get("note"):
         lines.append(f"  ({g['note']})")
     lines.append(
-        "Weigh the matchup (opponent strength, game state) against the track record, stay "
-        "calibrated to the base rate, and give your single best probability (0-1) that the "
-        "answer is YES, plus a one-sentence rationale."
+        "Review the model's estimate above. If real, match-specific nuance justifies a move, give your "
+        "adjusted probability (0-1), set evidence_strength ('hard' ONLY for a verifiable fact such as a "
+        "confirmed lineup / suspension / injury ruling, else 'soft' or 'none'), and list the factor(s) "
+        "that moved you with their concrete evidence. If nothing concrete contradicts the model, return "
+        "its estimate unchanged with an empty factor list and a one-sentence rationale."
     )
     return "\n".join(lines)
 
 
 def forecast_one(question: str, model_pct: float, model: str, role: str = "tactical",
-                 grounding: dict | None = None, max_tokens: int = 2500) -> float | None:
-    """One panelist's calibrated probability, clipped. None on no-key / error."""
+                 grounding: dict | None = None, max_tokens: int = 2500) -> "Forecast | None":
+    """One panelist's reviewed forecast (probability clipped, plus evidence_strength +
+    factors). None on no-key / error. Callers read `.probability` for the ensemble."""
     c = client()
     if c is None:
         return None
@@ -150,13 +188,21 @@ def forecast_one(question: str, model_pct: float, model: str, role: str = "tacti
         f = r.parsed_output
         if f is None:
             return None
-        return clip01(float(f.probability))
+        f.probability = clip01(float(f.probability))
+        return f
     except Exception as e:  # provider hiccup, parse failure, rate limit — drop this panelist
         print(f"  ! {model} failed on {question[:46]!r}: {str(e)[:70]}")
         return None
 
 
 _PROB_RE = re.compile(r"PROBABILITY:\s*([0-9]*\.?[0-9]+)\s*(%?)", re.I)
+_EVIDENCE_RE = re.compile(r"EVIDENCE_STRENGTH:\s*(hard|soft|none)", re.I)
+
+
+def _parse_evidence_strength(text: str) -> str:
+    """Pull the web reviewer's 'EVIDENCE_STRENGTH: <hard|soft|none>' line. Default 'none'."""
+    m = _EVIDENCE_RE.findall(text or "")
+    return m[-1].lower() if m else "none"
 
 
 def _parse_prob(text: str) -> float | None:
@@ -185,10 +231,14 @@ def forecast_web(question: str, model_pct: float, grounding: dict | None = None,
         return None, ""
     system = build_system(role) + (
         " You have a web_search tool. Search for the CONFIRMED starting lineup / team news, "
-        "the player's recent form, and any injury or rotation news for THIS specific match — "
-        "then price the question. If a player is benched, doubtful, or out, weight that heavily. "
-        "Stay strictly pre-match (never use the actual result). End your reply with a final line "
-        "EXACTLY in the form 'PROBABILITY: <p>' where <p> is your calibrated YES probability 0-1."
+        "the player's recent form, and any injury, suspension, or rotation news for THIS specific "
+        "match — then review the model's estimate. If a player is benched, doubtful, or out, weight "
+        "that heavily. Stay strictly pre-match (never use the actual result). End your reply with "
+        "EXACTLY these two final lines:\n"
+        "PROBABILITY: <p>   (your reviewed YES probability, 0-1)\n"
+        "EVIDENCE_STRENGTH: <hard|soft|none>   ('hard' ONLY for a verifiable fact you actually found "
+        "in search — a confirmed XI, an official suspension or injury ruling; 'soft' for form/opinion; "
+        "'none' if nothing concrete contradicts the model)"
     )
     user = build_user(question, model_pct, grounding)
     tool = {**WEB_SEARCH_TOOL, "max_uses": max_uses}
@@ -228,21 +278,34 @@ def web_forecast(question: str, model_pct: float, grounding: dict | None = None,
         p, t = forecast_web(question, model_pct, grounding, model=m, role=role, max_uses=max_uses)
         out[m], texts[m] = p, t
     probs = [p for p in out.values() if p is not None]
-    return {"models": out, "p_ensemble": combine_logodds(probs), "n": len(probs), "texts": texts}
+    # evidence_strength only counts from panelists that actually returned a probability
+    strengths = [_parse_evidence_strength(texts[m]) for m, p in out.items() if p is not None]
+    return {"models": out, "p_ensemble": combine_logodds(probs), "n": len(probs),
+            "texts": texts, "evidence_strength": agg_evidence(strengths)}
 
 
 def panel_forecast(question: str, model_pct: float, role: str = "tactical",
                    grounding: dict | None = None, models: list[str] | None = None) -> dict:
     """Fan out across the panel (one thread per model); robust-combine the results.
-    Returns {'models': {model: prob|None}, 'p_ensemble': float|None, 'n': int}."""
+    Returns {'models': {model: prob|None}, 'p_ensemble', 'n', 'evidence_strength', 'factors'}.
+    The ensemble math is unchanged — only `.probability` feeds combine_logodds; the
+    evidence_strength + factors are captured for the Phase-2 deconfliction verifier."""
     models = models or (LINEUP_PANEL if role == "lineup" else PANEL)
-    out: dict[str, float | None] = {}
+    res: dict[str, "Forecast | None"] = {}
     with ThreadPoolExecutor(max_workers=max(1, len(models))) as ex:
         futs = {ex.submit(forecast_one, question, model_pct, m, role, grounding): m for m in models}
         for fu, m in futs.items():
             try:
-                out[m] = fu.result()
+                res[m] = fu.result()
             except Exception:
-                out[m] = None
+                res[m] = None
+    out = {m: (f.probability if f is not None else None) for m, f in res.items()}
     probs = [p for p in out.values() if p is not None]
-    return {"models": out, "p_ensemble": combine_logodds(probs), "n": len(probs)}
+    dets = [f for f in res.values() if f is not None]
+    return {
+        "models": out,
+        "p_ensemble": combine_logodds(probs),
+        "n": len(probs),
+        "evidence_strength": agg_evidence([d.evidence_strength for d in dets]),
+        "factors": [f.model_dump() for d in dets for f in d.factors],
+    }
