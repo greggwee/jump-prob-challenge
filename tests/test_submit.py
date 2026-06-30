@@ -87,6 +87,12 @@ def test_player_prop_name_join_and_devig():
     # team suffix + accents normalize to the same key as the bare name
     assert norm_player("Kai Havertz (Germany)") == norm_player("Kai Havertz") == "kai havertz"
     assert norm_player("Viktor Gyökeres") == "viktor gyokeres"
+    # non-decomposing Latin letters must transliterate the way the feeds do (NFKD+ascii DROPPED
+    # them: 'Ødegaard'->'degaard') — the Sørloth/Ødegaard book-join miss class
+    assert norm_player("Martin Ødegaard") == "martin odegaard"
+    assert norm_player("Alexander Sørloth") == "alexander sorloth"
+    assert norm_player("Aleksander Å") == "aleksander a"
+    assert norm_player("Łukasz Łł") == "lukasz ll"
     # de-vig a SoT Over/Under 0.5 into P(>=1 SoT)  (1.25 ~ 80%, less the vig)
     event = {"bookmakers": [{"key": "pinnacle", "markets": [
         {"key": "player_shots_on_target", "outcomes": [
@@ -102,6 +108,28 @@ def test_player_prop_name_join_and_devig():
             {"description": "Neymar", "name": "Over", "point": 1.5, "price": 2.40}]}]}]}
     pn = _parse_player_event(one_sided)
     assert "neymar" in pn and 0.65 < pn["neymar"]["player_sot_ge"] < 0.80   # 1/1.30/1.08 ~ 0.71
+
+
+def test_resolve_player_robust_name_join():
+    """The book often carries a fuller name than the platform subject (middle names,
+    initials) — the Haaland bug: 'Erling Haaland' missed the book key 'erling braut haaland'
+    and silently lost the 52% scorer anchor. resolve_player must bridge that, while NEVER
+    guessing on an ambiguous (same-surname) collision."""
+    from jumpprob.ingest.odds_api import resolve_player
+    book = {"erling braut haaland": {"player_scores": 0.52}, "martin odegaard": {"player_scores": 0.18}}
+    # exact, middle-name, initial, and team-qualifier subjects all resolve to the same entry
+    assert resolve_player("Martin Odegaard", book)["player_scores"] == 0.18
+    assert resolve_player("Erling Haaland", book)["player_scores"] == 0.52          # middle name bridged
+    assert resolve_player("E Haaland", book)["player_scores"] == 0.52               # initial bridged
+    assert resolve_player("Erling Haaland (Norway)", book)["player_scores"] == 0.52 # team qualifier
+    # a different player / single token / empty book -> {} (fall back to the model)
+    assert resolve_player("Lionel Messi", book) == {}
+    assert resolve_player("Haaland", book) == {}                                    # one token: too risky
+    assert resolve_player("Erling Haaland", {}) == {}
+    # AMBIGUOUS surname collision must NOT guess -> {}
+    ambig = {"ousmane diomande": {"player_scores": 0.1}, "oumar diomande": {"player_scores": 0.2}}
+    assert resolve_player("O Diomande", ambig) == {}                                # 'o' prefixes both
+    assert resolve_player("Ousmane Diomande", ambig)["player_scores"] == 0.1        # full first disambiguates
 
 
 def test_drop_audit_recovered_archetypes():

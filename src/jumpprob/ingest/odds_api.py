@@ -151,12 +151,49 @@ def build_anchors(events: list[dict]) -> dict[tuple[str, str], MatchAnchor]:
 PLAYER_MARKETS = "player_shots_on_target,player_goal_scorer_anytime,player_assists"
 
 
+# Latin letters that do NOT decompose under NFKD, so a plain ascii-encode DROPS them
+# ('Ødegaard'->'degaard') while the books transliterate them ('odegaard'). Map them the way
+# the feeds do so the join survives — this was the Sørloth/Ødegaard miss class.
+_TRANSLIT = str.maketrans({
+    "ø": "o", "Ø": "o", "å": "a", "Å": "a", "æ": "ae", "Æ": "ae",
+    "ł": "l", "Ł": "l", "đ": "d", "Đ": "d", "ð": "d", "Ð": "d",
+    "þ": "th", "Þ": "th", "ß": "ss", "ı": "i", "œ": "oe", "Œ": "oe",
+})
+
+
 def norm_player(name: str) -> str:
-    """Accent/punct-stripped lowercase, for joining a question subject to a prop name.
-    Drops a trailing team qualifier — the platform writes 'Kai Havertz (Germany)'."""
+    """Transliterate + accent/punct-strip to lowercase, for joining a question subject to a
+    prop name. Drops a trailing team qualifier ('Kai Havertz (Germany)'). The _TRANSLIT pass
+    handles non-decomposing Latin letters (ø/æ/å/ł/đ...) that NFKD+ascii would otherwise drop."""
     s = re.sub(r"\(.*?\)", "", str(name))
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+    s = unicodedata.normalize("NFKD", s.translate(_TRANSLIT)).encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z ]", "", s).strip()
+
+
+def _first_match(a: str, b: str) -> bool:
+    """First names align: equal, or one is an initial/prefix of the other ('e' ~ 'erling')."""
+    return a == b or a.startswith(b) or b.startswith(a)
+
+
+def resolve_player(subject: str, props: dict) -> dict:
+    """Join a question subject ('Erling Haaland') to a book prop entry, robust to the book
+    carrying middle names ('erling braut haaland') or initials ('e haaland') — the exact
+    norm_player key often misses ('erling haaland' != 'erling braut haaland'), which silently
+    drops the anchor and leaves the player on the shrinkage model. Exact key wins; otherwise
+    require the LAST name to match and the FIRST names to align; 0 or AMBIGUOUS (>1) matches
+    -> {} so we fall back to the model rather than guess the wrong player."""
+    if not props:
+        return {}
+    key = norm_player(subject)
+    if key in props:
+        return props[key]
+    toks = key.split()
+    if len(toks) < 2:
+        return {}                       # single token (or empty) -> too risky to fuzzy-match
+    first, last = toks[0], toks[-1]
+    cands = [v for k, v in props.items()
+             if (kt := k.split()) and len(kt) >= 2 and kt[-1] == last and _first_match(first, kt[0])]
+    return cands[0] if len(cands) == 1 else {}
 
 
 def _two_way(books: list[tuple[str, list[float]]]) -> float | None:

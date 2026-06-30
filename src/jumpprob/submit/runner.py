@@ -35,7 +35,7 @@ from jumpprob.normalize.players import build_index as _club_index_fn, resolve as
 from jumpprob.simulate import markets as mk
 from jumpprob.simulate import mc_engine
 from jumpprob.models.dynamics import Dynamics, BUCKET
-from jumpprob.ingest.odds_api import norm_player
+from jumpprob.ingest.odds_api import norm_player, resolve_player
 from jumpprob.submit.parser import ParsedQuestion, parse_question
 from jumpprob.agents import panel as panel_mod  # out-of-band LLM blend (daemon reads cache only)
 
@@ -667,7 +667,10 @@ class Runner:
                 # market and SKIP the model's base-blend, extremize and confidence floor —
                 # those patch the model we're now anchoring away from. See
                 # docs/MARKET-FIRST-ARCHITECTURE.md.
-                pm = pp.get(norm_player(q.subject), {}).get(q.archetype) if (fam == "player" and q.subject) else None
+                # resolve_player is robust to the book carrying middle names / initials
+                # ('erling braut haaland' vs 'Erling Haaland') — an exact-key lookup silently
+                # dropped the anchor and left the player on the shrinkage model.
+                pm = resolve_player(q.subject, pp).get(q.archetype) if (fam == "player" and q.subject) else None
                 # The book player_sot_ge value is the Over-0.5 (>=1 SoT) price. It must NOT
                 # anchor a ">=2 shots on target" question (that stamps ~P(>=1) onto a >=2
                 # market -> Brobbey 2+ SoT submitted 60% off a 66% 1+ line). Drop the anchor

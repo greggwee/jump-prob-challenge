@@ -21,6 +21,8 @@ from jumpprob.pipeline import Pipeline
 from jumpprob.simulate.mc_engine import MCEngine
 from jumpprob.submit.api_client import SportsPredictClient
 from jumpprob.submit.runner import Runner
+from jumpprob.submit.parser import parse_question
+from jumpprob.normalize.teams import canonical
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
@@ -101,6 +103,29 @@ print("\nbiggest moves (pure Bot A -> odds-anchored Bot A):")
 big = df.reindex(df["delta"].abs().sort_values(ascending=False).index).head(20)
 for r in big.itertuples():
     print(f"  {r.sub_pure:>2} -> {r.sub_a:<2} ({r.delta:+d})  [{r.match}] {r.question[:46]}")
+
+# Name-join audit (robust future-proofing): a player prop whose subject matches NO book key
+# despite the match having book data is a likely new spelling-miss class — this is exactly how
+# the Haaland (middle name) and Sørloth/Ødegaard (ø-dropped) drops were found. Surface them
+# every run so the next one is caught immediately instead of post-settlement.
+_PLAYER_ARCH = {"player_scores", "player_ga", "player_sot_ge"}
+anchor_misses = []
+for r in anchored:
+    if r["archetype"] not in _PLAYER_ARCH:
+        continue
+    teams = runner.resolve_teams(r["match"], [r["question"]])
+    pp = (player_props.get(teams) or player_props.get((teams[1], teams[0])) or {}) if teams else {}
+    if not pp:
+        continue                       # no book data for this match -> uncovered, not a miss
+    q = parse_question(r["question"], teams={canonical(t) for t in teams})
+    subj = q.subject if q else None
+    if subj and not odds_api.resolve_player(subj, pp):
+        anchor_misses.append((r["match"], subj, r["archetype"]))
+if anchor_misses:
+    print(f"\n!! {len(anchor_misses)} player props have book data but NO name match "
+          f"(possible new spelling miss -> extend norm_player/_TRANSLIT or resolve_player):")
+    for mt, subj, a in anchor_misses[:15]:
+        print(f"    [{mt}] {subj!r}  ({a})")
 
 if not live:
     print("\nDRY RUN — rerun with --live to PATCH Bot A. Sheet: data/processed/odds_anchor_run.csv")
