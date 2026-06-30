@@ -262,9 +262,10 @@ def test_event_and_any_player_markets():
 
 def test_player_sot_threshold_not_the_one_plus_line():
     """Regression for the Brobbey 60%-off-a-66%-1+line bug. 'N or more shots on target'
-    must be P(>=N), strictly below the '1 or more' (book Over-0.5) line; and a book SoT
-    anchor (only ever the 0.5 line) must be DROPPED for a >=2 question rather than stamped
-    onto it. Both the model handler and the book-anchor path were threshold-blind."""
+    must be P(>=N), strictly below the '1 or more' (book Over-0.5) line. The book SoT anchor
+    (only ever the 0.5 line) must NOT be stamped raw onto a >=2 question; it is converted to
+    P(>=2) via the Poisson intensity (see test_player_multi_sot_poisson_from_one_plus) so the
+    >=2 line still tracks the book's player ranking instead of falling to a flat model."""
     import pandas as pd
     from jumpprob.pipeline import Pipeline
     from jumpprob.submit.runner import Runner
@@ -292,8 +293,38 @@ def test_player_sot_threshold_not_the_one_plus_line():
             {"id": "m2", "lobby_id": "L", "match": {"name": "Netherlands vs Morocco"}, "question": t2}]
     by_q = {o["question"]: o["p_bot_a"] for o in r.predictions_for(rows, player_props=pp)[0]}
     assert by_q[t1] > p1 + 0.05                          # >=1 IS pulled up toward the 0.66 book
-    assert by_q[t2] < by_q[t1] - 0.15                    # >=2 is NOT (anchor dropped)
-    assert by_q[t2] < 0.45                               # and tracks the low threshold-aware model
+    assert by_q[t2] < by_q[t1] - 0.15                    # >=2 is strictly, materially below >=1
+    assert by_q[t2] < 0.45                               # not the 0.66 1+ line stamped on
+    # >=2 is anchored to the Poisson conversion of the 0.66 book line (mu=-ln(1-0.66)=1.09 ->
+    # P>=2=0.295), blended at w_market -> well above a flat undifferentiated model, below P>=1.
+    assert by_q[t2] > 0.15                               # NOT dropped to a flat ~17% prior
+
+
+def test_player_multi_sot_poisson_from_one_plus():
+    """The fix for the flat-SoT under-pricing that lost R32 (Mbappe 2+ SoT priced 19 like
+    every player while the crowd ranked him 63, out=1 -> the single biggest loss). The book
+    only quotes the 1+ (Over-0.5) line; we derive P(>=k SoT) from it via the Poisson intensity
+    mu=-ln(1-P(>=1)), re-using the book's player ranking for the higher thresholds."""
+    from jumpprob.submit.runner import book_sot_ge_from_one_plus as f
+
+    # k<=1 -> None (caller uses the raw 1+ line directly)
+    assert f(0.80, 1) is None and f(0.80, 0) is None
+    # monotone in the threshold: P(>=1) > P(>=2) > P(>=3)
+    elite = 0.834                                        # Mbappe's live R32 1+ line
+    p2, p3 = f(elite, 2), f(elite, 3)
+    assert elite > p2 > p3 > 0.0
+    # elite 1+ line yields a MATERIALLY higher P(>=2) than a fringe one (the whole point:
+    # the crowd differentiates, the flat model did not)
+    fringe = 0.25
+    assert f(elite, 2) > f(fringe, 2) + 0.3
+    # live R32 numbers track the crowd (vs our flat 17-19, crowd 32-63):
+    assert 0.52 < f(0.834, 2) < 0.56                     # Mbappe -> ~0.54 (crowd 63, out=1)
+    assert 0.27 < f(0.658, 2) < 0.31                     # Sorloth -> ~0.29 (crowd 33, out=0)
+    assert 0.12 < f(0.478, 2) < 0.16                     # Isak -> ~0.14 (crowd 32, out=0)
+    # monotone in the 1+ line too: a higher 1+ line -> higher P(>=2)
+    assert f(0.90, 2) > f(0.70, 2) > f(0.50, 2) > f(0.30, 2)
+    # degenerate inputs stay in [0,1] without blowing up
+    assert 0.0 <= f(0.999999, 2) <= 1.0 and 0.0 <= f(0.000001, 2) <= 1.0
 
 
 def test_uncertain_markets_routed_to_llm_shadow():

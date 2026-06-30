@@ -128,6 +128,28 @@ _WINDOW = {
 _DYN_PATH = Path("data/processed/minute_dynamics.json")
 
 
+def book_sot_ge_from_one_plus(p1: float, k: int) -> float | None:
+    """Derive a player-differentiated P(>=k SoT) from the book's 1+ SoT (Over-0.5) line.
+
+    The book only ever quotes the 0.5 line, i.e. P(>=1 SoT). Treating SoT as Poisson(mu),
+    P(>=1) = 1 - e^-mu  =>  mu = -ln(1 - P(>=1)); then P(>=k) = 1 - Poisson.cdf(k-1, mu).
+    This re-uses the book's player RANKING (elite shooters carry a high 1+ line, fringe
+    players a low one) for the >=2/>=3 thresholds, instead of dropping the only
+    player-differentiated signal we have and falling back to a flat undifferentiated model.
+
+    Worked numbers (settled R32 props snapshot): Mbappe 1+=0.834 -> mu=1.80 -> P(>=2)=0.54
+    (vs our flat 19, crowd 63, out=1); Sorloth 1+=0.658 -> mu=1.07 -> P(>=2)=0.29 (stays
+    moderate, crowd 33, out=0); Isak 1+=0.478 -> mu=0.65 -> P(>=2)=0.14 (low, crowd 32).
+
+    Returns None for k<=1 (caller uses the raw 1+ line directly) or a degenerate input."""
+    if k <= 1:
+        return None
+    p1 = float(np.clip(p1, 1e-6, 1 - 1e-9))
+    mu = -np.log(1.0 - p1)
+    from scipy.stats import poisson
+    return float(np.clip(1.0 - poisson.cdf(k - 1, mu), 0.0, 1.0))
+
+
 def _norm_name(s: str) -> str:
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
 
@@ -671,12 +693,17 @@ class Runner:
                 # ('erling braut haaland' vs 'Erling Haaland') — an exact-key lookup silently
                 # dropped the anchor and left the player on the shrinkage model.
                 pm = resolve_player(q.subject, pp).get(q.archetype) if (fam == "player" and q.subject) else None
-                # The book player_sot_ge value is the Over-0.5 (>=1 SoT) price. It must NOT
-                # anchor a ">=2 shots on target" question (that stamps ~P(>=1) onto a >=2
-                # market -> Brobbey 2+ SoT submitted 60% off a 66% 1+ line). Drop the anchor
-                # so the threshold-aware model + LLM (now un-guarded) handle the >=2 line.
+                # The book player_sot_ge value is the Over-0.5 (>=1 SoT) price. It must NOT be
+                # stamped directly onto a ">=2 shots on target" question (that submits ~P(>=1)
+                # for a >=2 market -> Brobbey 2+ SoT at 60% off a 66% 1+ line). But DROPPING it
+                # was also costly: the >=2 line then falls to a flat, undifferentiated model
+                # (Mbappe priced 19 like everyone, crowd 63, out=1 -> the single biggest R32 loss).
+                # Instead, convert the book's player-differentiated 1+ line into P(>=k) via the
+                # Poisson intensity (mu = -ln(1-P(>=1))). This keeps the book's player ranking for
+                # the higher thresholds: an elite 1+ line yields a materially higher P(>=2) than a
+                # fringe one, tracking the crowd, while still sitting strictly below P(>=1).
                 if pm is not None and q.archetype == "player_sot_ge" and (q.threshold or 1) >= 2:
-                    pm = None
+                    pm = book_sot_ge_from_one_plus(pm, q.threshold)
                 if pm is not None:
                     p_a = float(np.clip(blend([p, pm], [1 - self.w_market, self.w_market]), 0.01, 0.99))
                 elif ctx.anchored and fam == "goal":
