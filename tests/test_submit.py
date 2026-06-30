@@ -110,6 +110,27 @@ def test_player_prop_name_join_and_devig():
     assert "neymar" in pn and 0.65 < pn["neymar"]["player_sot_ge"] < 0.80   # 1/1.30/1.08 ~ 0.71
 
 
+def test_book_vs_model_divergence_audit():
+    """The submission-time guard that surfaces a model data-gap OR a book/question mismatch:
+    a large pure-model vs de-vigged-book gap (the Haaland 7-vs-52 signature). Flags >= min_pts,
+    biggest first; small gaps and the empty frame are clean."""
+    import pandas as pd
+    from jumpprob.submit.audit import book_vs_model_divergence
+    df = pd.DataFrame([
+        {"market_id": "a", "match": "X", "archetype": "player_scores", "question": "q",
+         "sub_pure": 7, "sub_market": 52, "sub_a": 43},     # Haaland-class data gap, |gap|=45
+        {"market_id": "b", "match": "X", "archetype": "win", "question": "q",
+         "sub_pure": 48, "sub_market": 46, "sub_a": 46},    # |gap|=2 -> not flagged
+        {"market_id": "c", "match": "X", "archetype": "total_ge", "question": "q",
+         "sub_pure": 40, "sub_market": 64, "sub_a": 62},    # |gap|=24
+    ])
+    flagged = book_vs_model_divergence(df, min_pts=20)
+    assert list(flagged.market_id) == ["a", "c"]           # >=20pt gaps, biggest first
+    assert int(flagged.iloc[0].book_gap) == 45
+    assert flagged.iloc[0].logit_gap > flagged.iloc[1].logit_gap   # scale-aware ordering tracks
+    assert book_vs_model_divergence(df.iloc[:0], 20).empty        # empty frame is safe
+
+
 def test_resolve_player_robust_name_join():
     """The book often carries a fuller name than the platform subject (middle names,
     initials) — the Haaland bug: 'Erling Haaland' missed the book key 'erling braut haaland'

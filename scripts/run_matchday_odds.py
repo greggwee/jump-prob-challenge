@@ -23,6 +23,7 @@ from jumpprob.submit.api_client import SportsPredictClient
 from jumpprob.submit.runner import Runner
 from jumpprob.submit.parser import parse_question
 from jumpprob.normalize.teams import canonical
+from jumpprob.submit.audit import book_vs_model_divergence
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
@@ -126,6 +127,23 @@ if anchor_misses:
           f"(possible new spelling miss -> extend norm_player/_TRANSLIT or resolve_player):")
     for mt, subj, a in anchor_misses[:15]:
         print(f"    [{mt}] {subj!r}  ({a})")
+
+# Book-vs-model divergence audit: a large gap between the pure model and the de-vigged book
+# is either a model DATA-GAP (Haaland 7 vs 52: rate not loaded) or a book market that doesn't
+# match the question (scope/threshold/semantics). At w_market=0.85 a bad anchor is costly, so
+# surface them every run + log a trend ledger. Reporting only — submissions are unchanged.
+div = book_vs_model_divergence(df, min_pts=20)
+if len(div):
+    print(f"\n!! {len(div)} markets where the BOOK diverges >=20pts from the model "
+          f"(data-gap or possible market mismatch — review, esp. player props):")
+    for r in div.head(20).itertuples():
+        print(f"    model {r.sub_pure:>2} -> book {r.sub_market:<3} final {r.sub_a:<3} "
+              f"({r.book_gap:+d}, lg {r.logit_gap}) [{r.match}] {r.archetype}: {r.question[:36]}")
+    _dl = Path("data/processed/divergence_audit.csv")
+    led = div[["market_id", "match", "archetype", "question",
+               "sub_pure", "sub_market", "sub_a", "book_gap", "logit_gap"]].copy()
+    led.insert(0, "ts", stamp)
+    led.to_csv(_dl, mode="a", header=not _dl.exists(), index=False)
 
 if not live:
     print("\nDRY RUN — rerun with --live to PATCH Bot A. Sheet: data/processed/odds_anchor_run.csv")
