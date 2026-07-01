@@ -110,6 +110,25 @@ def test_player_prop_name_join_and_devig():
     assert "neymar" in pn and 0.65 < pn["neymar"]["player_sot_ge"] < 0.80   # 1/1.30/1.08 ~ 0.71
 
 
+def test_own_goal_and_outside_box_models():
+    """#3 own goal = flat WC base rate (thinning by goals was TESTED and lost to flat); #2
+    outside-box = Poisson thinning of the goal intensity, so it scales with match tempo."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    og = parse_question("Will an own goal be scored in regulation (90 minutes + stoppage time)?")
+    ob = parse_question("Will a goal be scored from outside the penalty area in regulation "
+                        "(90 minutes + stoppage time)?")
+    strong, weak = r.context("Brazil", "Haiti"), r.context("Qatar", "Haiti")
+    # own goal: FLAT — identical across a high- and low-tempo match, near the WC base rate
+    assert r.answer(og, strong) == r.answer(og, weak)
+    assert 0.05 < r.answer(og, strong) < 0.16
+    # outside-box: scales with expected goals (more goals -> more likely one is from outside)
+    assert r.answer(ob, strong) > r.answer(ob, weak)
+    assert 0.10 < r.answer(ob, strong) < 0.60
+
+
 def test_anchor_regression_guard():
     """The Diallo 50->24 KO-lock guard: a run whose book prop vanished must not revert a
     previously anchored player prop to the bare model, but genuine updates still pass."""

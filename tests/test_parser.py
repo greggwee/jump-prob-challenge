@@ -71,6 +71,14 @@ def test_ht_leading_and_full_match_corners_phrasings():
     assert parse_question("Will Ivory Coast have more corner kicks than Norway?").archetype == "corners_gt"
 
 
+def test_own_goal_and_outside_box_parse():
+    # the two novel MEX v ECU markets (were unparsed -> dropped)
+    assert parse_question("Will an own goal be scored in regulation "
+                          "(90 minutes + stoppage time)?").archetype == "own_goal"
+    assert parse_question("Will a goal be scored from outside the penalty area in "
+                          "regulation (90 minutes + stoppage time)?").archetype == "goal_outside_box"
+
+
 def test_full_match_sot_comparison_phrasing():
     # 'more shots on target than' with NO half (the knockout regulation suffix is stripped)
     # must parse like the corners equivalent — it was silently DROPPED (MEX v ECU 12/15) since

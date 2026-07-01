@@ -101,6 +101,13 @@ PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
 EVENT_BASE_DEFAULTS = {
     "goal_share_1h_stoppage": 0.02, "goal_share_2h_stoppage": 0.08,
     "sub_before_ht": 0.12, "substitute_scores": 0.18,
+    # own_goal: flat P(>=1 OG/match). Thinning-by-total-goals was TESTED and lost to flat
+    # (OGs don't scale with goals). 0.10 = WC-finals prior 0.062 shrunk with WC26's ~0.14 (the
+    # friendly-polluted all-comp pool of 0.019 badly under-prices the WC).
+    "own_goal": 0.10,
+    # outside_box_share: share of open-play goals from outside the box (StatsBomb). Validated
+    # as a Poisson thinning of the goal intensity (+0.021 Brier vs flat, calibrated).
+    "outside_box_share": 0.13,
 }
 _EVENT_BASE_PATH = Path("data/processed/event_baselines.json")
 
@@ -525,6 +532,10 @@ class Runner:
             return 1 - (1 - P_PEN_MATCH) * (1 - P_RED_MATCH)
         if a == "red_card":
             return P_RED_MATCH
+        if a == "own_goal":                          # near-random -> flat WC base rate (thinning tested worse)
+            return float(self.event_base["own_goal"])
+        if a == "goal_outside_box":                  # ~13% of open-play goals; Poisson thinning of the tempo
+            return float(1.0 - np.exp(-self.event_base["outside_box_share"] * (ctx.lam_a + ctx.lam_b)))
         if a == "total_le":
             return 1.0 - mk.p_total_ge(ctx.grid, q.threshold + 1)
         if a == "team_goals_ge":

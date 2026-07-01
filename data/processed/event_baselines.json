@@ -7,5 +7,9 @@
  "sub_before_ht": 0.15,
  "substitute_scores": 0.3,
  "p_1h_stoppage_goal_raw": 0.05,
- "p_2h_stoppage_goal_raw": 0.2
+ "p_2h_stoppage_goal_raw": 0.2,
+ "own_goal": 0.10,
+ "outside_box_share": 0.13,
+ "own_goal_source": "martj42 WC finals P(>=1 OG/match) 0.062 shrunk with WC26-so-far ~0.14 (friendly-polluted all-comp pool 0.019 under-prices the WC); thinning-by-goals tested worse than flat (n=24739)",
+ "outside_box_source": "StatsBomb open-play goals from outside the box (x<102), share ~0.13; validated as Poisson thinning of the goal intensity +0.021 Brier vs flat (n=157)"
 }
