@@ -129,6 +129,28 @@ def test_own_goal_and_outside_box_models():
     assert 0.10 < r.answer(ob, strong) < 0.60
 
 
+def test_player_prop_anchor_weight_near_book():
+    """The Jimenez/Kane under-weighting: a data-gapped model (7-9%) at 15% logit weight
+    dragged anchored scorer props 5-9 pts below the book (Jimenez book 27 -> submitted 22,
+    Kane 54 -> 45, both out=YES). On 51 settled anchored props Brier is monotone toward the
+    book, so player props blend at w_p = 1 - PLAYER_MODEL_FRAC*(1-w_market) ~= 0.97 live:
+    the submission must land within ~1.5 pts of the book, not 5+ below it."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner, PLAYER_MODEL_FRAC
+    from jumpprob.normalize.teams import canonical
+    from jumpprob.ingest.odds_api import norm_player
+
+    assert PLAYER_MODEL_FRAC <= 0.25          # the fix: players keep only a sliver of model
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    t = "Will Raúl Jiménez (Mexico) score a goal (excluding own goals) in regulation (90 minutes + stoppage time)?"
+    pp = {(canonical("Mexico"), canonical("Ecuador")):
+          {norm_player("Raúl Jiménez"): {"player_scores": 0.27}}}
+    rows = [{"id": "m1", "lobby_id": "L", "match": {"name": "Mexico vs Ecuador"}, "question": t}]
+    out = r.predictions_for(rows, player_props=pp)[0]
+    assert abs(out[0]["p_bot_a"] - 0.27) < 0.02, out[0]   # was 0.22 at the old 0.85 weight
+
+
 def test_anchor_regression_guard():
     """The Diallo 50->24 KO-lock guard: a run whose book prop vanished must not revert a
     previously anchored player prop to the bare model, but genuine updates still pass."""

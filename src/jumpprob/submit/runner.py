@@ -83,6 +83,11 @@ MINUTE_SCENARIOS = [(0.80, 80.0), (0.12, 25.0), (0.08, 0.0)]
 # (tougher opponents, less-familiar teammates). Fit on settled player props (see
 # scripts/fit_player_transfer.py); 1.0 = no discount.
 PLAYER_TRANSFER = 0.80   # validated flat optimum on settled player_ga (scripts/fit_player_transfer.py)
+# Model share of the PLAYER-prop book blend, as a fraction of the goal-market model share
+# (1-w_market). Fit 2026-07-01 on 51 settled anchored props: Brier is monotone toward the
+# pure book (model 0.250 / w=.85 0.206 / book 0.202) — the model is data-gapped on stars, so
+# it keeps only a 20% sliver of the goal-market share: live w_market=.85 -> player w=.97.
+PLAYER_MODEL_FRAC = 0.20
 CLUB_RATES = Path("data/processed/player_rates_combined.parquet")
 SOT_PER_SHOT = 0.37   # Understat has no SoT -> estimate from total shots
 P_RED_MATCH = 0.065   # P(>=1 red): 0.067 reds/match measured, 6 tournaments
@@ -716,7 +721,16 @@ class Runner:
                 if pm is not None and q.archetype == "player_sot_ge" and (q.threshold or 1) >= 2:
                     pm = book_sot_ge_from_one_plus(pm, q.threshold)
                 if pm is not None:
-                    p_a = float(np.clip(blend([p, pm], [1 - self.w_market, self.w_market]), 0.01, 0.99))
+                    # Player props anchor at a HIGHER book weight than goal markets. On 51
+                    # settled anchored props the Brier is MONOTONE in the book weight (raw model
+                    # 0.250, w=0.85 blend 0.206, pure book 0.202): the model side is data-gapped
+                    # for exactly the star players the book prices well (Jimenez model 7 vs book
+                    # 27, out=1; Kane raw ~9 dragging 54->45, out=1), so its logit is a large
+                    # negative drag, a systematic low bias vs book AND crowd — doubled at 2x.
+                    # Interpolate off w_market so the CLV passes keep their meaning
+                    # (w_market=1.0 closing-line pass -> pure book; live 0.85 -> 0.97).
+                    w_p = 1.0 - PLAYER_MODEL_FRAC * (1.0 - self.w_market)
+                    p_a = float(np.clip(blend([p, pm], [1 - w_p, w_p]), 0.01, 0.99))
                 elif ctx.anchored and fam == "goal":
                     p_a = p  # market is already calibrated/conservative — don't shrink
                 else:
