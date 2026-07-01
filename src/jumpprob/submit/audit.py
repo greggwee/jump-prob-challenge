@@ -18,6 +18,28 @@ import math
 import pandas as pd
 
 
+_PLAYER_ARCHS = frozenset({"player_scores", "player_ga", "player_sot_ge"})
+
+
+def is_anchor_regression(archetype: str, existing_pct, sub_pure, sub_market,
+                         min_gap: int = 5) -> bool:
+    """Guard against a props-less run REVERTING a previously book-anchored player prop back to
+    the bare model. The Diallo 50->24 lock: his SoT line vanished from the near-KO snapshot
+    (line pulled, or listed as just 'Amad' which the resolver rejects), so that run priced him
+    at the bare model (24) and OVERWROTE the anchored 50 already submitted, then it locked.
+
+    True when: (a) it's a player prop, (b) THIS run has no book anchor (sub_market == sub_pure
+    within 1pt), and (c) the EXISTING live submission is materially anchored (>= min_gap from
+    the bare model). In that case keep the existing anchored value rather than regress it.
+    Conservative by design — a genuinely-benched player is rare and the divergence audit + a
+    fresh book still catch it; silently reverting a good anchor to a data-gapped model is worse."""
+    if archetype not in _PLAYER_ARCHS or existing_pct is None:
+        return False
+    this_run_no_book = abs(int(round(sub_market)) - int(round(sub_pure))) <= 1
+    existing_anchored = abs(int(round(existing_pct)) - int(round(sub_pure))) >= int(min_gap)
+    return this_run_no_book and existing_anchored
+
+
 def book_vs_model_divergence(df: pd.DataFrame, min_pts: int = 20) -> pd.DataFrame:
     """Flag rows where the de-vigged BOOK line disagrees with the pure MODEL by >= min_pts
     integer probability points. Expects columns `sub_pure` (model %) and `sub_market` (book %);

@@ -110,7 +110,19 @@ def test_player_prop_name_join_and_devig():
     assert "neymar" in pn and 0.65 < pn["neymar"]["player_sot_ge"] < 0.80   # 1/1.30/1.08 ~ 0.71
 
 
-def test_book_vs_model_divergence_audit():
+def test_anchor_regression_guard():
+    """The Diallo 50->24 KO-lock guard: a run whose book prop vanished must not revert a
+    previously anchored player prop to the bare model, but genuine updates still pass."""
+    from jumpprob.submit.audit import is_anchor_regression as g
+    # Diallo: existing anchored 50, this run has no book (market==pure 23) -> KEEP (guard fires)
+    assert g("player_sot_ge", 50, 23, 24) is True
+    # this run DID anchor (market 55 != pure 23) -> a real update, let it through
+    assert g("player_sot_ge", 50, 23, 55) is False
+    # existing is itself near the bare model (not anchored) -> nothing to protect
+    assert g("player_sot_ge", 24, 23, 24) is False
+    # non-player archetypes and missing existing are never guarded
+    assert g("win", 70, 40, 40) is False
+    assert g("player_scores", None, 8, 8) is False
     """The submission-time guard that surfaces a model data-gap OR a book/question mismatch:
     a large pure-model vs de-vigged-book gap (the Haaland 7-vs-52 signature). Flags >= min_pts,
     biggest first; small gaps and the empty frame are clean."""

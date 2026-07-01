@@ -23,7 +23,7 @@ from jumpprob.submit.api_client import SportsPredictClient
 from jumpprob.submit.runner import Runner
 from jumpprob.submit.parser import parse_question
 from jumpprob.normalize.teams import canonical
-from jumpprob.submit.audit import book_vs_model_divergence
+from jumpprob.submit.audit import book_vs_model_divergence, is_anchor_regression
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
@@ -150,11 +150,18 @@ if not live:
 else:
     preds = client.my_predictions(LOBBY)
     by_market = {p["market_id"]: p for p in preds}
-    n_patch = n_new = n_fail = 0
+    n_patch = n_new = n_fail = n_kept = 0
     failures = []
     for r in df.itertuples():
         existing = by_market.get(r.market_id)
         new = int(r.sub_a)
+        # Anchor-regression guard: don't let a run whose book prop momentarily vanished
+        # overwrite a previously anchored player prop with the bare model (the Diallo 50->24
+        # KO lock). Keep the existing anchored value instead.
+        if is_anchor_regression(r.archetype, existing["probability"] if existing else None,
+                                r.sub_pure, r.sub_market):
+            n_kept += 1
+            continue
         try:
             if existing is None:
                 client.submit_batch([{"market_id": r.market_id, "lobby_id": LOBBY, "probability": new}])
@@ -165,8 +172,8 @@ else:
         except Exception as e:  # one market's failure must not abort the batch
             n_fail += 1
             failures.append((r.market_id, str(e)[:80]))
-    print(f"\nLIVE: PATCHed {n_patch}, submitted {n_new} new, {n_fail} failed, "
-          f"{len(df) - n_patch - n_new - n_fail} already current.")
+    print(f"\nLIVE: PATCHed {n_patch}, submitted {n_new} new, {n_fail} failed, {n_kept} kept "
+          f"(anchor-regression guard), {len(df) - n_patch - n_new - n_fail - n_kept} already current.")
     if failures:
         print("failures (re-run to retry these):")
         for mid, err in failures[:10]:
