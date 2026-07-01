@@ -69,3 +69,16 @@ def test_ht_leading_and_full_match_corners_phrasings():
     assert parse_question("Will Argentina be ahead at halftime?").archetype == "ht_leading"
     assert parse_question("At halftime, will Spain be winning?").archetype == "ht_leading"
     assert parse_question("Will Ivory Coast have more corner kicks than Norway?").archetype == "corners_gt"
+
+
+def test_full_match_sot_comparison_phrasing():
+    # 'more shots on target than' with NO half (the knockout regulation suffix is stripped)
+    # must parse like the corners equivalent — it was silently DROPPED (MEX v ECU 12/15) since
+    # only half-scoped SoT comparisons had a pattern.
+    q = parse_question("Will Mexico have more shots on target than Ecuador in "
+                       "regulation (90 minutes + stoppage time)?")
+    assert q is not None and q.archetype == "sot_gt" and q.half is None
+    assert parse_question("Will Mexico have more shots on target than Ecuador?").archetype == "sot_gt"
+    # precedence preserved: the half-scoped forms still carry their half
+    assert parse_question("Will Mexico have more shots on target than Ecuador in the second half?").half == 2
+    assert parse_question("In the first half, will Mexico have more shots on target than Ecuador?").half == 1

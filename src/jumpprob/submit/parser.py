@@ -177,6 +177,12 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=2)),
     (re.compile(r"will (.+?) have more shots on target than (.+?) in the first half", re.I),
      lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=1)),
+    # full-match catch-all (mirrors the corners_gt one) — must follow the half-specific
+    # patterns above. The knockout "...in regulation (90 minutes + stoppage time)?" suffix is
+    # stripped upstream, so this catches "Will X have more shots on target than Y?" which was
+    # silently dropped in every knockout match (only half-scoped SoT comparisons had a pattern).
+    (re.compile(r"will (.+?) have more shots on target than (.+?)\?", re.I),
+     lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=None)),
     (re.compile(r"will (.+?) win(?: the match)?\b(?! by)", re.I),
      lambda m: ParsedQuestion("win", m[1])),
     (re.compile(r"will (.+?) score in the second half", re.I),
