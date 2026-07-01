@@ -6,7 +6,7 @@
 explicit goal of taming the cases where our probabilities "vary very far from the crowd
 consensus" — player props and SoT — without breaking the markets where we already have edge.
 
-This plan supersedes the LLM portions of [CALIBRATION-AGENTS-PLAN.md](CALIBRATION-AGENTS-PLAN.md)
+This plan supersedes the LLM portions of the earlier calibration-agents plan
 (Part B). The calibration phases there (Phase 1 floor, club-GA prior) are already shipped and
 live; this document is the concrete build-out of the expert ensemble that was left as a plan.
 

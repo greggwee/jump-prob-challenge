@@ -58,11 +58,6 @@ table["count"] = fit(c["p"], c["outcome"].to_numpy(), "count")
 # are calibrated by the de-vigged book anchor now; shipping a non-transferring Platt
 # shift just adds harm. Re-enable only if a fit beats neutral on LIVE settled data.
 table["player"] = [1.0, 0.0]
-if False:  # disabled: see note above
-    praw = Path("data/processed/backtest_players_raw.csv")
-    if praw.exists():
-        p = pd.read_csv(praw)
-        table["player"] = fit(p["p_model"], p["outcome"].to_numpy(), "player")
 
 # OFFSIDES (#2): a StatsBomb->SportsPredict definition gap over-prices offsides
 # LIVE (backtest is calibrated; live n=8 had pred 0.50 vs realized 0.125). Fit a
