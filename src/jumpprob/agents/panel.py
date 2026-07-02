@@ -59,6 +59,7 @@ ROUTING: dict[str, tuple[str, str]] = {
     "penalty_awarded": ("tactical", SHADOW),
     "own_goal": ("tactical", EXCLUDE),          # flat WC base rate — near-random, LLM adds nothing
     "goal_outside_box": ("tactical", BLEND),    # data model + shadow LLM nudge (long-range shooters)
+    "goal_header": ("tactical", BLEND),         # validated thinning + shadow LLM nudge (crossing teams)
     # --- weak / no-edge counts: blend (low weight, set in L2) ---
     "offsides_ge": ("tactical", BLEND),
     "fouls_gt": ("tactical", BLEND),

@@ -113,6 +113,9 @@ EVENT_BASE_DEFAULTS = {
     # outside_box_share: share of open-play goals from outside the box (StatsBomb). Validated
     # as a Poisson thinning of the goal intensity (+0.021 Brier vs flat, calibrated).
     "outside_box_share": 0.13,
+    # header_share: share of open-play goals headed in (StatsBomb). Validated thinning
+    # (+0.027 Brier vs flat on held-out matches, calibrated at 1-3 goals).
+    "header_share": 0.21,
 }
 _EVENT_BASE_PATH = Path("data/processed/event_baselines.json")
 
@@ -463,6 +466,8 @@ class Runner:
             s = -np.log(1.0 - self.event_base["substitute_scores"]) / lam0
             return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * s))
         if a == "any_player_goals_ge":   # "any player score 2+ goals" — over the goal grid
+            if (q.threshold or 2) > 2:   # brace curve is P(some player >=2 | team goals); no 3+ data
+                return None
             def _team_any(marg):
                 return float(sum(marg[g] * (BRACE_BY_TEAM_GOALS[g] if g < len(BRACE_BY_TEAM_GOALS) else 1.0)
                                  for g in range(len(marg))))
@@ -541,6 +546,8 @@ class Runner:
             return float(self.event_base["own_goal"])
         if a == "goal_outside_box":                  # ~13% of open-play goals; Poisson thinning of the tempo
             return float(1.0 - np.exp(-self.event_base["outside_box_share"] * (ctx.lam_a + ctx.lam_b)))
+        if a == "goal_header":                       # ~22% of open-play goals are headers; validated thinning
+            return float(1.0 - np.exp(-self.event_base["header_share"] * (ctx.lam_a + ctx.lam_b)))
         if a == "total_le":
             return 1.0 - mk.p_total_ge(ctx.grid, q.threshold + 1)
         if a == "team_goals_ge":

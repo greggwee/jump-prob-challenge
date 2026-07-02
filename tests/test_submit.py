@@ -110,6 +110,30 @@ def test_player_prop_name_join_and_devig():
     assert "neymar" in pn and 0.65 < pn["neymar"]["player_sot_ge"] < 0.80   # 1/1.30/1.08 ~ 0.71
 
 
+def test_r32_new_phrasings_header_and_any_player():
+    """R32 template audit findings: 'Will a header goal be scored' was UNPARSED (dropped),
+    and 'Will any player score 2 or more goals' mis-hit team_goals_ge with subject
+    'any player' -> side resolution failed -> dropped. Both must parse and price."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    h = parse_question("Will a header goal be scored in regulation (90 minutes + stoppage time)?")
+    assert h.archetype == "goal_header"
+    a = parse_question("Will any player score 2 or more goals in regulation (90 minutes + stoppage time)?")
+    assert a.archetype == "any_player_goals_ge" and a.threshold == 2
+    # the old phrasing still routes the same way
+    assert parse_question("Will any player score more than 1 goal (excluding own goals)?").archetype == "any_player_goals_ge"
+    # and both price sensibly; header scales with tempo like outside-box
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    strong, weak = r.context("Brazil", "Haiti"), r.context("Qatar", "Haiti")
+    assert r.answer(h, strong) > r.answer(h, weak)
+    assert 0.15 < r.answer(h, strong) < 0.75
+    assert 0.05 < r.answer(a, strong) < 0.60
+    # 3+ has no concentration data -> None (skip), never a wrong price
+    a3 = parse_question("Will any player score 3 or more goals?")
+    assert a3.archetype == "any_player_goals_ge" and r.answer(a3, strong) is None
+
+
 def test_own_goal_and_outside_box_models():
     """#3 own goal = flat WC base rate (thinning by goals was TESTED and lost to flat); #2
     outside-box = Poisson thinning of the goal intensity, so it scales with match tempo."""

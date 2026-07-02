@@ -52,6 +52,11 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("cards_gt", m[1], m[2])),
     (re.compile(r"will (.+?) score more goals than (.+?) in the (first|second) half", re.I),
      lambda m: ParsedQuestion("goals_gt_half", m[1], m[2], half=1 if m[3].lower() == "first" else 2)),
+    # "any player" must precede the greedy team patterns below — the R32 phrasing
+    # "Will any player score 2 or more goals" mis-hit team_goals_ge with subject
+    # 'any player' -> side resolution failed -> the market was silently DROPPED.
+    (re.compile(r"will any player score (\d+) or more goals?", re.I),
+     lambda m: ParsedQuestion("any_player_goals_ge", threshold=int(m[1]))),
     (re.compile(r"will (.+?) score at least (\d+) goals?", re.I),
      lambda m: ParsedQuestion("team_goals_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will (.+?) score (\d+) or more (?:total )?goals", re.I),
@@ -183,6 +188,8 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("own_goal")),
     (re.compile(r"will a goal be scored from outside the (?:penalty area|box)", re.I),
      lambda m: ParsedQuestion("goal_outside_box")),
+    (re.compile(r"will a header(?:ed)? goal be scored", re.I),
+     lambda m: ParsedQuestion("goal_header")),
     (re.compile(r"will (.+?) have more shots on target than (.+?) in the second half", re.I),
      lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=2)),
     (re.compile(r"will (.+?) have more shots on target than (.+?) in the first half", re.I),
