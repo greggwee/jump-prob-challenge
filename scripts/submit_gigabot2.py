@@ -11,6 +11,16 @@ AND we're reliable AND we're confident, otherwise leave near the calibrated beli
 from __future__ import annotations
 
 import sys
+
+# cp1252 stdout pipe under the scheduler: a printed player name outside cp1252 ('ć') must
+# never raise and abort a submission (it killed Bot A's USA near-KO tick).
+for _s in (sys.stdout, sys.stderr):
+    try:
+        if _s is not None:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from pathlib import Path
 
 import numpy as np

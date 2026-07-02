@@ -9,6 +9,17 @@ data/processed/odds_anchor_run.csv so closing-line value is measurable later.
 
 import sys
 
+# The scheduler runs this via subprocess with a cp1252-encoded stdout pipe; printing a player
+# name outside cp1252 ('Demirović', U+0107) raised UnicodeEncodeError and KILLED the near-KO
+# tick before the PATCH loop (USA vs BIH 23:58Z). Force utf-8 + replace so a print can never
+# abort a submission.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        if _s is not None:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import numpy as np
 import pandas as pd
 
