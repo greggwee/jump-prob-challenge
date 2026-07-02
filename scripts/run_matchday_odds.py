@@ -87,6 +87,19 @@ blend_w = runner.w_market
 runner.w_market = 1.0
 market, _ = runner.predictions_for(market_rows, anchors=anchors, player_props=player_props)
 runner.w_market = blend_w  # restore the blend weight
+
+# P5 template audit: every question that did NOT price is a potential new phrasing/market
+# type — surface it LOUDLY every run and persist a ledger. The header-goal and
+# any-player-2+ drops sat invisible for days because `skipped` was silently discarded;
+# a new R16 phrasing must be seen the first run it appears, not post-settlement.
+if skipped:
+    print(f"\n!! TEMPLATE AUDIT: {len(skipped)} open questions NOT priced (new phrasing/market type?):")
+    for s in skipped:
+        print(f"    [{s['match']}] ({s['reason']}) {s['question'][:70]}")
+    _tl = Path("data/processed/template_audit.csv")
+    _ta = pd.DataFrame(skipped)
+    _ta.insert(0, "ts", pd.Timestamp.now(tz="UTC").isoformat())
+    _ta.to_csv(_tl, mode="a", header=not _tl.exists(), index=False)
 pure_by_mkt = {r["market_id"]: r for r in pure}
 mkt_by_mkt = {r["market_id"]: r for r in market}
 

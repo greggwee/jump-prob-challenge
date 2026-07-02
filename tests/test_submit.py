@@ -175,6 +175,23 @@ def test_player_prop_anchor_weight_near_book():
     assert abs(out[0]["p_bot_a"] - 0.27) < 0.02, out[0]   # was 0.22 at the old 0.85 weight
 
 
+def test_p5_skipped_questions_carry_reasons():
+    """P5 template audit: any open question that does not price must surface in `skipped`
+    with a reason — the header-goal and any-player-2+ drops were invisible because skipped
+    was discarded. A new phrasing must be catchable the first run it appears."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    rows = [{"id": "x1", "lobby_id": "L", "match": {"name": "Spain vs Austria"},
+             "question": "Will a bicycle-kick goal be scored in regulation (90 minutes + stoppage time)?"},
+            {"id": "x2", "lobby_id": "L", "match": {"name": "Spain vs Austria"},
+             "question": "Will Spain win in regulation (90 minutes + stoppage time)?"}]
+    out, skipped = r.predictions_for(rows)
+    assert len(out) == 1 and len(skipped) == 1
+    assert skipped[0]["reason"] == "unparsed" and "bicycle" in skipped[0]["question"]
+
+
 def test_p2_fouls_offsides_near_flat():
     """P2: our per-match variation on fouls_gt/offsides_ge is ANTI-signal (flat beats both
     us and the crowd on all settled-with-crowd data), so the risk gate pins them near their
