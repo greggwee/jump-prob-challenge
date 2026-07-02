@@ -46,18 +46,37 @@ The pipeline is a stack: a **statistical base layer**, a **market-anchoring laye
 
 ### 3. Market-anchoring layer — `models/devig.py`, `models/market_anchor.py`, `ingest/odds_api.py`
 - De-vig book 1X2 + totals (basic / power / **Shin**) → **implied goal intensities** → blend with the model's λ at `w_market = 0.85` → **one coherent Dixon-Coles grid** from which *every* goal-family question (win, BTTS, team goals, N+ totals, halves, first goal) is priced consistently. Threshold-independent by construction.
-- Player props anchor to the book's de-vigged scorer / SoT / assist lines.
-- Safety audits run every submit (`submit/audit.py`): **name-join** (player has book data but no name match), **book-vs-model divergence** (a large gap flags a model data-gap or a market mismatch), and an **anchor-regression guard** (a run whose book line momentarily vanished must not revert a previously anchored prop to the bare model).
+- Player props anchor to the book's de-vigged scorer / SoT / assist lines at a **higher weight (~0.97)** than goal markets — on all settled anchored props, Brier is monotone toward the pure book (the model side is data-gapped on exactly the stars the book prices well). Name joins are robust to middle names, initials, transliteration (Ø→o), and nicknames (an alias map, e.g. Trezeguet → Mahmoud Hassan).
+- Safety mechanisms run every submit (`submit/audit.py`):
+  - **Template audit** — any open question that fails to price (new phrasing/market type) is printed with its reason and ledgered, so a new question type surfaces the first run it appears.
+  - **Name-join audit** — a player with book data but no name match flags a spelling/nickname miss.
+  - **Book-vs-model divergence** — a ≥20-pt gap flags a model data-gap or a market mismatch.
+  - **Anchor-regression guard** — a run whose book line momentarily vanished must not revert a previously anchored prop to the bare model; it requires *ledger provenance* that the market was actually book-anchored before (deviation-from-model alone can't distinguish a protected anchor from a stale bad value).
+  - **Crowd-proxy deviation clamp** — the crowd is post-lock only, but on base-rate archetypes it clusters tightly, so a fitted per-archetype crowd prior serves as a pre-lock proxy: any *unbacked* submission >25 pts from it is pulled to the boundary. Measured basis: 5–15-pt deviations from the crowd are +EV; 25+-pt deviations were −0.095/mkt, every loss a bug-class extreme. Book-anchored values and fringe-player lows (a validated edge) are exempt.
 
 ### 4. LLM expert-review layer — `agents/`
 - An **out-of-band** multi-model panel (`agents/expert.py`) that **reviews** the statistical estimate rather than re-forecasting it — adjusting only for nuance the model is blind to: player availability, recent form, controversy, a coaching change. It emits a structured `evidence_strength` (hard / soft / none) plus factors, and can web-search live team news near kickoff.
 - The live runner reads the panel's cache (`agents/panel.py`) and applies a **deconfliction verifier**: on a *large* model-vs-LLM disagreement it follows the LLM **only on hard, verifiable evidence** (confirmed XI, suspension) for player props, otherwise keeps the model. Gated per-archetype, shadow-by-default. See [docs/LLM-EXPERT-PLAN.md](docs/LLM-EXPERT-PLAN.md).
 
 ### 5. Calibration & risk — `models/calibration.py`, `models/strategy.py`
-- Per-family Platt calibration, evidence-gated extremization, an asymmetric confidence floor, and an optional risk gate that shrinks no-edge archetypes toward the base rate.
+- Per-family Platt calibration, evidence-gated extremization, an asymmetric confidence floor, and a risk gate that shrinks no-edge archetypes toward calibrated bases. Where our per-match variation is measurably *anti-signal* (fouls comparisons, offsides counts — a flat value beat both our submissions and the crowd), the gate pins near-flat (s=0.15) at a base set from crowd-and-realized evidence.
 
 ### 6. Submission — `submit/`
 - `submit/parser.py` classifies a question into an *archetype*; `submit/runner.py` prices it, applies the anchor/LLM/calibration ladder, and submits through a throttled, dry-run-by-default API client (`submit/api_client.py`).
+
+---
+
+## Walkthrough: the life of one question
+
+What happens to *"Will Kylian Mbappé (France) have 2 or more shots on target in regulation (90 minutes + stoppage time)?"* on a submit run:
+
+1. **Parse** (`submit/parser.py`) — the regulation suffix is stripped; the phrasing matches the player-SoT pattern → archetype `player_sot_ge`, subject *Kylian Mbappé*, threshold 2. (If the subject had been a *team*, the player→team reroute would send it to `team_sot_ge`; if nothing matched, the **template audit** would print it as unpriced.)
+2. **Model** (`submit/runner.py`) — his shrunk per-90 SoT rate × this match's anchored goal intensity → `P(≥2) = 1 − Poisson.cdf(1, μ_player)`. A data-gapped player falls to a low prior — which is exactly why the next step dominates.
+3. **Book anchor** — `resolve_player` joins him to the book's SoT line (middle names / accents / nicknames handled; a miss triggers the name-join audit). The book quotes only the 1+ (Over 0.5) line, so it is converted to a 2+ price via `μ = −ln(1−P≥1)`, preserving the book's player ranking. Blend at ~0.97 book / 0.03 model.
+4. **LLM verifier** (only if there were *no* book line) — the cached expert review may lift/cut the price, but on a large disagreement it is followed **only with hard evidence** (confirmed XI, suspension); otherwise the model stands.
+5. **Calibration & risk** — per-family Platt (identity for anchored props); the risk gate and confidence floor apply only to unanchored values.
+6. **Clamp & audits** — if the final value sits >25 pts from the crowd proxy *without* book backing or a whitelisted edge, it is pulled to the boundary; the divergence audit prints the model-vs-book gap for review.
+7. **Submit** — PATCH only if the value changed; the anchor-regression guard blocks a bookless run from reverting a previously anchored value; every pass is decomposed (pure / book / submitted) into the CLV ledger for post-hoc evaluation. Near kickoff the scheduler re-runs this whole flow with fresh odds ~2 minutes before lock.
 
 ---
 
@@ -72,6 +91,8 @@ The pipeline is a stack: a **statistical base layer**, a **market-anchoring laye
 **LLM as reviewer, not oracle.** The model is blind to things a human reads off team news — who's actually starting, a suspension, a mid-tournament controversy. The LLM supplies exactly that nuance and nothing else: it reviews the model's number and moves it only when it can cite a *verifiable* fact. Frequencies and base rates (own-goals, offsides, card counts) stay with the data/statistical model, where the LLM has nothing to add. This keeps variance low at 2×.
 
 **Calibration over cleverness.** The scoring rewards being right *about your uncertainty*. Every layer above the market anchor is conservative and shadow-validated on settled data before it can move a live submission, because at 2× an unbacked deviation from a calibrated price is a doubled loss.
+
+**The deviation risk curve.** Measured across every settled question with harvested crowd data: deviations of 5–15 pts from the crowd are +EV (win-rate ~0.62); deviations of 25+ pts were −0.095/mkt — and every such loss traced to a bug, while the extreme *wins* were one repeatable edge (low SoT prices on fringe players the crowd over-prices). The strategy that follows: don't shrink toward the crowd wholesale — make bug-class extremes *structurally impossible* (the clamp + audits) while explicitly protecting the extremes that have earned their keep. Where per-match variation is measured to be anti-signal (fouls, offsides), submit near-flat calibrated bases: on markets the crowd treats as base-rate questions, the lowest-variance path to beating the mean-individual baseline is simply being the best-calibrated flat value in the room.
 
 Deeper math and validation: [docs/METHODS.md](docs/METHODS.md), [docs/MARKET-FIRST-ARCHITECTURE.md](docs/MARKET-FIRST-ARCHITECTURE.md), [docs/KNOCKOUT-AND-TIMING-ESTIMATION.md](docs/KNOCKOUT-AND-TIMING-ESTIMATION.md).
 
@@ -89,7 +110,7 @@ Windows Task Scheduler runs five jobs (both bots share the base layer):
 
 | Task | Script | Cadence | Role |
 |---|---|---|---|
-| DailyLearn | `daily_learn.py` | daily | refresh results/Elo, re-fit calibration + gates, score shadow hypotheses |
+| DailyLearn | `daily_learn.py` | daily | refresh results/Elo, re-fit calibration + gates + the crowd prior, score shadow hypotheses |
 | AIPanel | `ai_panel_live.py` | a few ×/day | generate the LLM panel for the imminent slate (gated markets only) |
 | WebPanel | `ai_panel_web.py` | near kickoff | web-search team news + top up book props for the imminent match |
 | BotA-Submit | `scheduler_tick.py` → `run_matchday_odds.py` | per kickoff | refresh odds, price, submit Bot A |
