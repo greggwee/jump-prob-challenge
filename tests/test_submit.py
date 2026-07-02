@@ -175,6 +175,40 @@ def test_player_prop_anchor_weight_near_book():
     assert abs(out[0]["p_bot_a"] - 0.27) < 0.02, out[0]   # was 0.22 at the old 0.85 weight
 
 
+def test_crowd_clamp_p1():
+    """P1 catastrophic-deviation clamp: unbacked extremes pull back to within 25 pts of the
+    archetype's crowd prior; book anchors and fringe player LOWS (the validated edge) are
+    exempt; matchup-wide / thin priors never clamp."""
+    from jumpprob.submit.audit import crowd_clamp
+    prior = {"both_teams_sot_ge": {"n": 6, "mean": 66.5, "std": 6.5},
+             "substitute_scores": {"n": 6, "mean": 31.0, "std": 3.0},
+             "player_sot_ge": {"n": 48, "mean": 46.0, "std": 9.9},
+             "win": {"n": 25, "mean": 60.0, "std": 17.6},          # too wide -> excluded
+             "own_goal": {"n": 1, "mean": 14.0, "std": None}}      # too thin -> excluded
+    # the group-era catastrophe: 9 vs crowd ~66 -> clamped to the 25-pt boundary
+    p, info = crowd_clamp("both_teams_sot_ge", 9, False, prior)
+    assert info is not None and p == 42
+    # the substitute 69-vs-29 catastrophe -> clamped to 56
+    p, info = crowd_clamp("substitute_scores", 69, False, prior)
+    assert info is not None and p == 56
+    # fringe player LOW: 40 pts below the prior but WHITELISTED (the +EV extreme class)
+    p, info = crowd_clamp("player_sot_ge", 6, False, prior)
+    assert info is None and p == 6
+    # player HIGH deviations are still clamped (no edge there)
+    p, info = crowd_clamp("player_sot_ge", 85, False, prior)
+    assert info is not None and p == 71
+    # book-anchored: never clamped, whatever the value
+    p, info = crowd_clamp("both_teams_sot_ge", 9, True, prior)
+    assert info is None and p == 9
+    # wide/thin priors and unknown archetypes: no-op
+    assert crowd_clamp("win", 95, False, prior)[1] is None
+    assert crowd_clamp("own_goal", 90, False, prior)[1] is None
+    assert crowd_clamp("goal_header", 90, False, prior)[1] is None
+    # moderate deviations (the +EV band) are untouched
+    p, info = crowd_clamp("both_teams_sot_ge", 50, False, prior)
+    assert info is None and p == 50
+
+
 def test_anchor_regression_guard():
     """The Diallo 50->24 KO-lock guard: a run whose book prop vanished must not revert a
     previously anchored player prop to the bare model — but ONLY with ledger evidence the

@@ -14,6 +14,7 @@ so we flag it for review. Reporting only — never changes a submission.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pandas as pd
 
@@ -54,6 +55,50 @@ def previously_anchored_markets(ledger_path="data/processed/clv_ledger.csv") -> 
         return set(last.index[(last.sub_market - last.sub_pure).abs() >= 2])
     except Exception:
         return set()
+
+
+CROWD_PRIOR_PATH = "data/processed/crowd_prior.json"
+CLAMP_MAX_DEV = 25          # pts from the crowd proxy — the measured catastrophic boundary
+CLAMP_MIN_N = 5             # prior must be fit on >= this many crowd observations
+CLAMP_MAX_STD = 12.0        # only base-rate-like archetypes (win ±17.6 etc. are excluded)
+
+
+def load_crowd_prior(path=CROWD_PRIOR_PATH) -> dict:
+    """{archetype: {n, mean, std}} fit by scripts/fit_crowd_prior.py; missing file -> {}."""
+    import json
+    try:
+        return json.loads(Path(path).read_text())
+    except Exception:
+        return {}
+
+
+def crowd_clamp(archetype: str, p_pct: float, book_anchored: bool, prior: dict,
+                max_dev: int = CLAMP_MAX_DEV) -> tuple[int, dict | None]:
+    """P1 catastrophic-deviation clamp: pull a submission back to within max_dev pts of the
+    predicted crowd position. The measured risk curve (336 crowd rows): 5-15 pt deviations
+    are +EV, 25+ pt deviations were -0.095/mkt — every loss a bug-class extreme. The clamp
+    is the mechanism that makes that tail structurally impossible while protecting the two
+    validated extreme classes:
+      * book-anchored markets — the book IS the crowd proxy; never clamped.
+      * player-family LOWS without a book — the fringe-player SoT/scorer edge (crowd
+        over-prices 1+ SoT at 40-60 for mid players; our lows bank +0.15-0.38) — whitelisted.
+    The proxy is the archetype's crowd prior, used only where the crowd is base-rate-like
+    (n>=CLAMP_MIN_N, std<=CLAMP_MAX_STD). Clamps to the boundary (direction preserved),
+    never to the proxy itself. Returns (possibly-clamped pct, info|None)."""
+    p = int(round(p_pct))
+    if book_anchored:
+        return p, None
+    e = prior.get(archetype)
+    if not e or e.get("n", 0) < CLAMP_MIN_N or e.get("std") is None or e["std"] > CLAMP_MAX_STD:
+        return p, None
+    mean = float(e["mean"])
+    if archetype in _PLAYER_ARCHS and p < mean:
+        return p, None                       # the fringe-low edge: never clamp downward deviations
+    dev = p - mean
+    if abs(dev) <= max_dev:
+        return p, None
+    newp = int(round(mean + (max_dev if dev > 0 else -max_dev)))
+    return newp, {"proxy": mean, "was": p, "clamped_to": newp}
 
 
 def book_vs_model_divergence(df: pd.DataFrame, min_pts: int = 20) -> pd.DataFrame:

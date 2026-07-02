@@ -35,7 +35,7 @@ from jumpprob.submit.runner import Runner
 from jumpprob.submit.parser import parse_question
 from jumpprob.normalize.teams import canonical
 from jumpprob.submit.audit import (book_vs_model_divergence, is_anchor_regression,
-                                   previously_anchored_markets)
+                                   previously_anchored_markets, load_crowd_prior, crowd_clamp)
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
@@ -98,6 +98,27 @@ for r in anchored:
                  "sub_market": m.get("sub_a", r["sub_a"])})
 df = pd.DataFrame(rows)
 df["delta"] = df["sub_a"] - df["sub_pure"]
+
+# P1 crowd-proxy deviation clamp: pull any UNBACKED submission back to within 25 pts of the
+# archetype's crowd prior. Measured risk curve (336 crowd rows): 5-15 pt deviations from the
+# crowd are +EV; 25+ pt deviations were -0.095/mkt, every loss a bug-class extreme. Book-
+# anchored markets and fringe player LOWS (a validated edge) are exempt inside crowd_clamp.
+# OOS check: fires 0 times on the current fixed pipeline — pure tail insurance.
+_prior = load_crowd_prior()
+_clamps = []
+_ba = (df["sub_market"] - df["sub_pure"]).abs() >= 2
+_new = []
+for _r, _b in zip(df.itertuples(), _ba):
+    _np, _info = crowd_clamp(_r.archetype, _r.sub_a, bool(_b), _prior)
+    _new.append(_np)
+    if _info and _np != int(round(_r.sub_a)):
+        _clamps.append((_r.match, _r.archetype, _info["was"], _np, _info["proxy"], _r.question[:44]))
+df["sub_a"] = _new
+if _clamps:
+    print(f"\n!! crowd-proxy clamp fired on {len(_clamps)} markets (unbacked extreme deviations):")
+    for mt, a, was, now, px, qq in _clamps:
+        print(f"    {was} -> {now} (crowd prior {px:.0f}) [{mt}] {a}: {qq}")
+
 df.to_csv("data/processed/odds_anchor_run.csv", index=False)
 
 # Snapshot which markets were book-anchored on a PREVIOUS run BEFORE appending this run's
