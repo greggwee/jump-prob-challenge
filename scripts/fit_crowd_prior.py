@@ -38,7 +38,17 @@ def main() -> None:
     r = pd.DataFrame(c.results(LOBBY))
     r = r[r.brier_score.notna()].copy()
     r["id8"] = r.market_id.str[:8]
-    r["arch"] = r.question.apply(lambda q: (lambda x: x.archetype if x else None)(parse_question(q)))
+    # archetype from the CLV ledger (parsed live WITH team context) — a bare re-parse here
+    # mis-labels team-SoT questions as player_sot_ge (the player->team reroute needs the
+    # team set), polluting the player prior with team questions. Fall back to a bare parse
+    # only for markets that predate the ledger.
+    led = pd.read_csv(ROOT / "data" / "processed" / "clv_ledger.csv")
+    led = led.sort_values("ts").groupby("market_id").last().reset_index()[["market_id", "archetype"]]
+    r = r.merge(led, on="market_id", how="left")
+    bare = r["archetype"].isna()
+    r.loc[bare, "archetype"] = r.loc[bare, "question"].apply(
+        lambda q: (lambda x: x.archetype if x else None)(parse_question(q)))
+    r["arch"] = r["archetype"]
     j = r.merge(cr[["id8", "crowd"]], on="id8", how="inner").dropna(subset=["arch", "crowd"])
 
     g = j.groupby("arch")["crowd"].agg(["count", "mean", "std"])

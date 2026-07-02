@@ -15,9 +15,9 @@
   "std": null
  },
  "both_teams_sot_ge": {
-  "n": 6,
-  "mean": 66.5,
-  "std": 6.5
+  "n": 5,
+  "mean": 64.6,
+  "std": 5.1
  },
  "btts": {
   "n": 3,
@@ -160,9 +160,9 @@
   "std": 7.4
  },
  "player_sot_ge": {
-  "n": 48,
-  "mean": 46.0,
-  "std": 9.9
+  "n": 37,
+  "mean": 47.2,
+  "std": 10.9
  },
  "score_both_halves": {
   "n": 3,
@@ -198,6 +198,11 @@
   "n": 14,
   "mean": 53.7,
   "std": 11.1
+ },
+ "team_sot_ge": {
+  "n": 12,
+  "mean": 44.6,
+  "std": 10.4
  },
  "total_ge": {
   "n": 8,
