@@ -153,17 +153,43 @@ def test_player_prop_anchor_weight_near_book():
 
 def test_anchor_regression_guard():
     """The Diallo 50->24 KO-lock guard: a run whose book prop vanished must not revert a
-    previously anchored player prop to the bare model, but genuine updates still pass."""
+    previously anchored player prop to the bare model — but ONLY with ledger evidence the
+    market was actually book-anchored before. Without it the guard kept a stale mis-parsed
+    'DR Congo scores' 8% against the pipeline's corrected 42 (out=YES, biggest R32 loss)."""
     from jumpprob.submit.audit import is_anchor_regression as g
-    # Diallo: existing anchored 50, this run has no book (market==pure 23) -> KEEP (guard fires)
-    assert g("player_sot_ge", 50, 23, 24) is True
+    # Diallo: existing anchored 50, this run bookless (market==pure), PRIOR ANCHOR -> KEEP
+    assert g("player_sot_ge", 50, 23, 24, was_anchored=True) is True
+    # DR Congo: existing 8 far from model 42, this run bookless, but NEVER book-anchored
+    # -> the correction must go through (guard must NOT fire)
+    assert g("player_scores", 8, 42, 42, was_anchored=False) is False
+    assert g("player_scores", 8, 42, 42) is False               # default: no evidence -> no block
     # this run DID anchor (market 55 != pure 23) -> a real update, let it through
-    assert g("player_sot_ge", 50, 23, 55) is False
+    assert g("player_sot_ge", 50, 23, 55, was_anchored=True) is False
     # existing is itself near the bare model (not anchored) -> nothing to protect
-    assert g("player_sot_ge", 24, 23, 24) is False
+    assert g("player_sot_ge", 24, 23, 24, was_anchored=True) is False
     # non-player archetypes and missing existing are never guarded
-    assert g("win", 70, 40, 40) is False
-    assert g("player_scores", None, 8, 8) is False
+    assert g("win", 70, 40, 40, was_anchored=True) is False
+    assert g("player_scores", None, 8, 8, was_anchored=True) is False
+
+
+def test_team_scores_reroutes_to_team_goals():
+    """'Will <TEAM> score a goal (excluding own goals)' must price as the team scoring >=1
+    (~40-75%), not as an unknown PLAYER (~8%) — the DR Congo miss."""
+    from jumpprob.normalize.teams import canonical
+    teams = {canonical("England"), canonical("DR Congo")}
+    q = parse_question("Will DR Congo score a goal (excluding own goals) in regulation "
+                       "(90 minutes + stoppage time)?", teams=teams)
+    assert q.archetype == "team_goals_ge" and q.threshold == 1
+    # a real player is untouched
+    p = parse_question("Will Harry Kane (England) score a goal (excluding own goals)?", teams=teams)
+    assert p.archetype == "player_scores"
+    # and the answer is a sane team-scoring probability
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    prob = r.answer(q, r.context("England", "DR Congo"))
+    assert 0.25 < prob < 0.85, prob
     """The submission-time guard that surfaces a model data-gap OR a book/question mismatch:
     a large pure-model vs de-vigged-book gap (the Haaland 7-vs-52 signature). Flags >= min_pts,
     biggest first; small gaps and the empty frame are clean."""

@@ -22,22 +22,38 @@ _PLAYER_ARCHS = frozenset({"player_scores", "player_ga", "player_sot_ge"})
 
 
 def is_anchor_regression(archetype: str, existing_pct, sub_pure, sub_market,
-                         min_gap: int = 5) -> bool:
+                         min_gap: int = 5, was_anchored: bool | None = None) -> bool:
     """Guard against a props-less run REVERTING a previously book-anchored player prop back to
     the bare model. The Diallo 50->24 lock: his SoT line vanished from the near-KO snapshot
     (line pulled, or listed as just 'Amad' which the resolver rejects), so that run priced him
     at the bare model (24) and OVERWROTE the anchored 50 already submitted, then it locked.
 
     True when: (a) it's a player prop, (b) THIS run has no book anchor (sub_market == sub_pure
-    within 1pt), and (c) the EXISTING live submission is materially anchored (>= min_gap from
-    the bare model). In that case keep the existing anchored value rather than regress it.
-    Conservative by design — a genuinely-benched player is rare and the divergence audit + a
-    fresh book still catch it; silently reverting a good anchor to a data-gapped model is worse."""
+    within 1pt), (c) the EXISTING live submission is materially different (>= min_gap) from the
+    bare model, AND (d) the ledger CONFIRMS the market was book-anchored on a previous run
+    (was_anchored). (d) is load-bearing: 'existing differs from the model' alone cannot tell a
+    protected book anchor (Diallo 50 vs model 24) from a STALE BAD submission the current model
+    wants to correct — the guard's first live version kept a mis-parsed 'DR Congo scores' at 8%
+    while the fixed pipeline wanted 42 (crowd 37, out=YES, -0.45 edge, the single biggest R32
+    loss). No ledger evidence of a prior anchor -> never block a correction."""
     if archetype not in _PLAYER_ARCHS or existing_pct is None:
+        return False
+    if not was_anchored:                      # None/False: no proof it was ever book-anchored
         return False
     this_run_no_book = abs(int(round(sub_market)) - int(round(sub_pure))) <= 1
     existing_anchored = abs(int(round(existing_pct)) - int(round(sub_pure))) >= int(min_gap)
     return this_run_no_book and existing_anchored
+
+
+def previously_anchored_markets(ledger_path="data/processed/clv_ledger.csv") -> set:
+    """Market_ids whose most recent ledger row was book-anchored (sub_market != sub_pure).
+    Feeds is_anchor_regression's was_anchored evidence; missing/empty ledger -> empty set."""
+    try:
+        led = pd.read_csv(ledger_path)
+        last = led.sort_values("ts").groupby("market_id").last()
+        return set(last.index[(last.sub_market - last.sub_pure).abs() >= 2])
+    except Exception:
+        return set()
 
 
 def book_vs_model_divergence(df: pd.DataFrame, min_pts: int = 20) -> pd.DataFrame:

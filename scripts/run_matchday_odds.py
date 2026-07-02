@@ -23,7 +23,8 @@ from jumpprob.submit.api_client import SportsPredictClient
 from jumpprob.submit.runner import Runner
 from jumpprob.submit.parser import parse_question
 from jumpprob.normalize.teams import canonical
-from jumpprob.submit.audit import book_vs_model_divergence, is_anchor_regression
+from jumpprob.submit.audit import (book_vs_model_divergence, is_anchor_regression,
+                                   previously_anchored_markets)
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
@@ -87,6 +88,11 @@ for r in anchored:
 df = pd.DataFrame(rows)
 df["delta"] = df["sub_a"] - df["sub_pure"]
 df.to_csv("data/processed/odds_anchor_run.csv", index=False)
+
+# Snapshot which markets were book-anchored on a PREVIOUS run BEFORE appending this run's
+# rows — the anchor-regression guard needs prior-run evidence, and appending first would let
+# this run's own props-less rows erase it.
+prev_anchored = previously_anchored_markets()
 
 # append to the persistent CLV ledger (pure / market-close / blend per market)
 ledger = Path("data/processed/clv_ledger.csv")
@@ -157,9 +163,12 @@ else:
         new = int(r.sub_a)
         # Anchor-regression guard: don't let a run whose book prop momentarily vanished
         # overwrite a previously anchored player prop with the bare model (the Diallo 50->24
-        # KO lock). Keep the existing anchored value instead.
+        # KO lock). was_anchored (prior-run ledger evidence) is REQUIRED — without it the guard
+        # kept a stale mis-parsed 'DR Congo scores' at 8% against the pipeline's corrected 42
+        # (crowd 37, out=YES, the single biggest R32 loss).
         if is_anchor_regression(r.archetype, existing["probability"] if existing else None,
-                                r.sub_pure, r.sub_market):
+                                r.sub_pure, r.sub_market,
+                                was_anchored=r.market_id in prev_anchored):
             n_kept += 1
             continue
         try:

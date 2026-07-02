@@ -16,7 +16,13 @@ from jumpprob.normalize.teams import canonical
 # A few archetypes are phrased identically for a player or a team ("... have at
 # least N shots on target"); the regex defaults to the player reading, so when the
 # subject is one of the match's known teams we re-route to the team archetype.
-_PLAYER_TO_TEAM = {"player_sot_ge": "team_sot_ge"}
+# player archetype -> (team archetype, default threshold) when the "player" subject is
+# actually one of the match TEAMS. player_scores carries no threshold, but the team target
+# (team_goals_ge) needs one: "Will DR Congo score a goal" = P(>=1 team goal). Left unrouted,
+# that question priced DR Congo like an unknown PLAYER (~8%) vs a true ~40% — kept low by the
+# (old) anchor guard, it settled YES for the single biggest R32 loss (crowd 37, edge -0.45).
+_PLAYER_TO_TEAM = {"player_sot_ge": ("team_sot_ge", None),
+                   "player_scores": ("team_goals_ge", 1)}
 
 
 @dataclass
@@ -227,7 +233,9 @@ def parse_question(text: str, teams: set[str] | None = None) -> ParsedQuestion |
             q = build(m)
             if (teams and q.archetype in _PLAYER_TO_TEAM and q.subject
                     and canonical(q.subject) in teams):
-                return ParsedQuestion(_PLAYER_TO_TEAM[q.archetype], q.subject,
-                                      threshold=q.threshold, half=q.half)
+                target, default_thr = _PLAYER_TO_TEAM[q.archetype]
+                return ParsedQuestion(target, q.subject,
+                                      threshold=q.threshold if q.threshold is not None else default_thr,
+                                      half=q.half)
             return q
     return None
