@@ -306,6 +306,9 @@ def test_resolve_player_robust_name_join():
     ambig = {"ousmane diomande": {"player_scores": 0.1}, "oumar diomande": {"player_scores": 0.2}}
     assert resolve_player("O Diomande", ambig) == {}                                # 'o' prefixes both
     assert resolve_player("Ousmane Diomande", ambig)["player_scores"] == 0.1        # full first disambiguates
+    # NICKNAME alias: the platform's 'Trezeguet' is the book's registered 'mahmoud hassan'
+    nick = {"mahmoud hassan": {"player_scores": 0.22}, "mohamed salah": {"player_scores": 0.5}}
+    assert resolve_player("Mahmoud Trezeguet (Egypt)", nick)["player_scores"] == 0.22
 
 
 def test_drop_audit_recovered_archetypes():

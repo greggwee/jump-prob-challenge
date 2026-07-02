@@ -175,18 +175,31 @@ def _first_match(a: str, b: str) -> bool:
     return a == b or a.startswith(b) or b.startswith(a)
 
 
+# Nickname/registered-name aliases the token matcher cannot bridge (platform name ->
+# the book's normalized key). Populated from the submit-time name-join audit as new
+# cases surface; keep entries normalized (lowercase, ascii).
+_ALIASES = {
+    "mahmoud trezeguet": "mahmoud hassan",   # Trezeguet = nickname; books list Mahmoud Hassan
+    "trezeguet": "mahmoud hassan",
+}
+
+
 def resolve_player(subject: str, props: dict) -> dict:
     """Join a question subject ('Erling Haaland') to a book prop entry, robust to the book
     carrying middle names ('erling braut haaland') or initials ('e haaland') — the exact
     norm_player key often misses ('erling haaland' != 'erling braut haaland'), which silently
-    drops the anchor and leaves the player on the shrinkage model. Exact key wins; otherwise
-    require the LAST name to match and the FIRST names to align; 0 or AMBIGUOUS (>1) matches
-    -> {} so we fall back to the model rather than guess the wrong player."""
+    drops the anchor and leaves the player on the shrinkage model. Exact key wins; then a
+    NICKNAME alias (Trezeguet -> mahmoud hassan); otherwise require the LAST name to match
+    and the FIRST names to align; 0 or AMBIGUOUS (>1) matches -> {} so we fall back to the
+    model rather than guess the wrong player."""
     if not props:
         return {}
     key = norm_player(subject)
     if key in props:
         return props[key]
+    alias = _ALIASES.get(key)
+    if alias and alias in props:
+        return props[alias]
     toks = key.split()
     if len(toks) < 2:
         return {}                       # single token (or empty) -> too risky to fuzzy-match
