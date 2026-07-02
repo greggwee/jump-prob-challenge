@@ -50,6 +50,16 @@ def archetype_base_rates() -> dict:
     # model's confident 88/24 noise through (the -89 RBP leak, 2026-06-22). Pin it so
     # the daily regen keeps this risk-gate base aligned with risk_gate.json's shrink.
     rates["both_teams_sot_ge"] = 0.70
+    # P2 (2026-07-02 review): our per-match variation on fouls/offsides is ANTI-signal — a
+    # FLAT value beats both our submissions and the crowd on all settled-with-crowd data
+    # (fouls: flat .245 vs crowd .263 vs us .277, n=21; offsides: flat@.40 .233 vs crowd
+    # .253 vs us .280, n=22). Pin the levels the risk gate shrinks toward (risk_gate.json
+    # holds the matching strong shrink s=0.15):
+    #   fouls_gt 0.55   = crowd prior 55.2 ~= realized 0.57 (they agree);
+    #   offsides_ge 0.40 = crowd 0.49 shrunk toward realized 0.36 (the StatsBomb->live
+    #   definition gap makes the crowd itself too HIGH here; 0.40 beats the crowd +0.021).
+    rates["fouls_gt"] = 0.55
+    rates["offsides_ge"] = 0.40
     praw = PROC / "backtest_players_raw.csv"
     if praw.exists():
         p = pd.read_csv(praw)

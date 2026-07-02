@@ -89,7 +89,13 @@ def crowd_clamp(archetype: str, p_pct: float, book_anchored: bool, prior: dict,
     if book_anchored:
         return p, None
     e = prior.get(archetype)
-    if not e or e.get("n", 0) < CLAMP_MIN_N or e.get("std") is None or e["std"] > CLAMP_MAX_STD:
+    # usable prior: n>=5 & std<=12, OR very tight n>=3 & std<=6 (base-rate markets like
+    # substitute_scores sit at 31 +- 1.7 — three crowd observations already pin them, and
+    # the historical 69-vs-29 catastrophe must be catchable).
+    if not e or e.get("std") is None:
+        return p, None
+    n, sd = e.get("n", 0), float(e["std"])
+    if not ((n >= CLAMP_MIN_N and sd <= CLAMP_MAX_STD) or (n >= 3 and sd <= 6.0)):
         return p, None
     mean = float(e["mean"])
     if archetype in _PLAYER_ARCHS and p < mean:
