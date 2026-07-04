@@ -44,7 +44,16 @@ live = "--live" in sys.argv
 client = SportsPredictClient("SPORTSPREDICT_KEY_A", dry_run=not live)
 
 print("fetching live odds...")
-events = odds_api.fetch_events()
+try:
+    events = odds_api.fetch_events()
+except Exception as e:
+    # Odds API quota exhaustion (401 at 0 credits) or an outage must NEVER kill a
+    # submission run — fall back to the most recent cached snapshot. A few-hours-old
+    # book anchor is far better than the pure model, and the anchor-regression guard
+    # protects previously anchored props if even the cache is empty.
+    events = odds_api.load_latest()
+    print(f"!! live odds fetch FAILED ({str(e)[:60]}) -> using the latest CACHED snapshot "
+          f"({len(events)} events). Check The Odds API quota.")
 anchors = odds_api.build_anchors(events)
 print(f"{len(anchors)} fixtures with book consensus")
 
@@ -76,7 +85,12 @@ try:
     player_props = odds_api.fetch_player_props() if matches_filter is None else odds_api.load_latest_props()
     print(f"player props: {len(player_props)} fixtures")
 except Exception as e:
-    print(f"player props unavailable ({str(e)[:50]}) -> model-only")
+    # same quota/outage resilience as the main odds fetch: cached props before model-only
+    try:
+        player_props = odds_api.load_latest_props()
+        print(f"!! props fetch FAILED ({str(e)[:50]}) -> latest CACHED props ({len(player_props)} fixtures)")
+    except Exception:
+        print(f"player props unavailable ({str(e)[:50]}) -> model-only")
     player_props = {}
 
 # three passes for CLV (improvement #1): pure model (w=0, no anchors), the

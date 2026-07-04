@@ -116,6 +116,9 @@ EVENT_BASE_DEFAULTS = {
     # header_share: share of open-play goals headed in (StatsBomb). Validated thinning
     # (+0.027 Brier vs flat on held-out matches, calibrated at 1-3 goals).
     "header_share": 0.21,
+    # P(a named starter plays the full 90): ~5 subs over 10 outfield -> ~52% survive;
+    # attackers are subbed more -> 0.42. R16 template (plays_full_match), no book market.
+    "player_full90": 0.42,
 }
 _EVENT_BASE_PATH = Path("data/processed/event_baselines.json")
 
@@ -518,6 +521,49 @@ class Runner:
             s_pen = 0.5 + PEN_TILT * (r - 0.5)
             q = p_win_et + p_et_draw * s_pen
             return float(p_win90 + p_draw90 * q)
+        # --- R16 templates (2026-07-04, caught by the P5 template audit) ---
+        if a == "pen_shootout":
+            # shootout <=> drawn after 90 AND ET also drawn — same ET grid as `advance`
+            p_draw90 = mk.p_draw(ctx.grid)
+            et = dc_grid(ET_TEMPO / 3 * ctx.lam_a, ET_TEMPO / 3 * ctx.lam_b, ctx.rho_dc)
+            return float(p_draw90 * mk.p_draw(et))
+        if a == "total_exact":
+            k = q.threshold or 0
+            g = ctx.grid
+            return float(sum(g[i, k - i] for i in range(k + 1) if k - i < g.shape[1] and i < g.shape[0]))
+        if a == "goal_each_half":
+            # >=1 goal (either team) in EACH half: the match-level version of
+            # score_both_halves, same half-share thinning of the total intensity.
+            lam_t = ctx.lam_a + ctx.lam_b
+            return float((1 - np.exp(-H1 * lam_t)) * (1 - np.exp(-H2 * lam_t)))
+        if a == "cards_gt_goals":
+            # P(total cards > total goals): count-model cards pmf x the grid's total-goals
+            # pmf (independence — cards/goals correlation is weak and second-order here).
+            cm = self.pl.count_model
+            if "cards" not in cm.params:
+                return None
+            mu_c = sum(cm.mu("cards", h, ctx.lam_a, ctx.lam_b) + cm.mu("cards", h, ctx.lam_b, ctx.lam_a)
+                       for h in (1, 2))
+            cpmf = cm.pmf("cards", mu_c)
+            g = ctx.grid
+            n = g.shape[0]
+            tg = [float(sum(g[i, k - i] for i in range(k + 1) if k - i < n and i < n)) for k in range(2 * n - 1)]
+            return float(sum(pg * float(cpmf[k + 1:].sum()) for k, pg in enumerate(tg) if k + 1 < len(cpmf)))
+        if a == "leads_at_any_point":
+            # P(team is strictly ahead at some point in 90') ~= P(team scores FIRST) plus a
+            # small comeback allowance (fall behind, then go ahead — rare; MC-quality path
+            # dynamics aren't warranted for one question). Crude but bounded and monotone.
+            if side is None:
+                return None
+            lt, lo = lams(side)
+            lam_t = lt + lo
+            p_first = (lt / lam_t) * (1 - np.exp(-lam_t)) if lam_t > 0 else 0.0
+            return float(np.clip(p_first + 0.03, 0.01, 0.97))
+        if a == "plays_full_match":
+            # P(a named starter plays all 90'): ~5 subs over 10 outfield starters -> ~52%
+            # survive; attacking players are subbed MORE (tactics/fatigue) -> base 0.42.
+            # No book market; LLM fitness/rotation nuance can be gated in later.
+            return float(self.event_base["player_full90"])
         if a == "btts":
             return mk.p_btts(ctx.grid)
         if a == "total_ge":

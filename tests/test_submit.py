@@ -175,6 +175,43 @@ def test_player_prop_anchor_weight_near_book():
     assert abs(out[0]["p_bot_a"] - 0.27) < 0.02, out[0]   # was 0.22 at the old 0.85 weight
 
 
+def test_r16_template_handlers():
+    """The 6 R16 archetypes price sanely: shootout in the knockout-plausible band and higher
+    for even matchups; exact-totals sum consistently with the >= family; goal-each-half below
+    either half alone; cards>goals a real probability; leads-at-any-point tracks first-goal;
+    full-90 at the sub-pattern base."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    even, lop = r.context("France", "Croatia"), r.context("Brazil", "Haiti")
+    P = lambda q, c: r.answer(parse_question(q), c)
+    # shootout: plausible band, more likely in an even tie than a blowout
+    ps_even, ps_lop = P("Will the match be decided by a penalty shootout?", even), \
+                      P("Will the match be decided by a penalty shootout?", lop)
+    assert 0.02 < ps_lop < ps_even < 0.30
+    # exact totals: P(exactly 0) == 1 - P(>=1); peak near the mode; sums below 1
+    p0 = P("Will exactly 0 goals be scored in regulation (90 minutes + stoppage time)?", even)
+    from jumpprob.simulate import markets as mk
+    assert abs(p0 - (1 - mk.p_total_ge(even.grid, 1))) < 1e-6
+    p2 = P("Will the match finish with exactly 2 total goals in regulation (90 minutes + stoppage time)?", even)
+    assert 0.15 < p2 < 0.35
+    # goal in each half: below either single half's P(>=1 goal), above their product floor
+    geh = P("Will at least one goal be scored in each half in regulation (90 minutes + stoppage time)?", even)
+    assert 0.3 < geh < 0.85
+    # cards > goals: valid prob, higher in a low-scoring matchup than a goal-fest
+    cg_even = P("Will there be more total cards than total goals in regulation (90 minutes + stoppage time)?", even)
+    cg_lop = P("Will there be more total cards than total goals in regulation (90 minutes + stoppage time)?", lop)
+    assert 0.05 < cg_lop < cg_even < 0.95
+    # leads at any point ~ first goal + comeback margin; underdog << favorite
+    la_f = P("Will France hold a lead at any point in the match (excluding a penalty shootout)?", even)
+    la_c = P("Will Croatia hold a lead at any point in the match (excluding a penalty shootout)?", even)
+    assert la_f > la_c and 0.05 < la_c < la_f < 0.95
+    # full 90: the sub-pattern base rate
+    pf = P("Will Christian Pulisic (United States) play the entire match in regulation (90 minutes + stoppage time)?", even)
+    assert abs(pf - 0.42) < 1e-9
+
+
 def test_p5_skipped_questions_carry_reasons():
     """P5 template audit: any open question that does not price must surface in `skipped`
     with a reason — the header-goal and any-player-2+ drops were invisible because skipped

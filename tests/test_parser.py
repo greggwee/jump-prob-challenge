@@ -79,6 +79,24 @@ def test_own_goal_and_outside_box_parse():
                           "regulation (90 minutes + stoppage time)?").archetype == "goal_outside_box"
 
 
+def test_r16_templates_parse():
+    # the 6 new R16 question types caught by the P5 template audit (2026-07-04)
+    assert parse_question("Will the match be decided by a penalty shootout?").archetype == "pen_shootout"
+    q = parse_question("Will exactly 1 goal be scored in regulation (90 minutes + stoppage time)?")
+    assert q.archetype == "total_exact" and q.threshold == 1
+    q2 = parse_question("Will the match finish with exactly 2 total goals in regulation (90 minutes + stoppage time)?")
+    assert q2.archetype == "total_exact" and q2.threshold == 2
+    q3 = parse_question("Will Paraguay hold a lead at any point in the match (excluding a penalty shootout)?")
+    assert q3.archetype == "leads_at_any_point" and q3.subject == "Paraguay"
+    assert parse_question("Will there be more total cards than total goals in regulation "
+                          "(90 minutes + stoppage time)?").archetype == "cards_gt_goals"
+    q4 = parse_question("Will Christian Pulisic (United States) play the entire match in regulation "
+                        "(90 minutes + stoppage time)?")
+    assert q4.archetype == "plays_full_match" and "Pulisic" in q4.subject
+    assert parse_question("Will at least one goal be scored in each half in regulation "
+                          "(90 minutes + stoppage time)?").archetype == "goal_each_half"
+
+
 def test_full_match_sot_comparison_phrasing():
     # 'more shots on target than' with NO half (the knockout regulation suffix is stripped)
     # must parse like the corners equivalent — it was silently DROPPED (MEX v ECU 12/15) since
