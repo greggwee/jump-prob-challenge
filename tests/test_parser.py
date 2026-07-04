@@ -108,3 +108,15 @@ def test_full_match_sot_comparison_phrasing():
     # precedence preserved: the half-scoped forms still carry their half
     assert parse_question("Will Mexico have more shots on target than Ecuador in the second half?").half == 2
     assert parse_question("In the first half, will Mexico have more shots on target than Ecuador?").half == 1
+
+
+def test_halftime_both_teams_sot_is_first_half_scoped():
+    # the platform's single worst category (-7.8 RBP): "At halftime, ..." fell to the
+    # no-half patterns and priced as FULL-MATCH (~.88) vs first-half truth (~.60).
+    q = parse_question("At halftime, will both teams have at least 1 shot on target?")
+    assert q.archetype == "both_teams_sot_ge" and q.half == 1 and q.threshold == 1
+    q2 = parse_question("At halftime, will both teams have 2 or more shots on target?")
+    assert q2.archetype == "both_teams_sot_ge" and q2.half == 1 and q2.threshold == 2
+    # full-match + second-half phrasings unchanged
+    assert parse_question("Will both teams have at least 1 shot on target?").half is None
+    assert parse_question("Will both teams have at least 1 shot on target in the second half?").half == 2

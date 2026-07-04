@@ -65,6 +65,11 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     # (else the greedy (.+?) swallows "both teams"), then DEFAULT to player_sot_ge so a
     # player subject ("Musiala (Germany) ... 2 or more shots on target") is priced as a
     # prop; _PLAYER_TO_TEAM re-routes to team_sot_ge when the subject is one of the teams.
+    # "At halftime, ..." prefix = FIRST-HALF scope. Without these, the halftime phrasing
+    # fell to the no-half patterns and priced as FULL-MATCH (~.88 vs ~.60 truth) — the
+    # single worst category on the platform (-7.8 RBP; adversarial review 2026-07-05 §1.1).
+    (re.compile(r"at halftime, will both teams have (?:at least (\d+)|(\d+) or more) shots? on target", re.I),
+     lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1] or m[2]), half=1)),
     (re.compile(r"will both teams have (\d+) or more shots on target in the (first|second) half", re.I),
      lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]), half=1 if m[2].lower() == "first" else 2)),
     (re.compile(r"will both teams have (\d+) or more shots on target", re.I),

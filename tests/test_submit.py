@@ -622,3 +622,35 @@ def test_submit_int_bounds():
     assert submit_int(0.9999) == 99
     assert submit_int(0.755) == 76  # 0.755*100 = 75.5 rounds to 76
     assert submit_int(0.5) == 50
+
+
+def test_r16_review_ship_now_fixes():
+    """Adversarial-review SHIP-NOW set: grid templates registered as goal family (anchored
+    pass-through, no base dilution); leads_at_any_point includes the ET term; the risk gate
+    bypasses HALF-scoped questions (its bases are full-match quantities)."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner, GOAL_ARCHS
+    for a in ("pen_shootout", "total_exact", "goal_each_half", "leads_at_any_point"):
+        assert a in GOAL_ARCHS, a
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    ctx = r.context("France", "Croatia")
+    # leads now = first-goal + 0.05 comeback + ET term: strictly above the old +0.03 form
+    la = r.answer(parse_question("Will Croatia hold a lead at any point in the match "
+                                 "(excluding a penalty shootout)?"), ctx)
+    import numpy as np
+    lt, lo = (ctx.lam_b, ctx.lam_a)
+    old = (lt / (lt + lo)) * (1 - np.exp(-(lt + lo))) + 0.03
+    assert la > old + 0.015
+    # half-scoped questions BYPASS the risk gate (its bases are full-match quantities):
+    # spy on _risk — it must fire for the full-match phrasing, never for the halftime one
+    calls = []
+    orig = r._risk
+    r._risk = lambda a, p: (calls.append(a), orig(a, p))[1]
+    r.risk_on = True
+    mk_row = lambda q: [{"id": "m1", "lobby_id": "L", "match": {"name": "France vs Croatia"}, "question": q}]
+    r.predictions_for(mk_row("At halftime, will both teams have at least 1 shot on target?"))
+    assert calls == []                                   # half-scoped: gate bypassed
+    r.predictions_for(mk_row("Will both teams have at least 1 shot on target?"))
+    assert "both_teams_sot_ge" in calls                  # full-match: gate still applies
+    r._risk = orig

@@ -46,6 +46,9 @@ from jumpprob.agents import panel as panel_mod  # out-of-band LLM blend (daemon 
 TIMING_ARCHS = {"ht_tied", "ht_leading", "h2_more_goals_than_h1", "first_goal_half",
                 "first_goal_and_win", "first_goal_and_opp_2h", "goals_gt_half"}
 GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge",
+              # R16 grid/lambda-derived templates: registering them makes anchored answers
+              # pass through instead of taking a 25% base-rate dilution (review §3.4)
+              "pen_shootout", "total_exact", "goal_each_half", "leads_at_any_point",
               "team_scores_half", "half_total_ge", "team_goals_ge",
               "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
               "advance"} | TIMING_ARCHS
@@ -558,7 +561,11 @@ class Runner:
             lt, lo = lams(side)
             lam_t = lt + lo
             p_first = (lt / lam_t) * (1 - np.exp(-lam_t)) if lam_t > 0 else 0.0
-            return float(np.clip(p_first + 0.03, 0.01, 0.97))
+            # comeback allowance 0.05 (martj42: .114 fall-behind-then-lead events/match ->
+            # ~+.05 per side) and the question EXCLUDES only the shootout, so a first lead
+            # in EXTRA TIME counts: + P(tied at FT) x share x P(>=1 ET goal). Review §3.3.
+            p_et = float(mk.p_draw(ctx.grid)) * (lt / lam_t if lam_t > 0 else 0.5) *                    (1 - np.exp(-ET_TEMPO * lam_t / 3))
+            return float(np.clip(p_first + 0.05 + p_et, 0.01, 0.97))
         if a == "plays_full_match":
             # P(a named starter plays all 90'): ~5 subs over 10 outfield starters -> ~52%
             # survive; attacking players are subbed MORE (tactics/fatigue) -> base 0.42.
@@ -806,7 +813,10 @@ class Runner:
                 # Phase R risk management: shrink no-edge archetypes toward the base
                 # rate (don't bet over-confidently where we have no validated edge).
                 # Off unless RISK_GATE_ENABLE; no-op for archetypes not in the gate.
-                if self.risk_on:
+                # HALF-SCOPED questions bypass: the gate bases are FULL-MATCH quantities
+                # (both_teams_sot_ge .70, cards .525) — shrinking a first-half price toward
+                # a full-match base silently undoes the scope (review §3.6 interaction trap).
+                if self.risk_on and q.half is None:
                     p_a = float(np.clip(self._risk(q.archetype, p_a), 0.01, 0.99))
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,
