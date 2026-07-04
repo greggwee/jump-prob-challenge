@@ -204,8 +204,11 @@ def resolve_player(subject: str, props: dict) -> dict:
     if len(toks) < 2:
         return {}                       # single token (or empty) -> too risky to fuzzy-match
     first, last = toks[0], toks[-1]
+    # the subject's surname may sit ANYWHERE after the first token in the book's fuller
+    # registered name — Hispanic double surnames ('Luis Díaz' -> 'luis fernando diaz
+    # marulanda') put the matched (paternal) surname before a trailing maternal one.
     cands = [v for k, v in props.items()
-             if (kt := k.split()) and len(kt) >= 2 and kt[-1] == last and _first_match(first, kt[0])]
+             if (kt := k.split()) and len(kt) >= 2 and last in kt[1:] and _first_match(first, kt[0])]
     return cands[0] if len(cands) == 1 else {}
 
 

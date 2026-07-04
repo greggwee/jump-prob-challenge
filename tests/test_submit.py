@@ -363,6 +363,15 @@ def test_resolve_player_robust_name_join():
     # NICKNAME alias: the platform's 'Trezeguet' is the book's registered 'mahmoud hassan'
     nick = {"mahmoud hassan": {"player_scores": 0.22}, "mohamed salah": {"player_scores": 0.5}}
     assert resolve_player("Mahmoud Trezeguet (Egypt)", nick)["player_scores"] == 0.22
+    # HISPANIC DOUBLE SURNAME: the paternal surname sits before a trailing maternal one
+    dbl = {"luis fernando diaz marulanda": {"player_scores": 0.31},
+           "luis javier suarez charris": {"player_scores": 0.28}}
+    assert resolve_player("Luis Díaz (Colombia)", dbl)["player_scores"] == 0.31
+    assert resolve_player("Luis Suárez (Colombia)", dbl)["player_scores"] == 0.28
+    # a colliding surname in ANY position must still refuse to guess
+    coll = {"luis fernando diaz marulanda": {"player_scores": 0.31},
+            "luis diaz romero": {"player_scores": 0.1}}
+    assert resolve_player("Luis Díaz", coll) == {}
 
 
 def test_drop_audit_recovered_archetypes():
