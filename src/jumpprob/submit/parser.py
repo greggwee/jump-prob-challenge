@@ -195,6 +195,17 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("goal_outside_box")),
     (re.compile(r"will a header(?:ed)? goal be scored", re.I),
      lambda m: ParsedQuestion("goal_header")),
+    # --- QF templates (first seen 2026-07-05, caught by the P5 template audit) ---
+    (re.compile(r"will the match go to extra time", re.I),
+     lambda m: ParsedQuestion("extra_time")),
+    (re.compile(r"will both halves have the same number of goals", re.I),
+     lambda m: ParsedQuestion("halves_equal_goals")),
+    (re.compile(r"will the first card of the match be shown before the first goal", re.I),
+     lambda m: ParsedQuestion("first_card_before_goal")),
+    (re.compile(r"will (.+?) \((.+?)\) make (\d+) or more saves", re.I),
+     lambda m: ParsedQuestion("player_saves_ge", m[1], m[2], threshold=int(m[3]))),
+    (re.compile(r"will there be (\d+) or more total substitutions", re.I),
+     lambda m: ParsedQuestion("subs_total_ge", threshold=int(m[1]))),
     # --- R16 templates (first seen 2026-07-04, caught by the P5 template audit) ---
     (re.compile(r"will the match be decided by a penalty shootout", re.I),
      lambda m: ParsedQuestion("pen_shootout")),

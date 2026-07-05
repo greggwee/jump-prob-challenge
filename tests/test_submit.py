@@ -654,3 +654,30 @@ def test_r16_review_ship_now_fixes():
     r.predictions_for(mk_row("Will both teams have at least 1 shot on target?"))
     assert "both_teams_sot_ge" in calls                  # full-match: gate still applies
     r._risk = orig
+
+
+def test_qf_templates_price_sanely():
+    """The 5 QF templates (docs/QF-TEMPLATES-PLAN.md): extra_time == grid draw mass;
+    halves-equal in the validated band; the subs mixture reflects the ET-censoring fetch
+    (~.54 at even-tie P(ET), NOT the naive non-ET .746); saves monotone in threshold; the
+    card race prices inside the sane band (below the naive constant-rate ~.58)."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    from jumpprob.simulate import markets as mk
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    ctx = r.context("Portugal", "Spain")
+    P = lambda q: r.answer(parse_question(q), ctx)
+    et = P("Will the match go to extra time?")
+    assert abs(et - mk.p_draw(ctx.grid)) < 1e-9 and 0.15 < et < 0.40
+    heq = P("Will both halves have the same number of goals in regulation (90 minutes + stoppage time)?")
+    assert 0.18 < heq < 0.40
+    subs = P("Will there be 9 or more total substitutions (both teams combined) in regulation (90 minutes + stoppage time)?")
+    assert 0.45 < subs < 0.65 and subs < 0.70
+    s4 = P("Will Diogo Costa (Portugal) make 4 or more saves in regulation (90 minutes + stoppage time)?")
+    s2_ = P("Will Diogo Costa (Portugal) make 2 or more saves in regulation (90 minutes + stoppage time)?")
+    assert 0.05 < s4 < 0.60 and s2_ > s4
+    race = P("Will the first card of the match be shown before the first goal is scored?")
+    assert 0.25 < race < 0.70
+    # un-tabled subs threshold -> None (template audit), never a guess
+    assert r.answer(parse_question("Will there be 6 or more total substitutions (both teams combined) in regulation (90 minutes + stoppage time)?"), ctx) is None

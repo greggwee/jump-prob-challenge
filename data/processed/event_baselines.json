@@ -15,5 +15,12 @@
  "own_goal_source": "martj42 WC finals P(>=1 OG/match) 0.062 shrunk with WC26-so-far ~0.14 (friendly-polluted all-comp pool 0.019 under-prices the WC); thinning-by-goals tested worse than flat (n=24739)",
  "outside_box_source": "StatsBomb open-play goals from outside the box (x<102), share ~0.13; validated as Poisson thinning of the goal intensity +0.021 Brier vs flat (n=157)",
  "player_full90": 0.42,
- "player_full90_source": "~4.8 subs used over 10 outfield starters -> 52% survive; attackers subbed more often -> 0.42; no book market, LLM nuance gateable later"
+ "player_full90_source": "~4.8 subs used over 10 outfield starters -> 52% survive; attackers subbed more often -> 0.42; no book market, LLM nuance gateable later",
+ "subs_ge8_nonET": 0.836,
+ "subs_ge9_nonET": 0.738,
+ "subs_ge10_nonET": 0.443,
+ "subs_ge8_ET": 0.429,
+ "subs_ge9_ET": 0.143,
+ "subs_ge10_ET": 0.143,
+ "subs_source": "WC2022 api-football, ALL 64 matches (5 ET matches fetched 2026-07-05 \u2014 informative censoring: ET-bound reg-subs 6,8,8,5,6, P(>=9)=0/5). Laplace (k+1)/(n+2) per stratum; mixture weight = P(draw90) from the anchored grid."
 }

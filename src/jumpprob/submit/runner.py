@@ -49,6 +49,7 @@ GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge"
               # R16 grid/lambda-derived templates: registering them makes anchored answers
               # pass through instead of taking a 25% base-rate dilution (review §3.4)
               "pen_shootout", "total_exact", "goal_each_half", "leads_at_any_point",
+              "extra_time", "halves_equal_goals",
               "team_scores_half", "half_total_ge", "team_goals_ge",
               "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
               "advance"} | TIMING_ARCHS
@@ -122,6 +123,10 @@ EVENT_BASE_DEFAULTS = {
     # P(a named starter plays the full 90): ~5 subs over 10 outfield -> ~52% survive;
     # attackers are subbed more -> 0.42. R16 template (plays_full_match), no book market.
     "player_full90": 0.42,
+    # QF subs exceedance (WC2022 all 64, Laplace-shrunk, ET stratum from the 5 fetched
+    # ET matches — reg-subs 6,8,8,5,6): mixture weight = P(draw90) at answer time.
+    "subs_ge8_nonET": 0.836, "subs_ge9_nonET": 0.738, "subs_ge10_nonET": 0.443,
+    "subs_ge8_ET": 0.429, "subs_ge9_ET": 0.143, "subs_ge10_ET": 0.143,
 }
 _EVENT_BASE_PATH = Path("data/processed/event_baselines.json")
 
@@ -524,6 +529,69 @@ class Runner:
             s_pen = 0.5 + PEN_TILT * (r - 0.5)
             q = p_win_et + p_et_draw * s_pen
             return float(p_win90 + p_draw90 * q)
+        # --- QF templates (2026-07-05; docs/QF-TEMPLATES-PLAN.md) ---
+        if a == "extra_time":
+            # ET <=> drawn after 90; the anchored grid's draw mass ~= the de-vigged book X
+            return float(mk.p_draw(ctx.grid))
+        if a == "halves_equal_goals":
+            # P(G1h == G2h) = sum_N P(total=N) x P(N splits equally). Given N, each goal
+            # falls in H1 iid w.p. H1 (the goal share): P(equal | N=2k) = Binom(2k, H1).pmf(k);
+            # zero for odd N. Binomial split validated on 11,658+ martj42 matches (plan s1).
+            from scipy.stats import binom
+            g = ctx.grid; n = g.shape[0]
+            tg = [float(sum(g[i, k - i] for i in range(k + 1) if k - i < n and i < n))
+                  for k in range(2 * n - 1)]
+            return float(sum(pg * binom.pmf(k // 2, k, H1) for k, pg in enumerate(tg) if k % 2 == 0))
+        if a == "subs_total_ge":
+            # Regulation-only subs are quota consumption, NOT a count process (WC2022
+            # var/mean 0.175): stratified empirical exceedance mixed by P(ET) — ET-bound
+            # matches HOLD subs back (reg-subs 6,8,8,5,6 in the five WC2022 ET matches).
+            key_ne = "subs_ge%d_nonET" % (q.threshold or 0)
+            key_et = "subs_ge%d_ET" % (q.threshold or 0)
+            if key_ne not in self.event_base or key_et not in self.event_base:
+                return None                      # un-tabled threshold -> template audit
+            pd_ = float(mk.p_draw(ctx.grid))
+            return float((1 - pd_) * self.event_base[key_ne] + pd_ * self.event_base[key_et])
+        if a == "player_saves_ge":
+            # saves == SoT-against - goals-against (identity exact in 628/628 StatsBomb
+            # matches): P(saves >= t) = sum_s P(SoT_opp = s) x P(Bin(s, 1-conv) >= t), with
+            # the count model's overdispersed SoT pmf and conv = lam_opp / mu_SoT_opp.
+            # Keeper quality rides the (anchored) lambdas; no GK-saves book market exists.
+            kteam = canonical(q.other) if q.other else None
+            kside = "a" if kteam == ctx.team_a else "b" if kteam == ctx.team_b else None
+            if kside is None:
+                return None
+            from scipy.stats import binom
+            cm = self.pl.count_model
+            if "shots_on_target" not in cm.params:
+                return None
+            lam_opp, lam_own = (ctx.lam_b, ctx.lam_a) if kside == "a" else (ctx.lam_a, ctx.lam_b)
+            mu_opp = sum(cm.mu("shots_on_target", h, lam_opp, lam_own) for h in (1, 2))
+            spmf = cm.pmf("shots_on_target", mu_opp)
+            mu_sot = float(sum(k2 * w2 for k2, w2 in enumerate(spmf)))
+            conv = min(0.9, lam_opp / mu_sot) if mu_sot > 0 else 0.3
+            t = q.threshold or 1
+            return float(sum(w2 * float(binom.sf(t - 1, k2, 1 - conv))
+                             for k2, w2 in enumerate(spmf) if k2 >= t))
+        if a == "first_card_before_goal":
+            # Time-varying competing-risks race on the minute profiles: cards are LATE-
+            # loaded vs goals, so the constant-rate answer overstates card-first by ~9 pts
+            # (plan s2). Settlement ambiguity (card but no goal ever): permissive reading
+            # (counts as YES) weighted 0.6 vs strict (a goal must follow) 0.4.
+            if self.dyn is None or "card" not in self.dyn.alpha or "goal" not in self.dyn.alpha:
+                return None
+            cm = self.pl.count_model
+            mu_c = sum(cm.mu("cards", h, ctx.lam_a, ctx.lam_b) + cm.mu("cards", h, ctx.lam_b, ctx.lam_a)
+                       for h in (1, 2))
+            lam_t = ctx.lam_a + ctx.lam_b
+            wc = np.exp(np.asarray(self.dyn.alpha["card"])[BUCKET]); wc = wc / wc.sum()
+            wg = np.exp(np.asarray(self.dyn.alpha["goal"])[BUCKET]); wg = wg / wg.sum()
+            hc, hg = mu_c * wc, lam_t * wg
+            S = np.exp(-(np.cumsum(hc + hg) - (hc + hg)))          # survival to slot start
+            p_perm = float(np.sum(hc * S))                          # card first (goal may never come)
+            tail_g = np.concatenate([np.cumsum(hg[::-1])[::-1][1:], [0.0]])
+            p_strict = float(np.sum(hc * S * (1 - np.exp(-tail_g))))
+            return float(np.clip(0.6 * p_perm + 0.4 * p_strict, 0.01, 0.97))
         # --- R16 templates (2026-07-04, caught by the P5 template audit) ---
         if a == "pen_shootout":
             # shootout <=> drawn after 90 AND ET also drawn — same ET grid as `advance`
