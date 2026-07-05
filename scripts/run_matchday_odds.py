@@ -158,9 +158,9 @@ try:
 except Exception:
     _ov = {}
 _hits = df["market_id"].astype(str).map(_ov.__contains__) if _ov else None
-if _ov and _hits.any():
-    print(f"
-!! expert overrides applied to {int(_hits.sum())} markets:")
+if _ov and _hits is not None and _hits.any():
+    print("")
+    print(f"!! expert overrides applied to {int(_hits.sum())} markets:")
     for _r in df[_hits].itertuples():
         _o = _ov[str(_r.market_id)]
         print(f"    {_r.sub_a} -> {_o['value']}  ({_o['why'][:80]}) | {_r.question[:44]}")
