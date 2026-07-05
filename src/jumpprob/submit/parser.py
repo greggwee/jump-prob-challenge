@@ -74,6 +74,11 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]), half=1 if m[2].lower() == "first" else 2)),
     (re.compile(r"will both teams have (\d+) or more shots on target", re.I),
      lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]))),
+    # "any <TEAM> player" is a TEAM-scoped any-player market — without this it parsed as a
+    # single unknown player named "any Portugal player" and priced at the flat low prior
+    # (15 vs a true ~40): the mis-route class the template audit cannot see (it parses fine).
+    (re.compile(r"will any (.+?) player have (\d+) or more shots? on target", re.I),
+     lambda m: ParsedQuestion("any_team_player_sot_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will (.+?) have (\d+) or more shots on target in the (first|second) half", re.I),
      lambda m: ParsedQuestion("player_sot_ge", m[1], threshold=int(m[2]), half=1 if m[3].lower() == "first" else 2)),
     (re.compile(r"will (.+?) have (\d+) or more shots on target", re.I),

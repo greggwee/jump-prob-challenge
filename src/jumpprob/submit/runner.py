@@ -771,6 +771,12 @@ class Runner:
                 return float(sum(pmf[t] * (SOTCONC_BY_TEAM_SOT[t] if t < len(SOTCONC_BY_TEAM_SOT) else 1.0)
                                  for t in range(len(pmf))))
             return float(1 - (1 - _team_any_sot("a")) * (1 - _team_any_sot("b")))
+        if a == "any_team_player_sot_ge":  # team-scoped: P(some <team> player gets 2+ SoT)
+            if side is None or (q.threshold or 2) != 2:
+                return None                # concentration curve is fit for the 2+ line only
+            pmf2 = side_pmf("shots_on_target", side)
+            return float(sum(pmf2[t] * (SOTCONC_BY_TEAM_SOT[t] if t < len(SOTCONC_BY_TEAM_SOT) else 1.0)
+                             for t in range(len(pmf2))))
         if a in ("player_scores", "player_sot_ge", "player_ga"):
             rate_sot, rate_goal, rate_ga = self.player_rate(q.subject)
             rate = {"player_sot_ge": rate_sot, "player_scores": rate_goal, "player_ga": rate_ga}[a]

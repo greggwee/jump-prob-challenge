@@ -120,3 +120,12 @@ def test_halftime_both_teams_sot_is_first_half_scoped():
     # full-match + second-half phrasings unchanged
     assert parse_question("Will both teams have at least 1 shot on target?").half is None
     assert parse_question("Will both teams have at least 1 shot on target in the second half?").half == 2
+
+
+def test_any_team_player_sot_is_team_scoped():
+    # "any Portugal player" must NOT price as a single unknown player (flat 15)
+    q = parse_question("Will any Portugal player have 2 or more shots on target in "
+                       "regulation (90 minutes + stoppage time)?")
+    assert q.archetype == "any_team_player_sot_ge" and q.subject == "Portugal" and q.threshold == 2
+    # the match-level phrasing is untouched
+    assert parse_question("Will any player record 2 or more shots on target?").archetype == "any_player_sot_ge"
