@@ -8,6 +8,7 @@ data/processed/odds_anchor_run.csv so closing-line value is measurable later.
 """
 
 import sys
+import json
 
 # The scheduler runs this via subprocess with a cp1252-encoded stdout pipe; printing a player
 # name outside cp1252 ('Demirović', U+0107) raised UnicodeEncodeError and KILLED the near-KO
@@ -147,6 +148,23 @@ if _clamps:
         print(f"    {was} -> {now} (crowd prior {px:.0f}) [{mt}] {a}: {qq}")
 
 df.to_csv("data/processed/odds_anchor_run.csv", index=False)
+
+# Expert overrides: hand-curated, HARD/HISTORICAL-evidence-only values from the expert
+# sense-check (data/processed/expert_overrides.json, per-market, loudly printed). Applied
+# after the clamp so a fat-fingered override still can't produce a silent extreme; a
+# scheduler tick re-applies them, so they survive re-pricing until the market settles.
+try:
+    _ov = json.loads(Path("data/processed/expert_overrides.json").read_text())
+except Exception:
+    _ov = {}
+_hits = df["market_id"].astype(str).map(_ov.__contains__) if _ov else None
+if _ov and _hits.any():
+    print(f"
+!! expert overrides applied to {int(_hits.sum())} markets:")
+    for _r in df[_hits].itertuples():
+        _o = _ov[str(_r.market_id)]
+        print(f"    {_r.sub_a} -> {_o['value']}  ({_o['why'][:80]}) | {_r.question[:44]}")
+        df.loc[df.market_id == _r.market_id, "sub_a"] = int(_o["value"])
 
 # Snapshot which markets were book-anchored on a PREVIOUS run BEFORE appending this run's
 # rows — the anchor-regression guard needs prior-run evidence, and appending first would let
