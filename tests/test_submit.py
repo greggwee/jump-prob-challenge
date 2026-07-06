@@ -167,12 +167,50 @@ def test_player_prop_anchor_weight_near_book():
 
     assert PLAYER_MODEL_FRAC <= 0.25          # the fix: players keep only a sliver of model
     r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    r.player_crowd_prem = {}                  # isolate the anchor WEIGHT; crowd lift tested below
     t = "Will Raúl Jiménez (Mexico) score a goal (excluding own goals) in regulation (90 minutes + stoppage time)?"
     pp = {(canonical("Mexico"), canonical("Ecuador")):
           {norm_player("Raúl Jiménez"): {"player_scores": 0.27}}}
     rows = [{"id": "m1", "lobby_id": "L", "match": {"name": "Mexico vs Ecuador"}, "question": t}]
     out = r.predictions_for(rows, player_props=pp)[0]
     assert abs(out[0]["p_bot_a"] - 0.27) < 0.02, out[0]   # was 0.22 at the old 0.85 weight
+
+
+def test_player_prop_crowd_lift():
+    """P4b: book-anchored player props are lifted toward the Jump crowd we are SCORED against
+    (it prices these props above the book AND calibrates better: LOO Brier .223 vs book .258 on
+    29 settled anchored props). The lift is one-sided (up), a fixed fraction of the fitted
+    per-archetype premium, capped, applied only on the live 0.85 pass — the w=1 closing-line
+    (CLV) pass stays pure book — and skipped for props already priced high (no crowd headroom)."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import (Runner, PLAYER_CROWD_LIFT, PLAYER_CROWD_LIFT_CAP,
+                                        PLAYER_CROWD_LIFT_CEIL)
+    from jumpprob.normalize.teams import canonical
+    from jumpprob.ingest.odds_api import norm_player
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    t = "Will Raúl Jiménez (Mexico) score a goal (excluding own goals) in regulation (90 minutes + stoppage time)?"
+    pp = {(canonical("Mexico"), canonical("Ecuador")):
+          {norm_player("Raúl Jiménez"): {"player_scores": 0.27}}}
+    rows = [{"id": "m1", "lobby_id": "L", "match": {"name": "Mexico vs Ecuador"}, "question": t}]
+
+    r.player_crowd_prem = {}                                  # baseline: pure anchor
+    base = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    prem = 0.08
+    r.player_crowd_prem = {"player_scores": prem}             # lifted by exactly LIFT*prem (< cap)
+    lifted = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    assert lifted > base
+    assert abs((lifted - base) - min(PLAYER_CROWD_LIFT * prem, PLAYER_CROWD_LIFT_CAP)) < 1e-6
+
+    r.player_crowd_prem = {"player_scores": 0.40}             # a huge premium is CAPPED
+    capped = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    assert abs((capped - base) - PLAYER_CROWD_LIFT_CAP) < 1e-6
+
+    r.player_crowd_prem = {"player_scores": prem}
+    r.w_market = 1.0                                          # closing-line pass: NOT lifted
+    closing = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    assert abs(closing - 0.27) < 0.02
+    assert PLAYER_CROWD_LIFT_CEIL <= 1.0
 
 
 def test_r16_template_handlers():

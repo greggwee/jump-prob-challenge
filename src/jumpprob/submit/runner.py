@@ -92,6 +92,20 @@ PLAYER_TRANSFER = 0.80   # validated flat optimum on settled player_ga (scripts/
 # pure book (model 0.250 / w=.85 0.206 / book 0.202) — the model is data-gapped on stars, so
 # it keeps only a 20% sliver of the goal-market share: live w_market=.85 -> player w=.97.
 PLAYER_MODEL_FRAC = 0.20
+# P4b player-prop crowd premium — the Jump crowd we are SCORED against prices these props
+# systematically ABOVE the book we anchor to (+13 pts / +18 on SoT across 17 settled anchored
+# props) and is better calibrated (Brier .223 vs book .258, n=29). We can't see the crowd
+# pre-lock, but the per-archetype premium is stable; lift book-anchored player props toward it
+# by the fitted amount, damped and capped. Refit in daily_learn.
+# Shift magnitude (PLAYER_CROWD_LIFT): leave-one-out Brier over the 29 settled anchored props is
+# MONOTONE in the shift (book .258 -> f=.5 .241 -> f=.75 .234 -> f=1 .231, crowd floor .223) with
+# gains flattening past .75 (.0065 -> .0035). 0.75 is the knee — banks ~87% of the max lift
+# without greedily fitting the last of the magnitude on thin n. (n=17 earlier favored .5; the
+# fuller ledger resolved it upward.)
+PLAYER_CROWD_PREM_PATH = Path("data/processed/player_crowd_premium.json")
+PLAYER_CROWD_LIFT = 0.75      # LOO knee on 29 settled props (see above); refit-robust to the cap
+PLAYER_CROWD_LIFT_CAP = 0.10  # never add more than 10 pts (bounds a runaway refit on thin n)
+PLAYER_CROWD_LIFT_CEIL = 0.85  # skip props already priced high — no crowd headroom (both agree)
 CLUB_RATES = Path("data/processed/player_rates_combined.parquet")
 SOT_PER_SHOT = 0.37   # Understat has no SoT -> estimate from total shots
 P_RED_MATCH = 0.065   # P(>=1 red): 0.067 reds/match measured, 6 tournaments
@@ -180,6 +194,14 @@ def _norm_name(s: str) -> str:
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
 
 
+def _load_crowd_prem() -> dict:
+    """Fitted per-archetype player-prop crowd premium (prob units); {} if unavailable."""
+    try:
+        return json.loads(PLAYER_CROWD_PREM_PATH.read_text()).get("premium", {})
+    except (OSError, ValueError):
+        return {}
+
+
 @dataclass
 class MatchContext:
     team_a: str          # listed first in match name
@@ -223,6 +245,7 @@ class Runner:
         self.risk_on = strategy.risk_enabled()
         self.panel = panel_mod.load_panel()                     # L0 LLM expert cache (shadow by default)
         self.expert_gate = panel_mod.load_gate()                # L2 per-archetype blend gate (off unless AI_EXPERT_ENABLE)
+        self.player_crowd_prem = _load_crowd_prem()             # P4b per-archetype crowd-premium lift
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -865,6 +888,14 @@ class Runner:
                     # (w_market=1.0 closing-line pass -> pure book; live 0.85 -> 0.97).
                     w_p = 1.0 - PLAYER_MODEL_FRAC * (1.0 - self.w_market)
                     p_a = float(np.clip(blend([p, pm], [1 - w_p, w_p]), 0.01, 0.99))
+                    # P4b: lift toward the crowd we're scored against (it prices these props
+                    # above the book AND calibrates better). Damped half-shift, capped, one-sided
+                    # (up only), and only on the live 0.85 pass — the w=0/1 CLV passes stay pure so
+                    # the divergence audit still measures the raw book anchor. Skip already-high
+                    # props (>=CEIL): there the book and crowd agree and there's no headroom.
+                    prem = self.player_crowd_prem.get(q.archetype, 0.0)
+                    if prem and 0.0 < self.w_market < 1.0 and p_a < PLAYER_CROWD_LIFT_CEIL:
+                        p_a = float(np.clip(p_a + min(PLAYER_CROWD_LIFT * prem, PLAYER_CROWD_LIFT_CAP), 0.01, 0.99))
                 elif ctx.anchored and fam == "goal":
                     p_a = p  # market is already calibrated/conservative — don't shrink
                 else:
