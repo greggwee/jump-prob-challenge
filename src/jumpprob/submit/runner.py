@@ -93,19 +93,25 @@ PLAYER_TRANSFER = 0.80   # validated flat optimum on settled player_ga (scripts/
 # it keeps only a 20% sliver of the goal-market share: live w_market=.85 -> player w=.97.
 PLAYER_MODEL_FRAC = 0.20
 # P4b player-prop crowd premium — the Jump crowd we are SCORED against prices these props
-# systematically ABOVE the book we anchor to (+13 pts / +18 on SoT across 17 settled anchored
-# props) and is better calibrated (Brier .223 vs book .258, n=29). We can't see the crowd
-# pre-lock, but the per-archetype premium is stable; lift book-anchored player props toward it
-# by the fitted amount, damped and capped. Refit in daily_learn.
-# Shift magnitude (PLAYER_CROWD_LIFT): leave-one-out Brier over the 29 settled anchored props is
-# MONOTONE in the shift (book .258 -> f=.5 .241 -> f=.75 .234 -> f=1 .231, crowd floor .223) with
-# gains flattening past .75 (.0065 -> .0035). 0.75 is the knee — banks ~87% of the max lift
-# without greedily fitting the last of the magnitude on thin n. (n=17 earlier favored .5; the
-# fuller ledger resolved it upward.)
+# systematically ABOVE the book we anchor to (crowd .223 vs book .258 Brier, n=29 settled anchored
+# props). Quant audit 2026-07-06 confirmed the edge is real, NOT an artifact: the gap survives
+# dropping any single match, outcome reconstruction is clean (0/29 mismatch), and it is LARGER
+# without the anchored-only filter. Root cause is a book LOW-SIDE miscalibration — book prices in
+# [0,.34) realize .44. We can't see the crowd pre-lock; lift book-anchored player props toward it
+# by the fitted per-archetype premium, DAMPED and CAPPED. Refit in daily_learn.
+# MAGNITUDE IS NOT DATA-IDENTIFIED (audited): the LOO-Brier-vs-shift curve is MONOTONE (more lift =
+# lower Brier, no interior optimum; bootstrap argmin sits at the grid edge), the raw crowd-beats-
+# book edge is only borderline (p~.065) and its DIRECTION is a 15-14 coin flip — the win is
+# magnitude on mid-priced props, not hit-rate. So PLAYER_CROWD_LIFT is a deliberate CONSERVATIVE
+# under-shift for safety, NOT a fitted optimum: 0.5 keeps ~70% of the modelled gain while ~halving
+# the calm-match downside; let forward settlement earn any increase. The CAP is the real
+# regularizer — it BINDS on SoT (biggest premium / most low-priced props, where a flat additive
+# lift most overshoots) and bounds any daily_learn refit. A price-interacted or logit-space lift
+# was tested and is worse/neutral at this n, so the flat-additive form stays.
 PLAYER_CROWD_PREM_PATH = Path("data/processed/player_crowd_premium.json")
-PLAYER_CROWD_LIFT = 0.75      # LOO knee on 29 settled props (see above); refit-robust to the cap
-PLAYER_CROWD_LIFT_CAP = 0.10  # never add more than 10 pts (bounds a runaway refit on thin n)
-PLAYER_CROWD_LIFT_CEIL = 0.85  # skip props already priced high — no crowd headroom (both agree)
+PLAYER_CROWD_LIFT = 0.5       # deliberate conservative under-shift (magnitude unidentified, p~.065)
+PLAYER_CROWD_LIFT_CAP = 0.06  # BINDING guardrail: max +6 pts/prop; caps SoT + any refit over-lift
+PLAYER_CROWD_LIFT_CEIL = 0.85  # skip props already priced high — crowd premium ~0 there (both agree)
 CLUB_RATES = Path("data/processed/player_rates_combined.parquet")
 SOT_PER_SHOT = 0.37   # Understat has no SoT -> estimate from total shots
 P_RED_MATCH = 0.065   # P(>=1 red): 0.067 reds/match measured, 6 tournaments
