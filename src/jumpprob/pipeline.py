@@ -65,7 +65,7 @@ class Pipeline:
                 rows.append({"period": r.period, "lam_team": la, "lam_opp": lb,
                              "referee": r.referee, "corners": r.corners, "cards": r.cards,
                              "offsides": r.offsides, "shots_on_target": r.shots_on_target,
-                             "fouls": r.fouls})
+                             "fouls": r.fouls, "shots": r.shots})  # shots = total (on+off), real data
         return fit_count_model(pd.DataFrame(rows))
 
     def predict_fixture(

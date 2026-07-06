@@ -17,3 +17,16 @@ data/processed/clv_ledger.csv
 data/processed/clv_analysis.csv
 data/*.txt
 data/*.log
+
+# LLM expert panel — slate-specific, non-deterministic caches (regenerated per slate)
+data/processed/ai_panel*.json
+# Tier-3 web pass: runtime state + forward-test ledger
+data/processed/ai_panel_web_state.json
+data/processed/ai_panel_web_ledger.csv
+
+# operational audit ledgers + analysis artifacts (regenerable / append-only runtime state)
+data/processed/divergence_audit.csv
+data/processed/template_audit.csv
+data/processed/master_eval.parquet
+data/processed/gigabot2_plan.csv
+data/processed/scheduler_state_b.json

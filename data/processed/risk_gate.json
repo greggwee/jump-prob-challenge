@@ -1,0 +1,8 @@
+{
+  "offsides_ge": 0.15,
+  "fouls_gt": 0.15,
+  "cards_ge": 0.5,
+  "cards_gt": 0.5,
+  "team_cards_ge": 0.5,
+  "both_teams_sot_ge": 0.3
+}

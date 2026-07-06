@@ -113,3 +113,51 @@ class TestKFor:
 
     def test_aggression_scales_excess(self):
         assert k_for("count", {"count": 1.4}, 1.0, 0.5) == pytest.approx(1.0 + 0.4 * 0.5)
+
+
+class TestRisk:
+    GATE = {"offsides_ge": 0.5}
+    BASE = {"offsides_ge": 0.525}
+
+    def test_shrinks_gated_toward_base(self):
+        from jumpprob.models.strategy import apply_risk
+        # an over-confident low offsides is pulled toward the 0.525 base
+        out = apply_risk(0.16, "offsides_ge", self.GATE, self.BASE)
+        assert 0.16 < out < 0.525
+        # symmetric: an over-confident high one is pulled down toward base
+        hi = apply_risk(0.80, "offsides_ge", self.GATE, self.BASE)
+        assert 0.525 < hi < 0.80
+
+    def test_noop_for_ungated_archetype(self):
+        from jumpprob.models.strategy import apply_risk
+        # player props / edge archetypes are NOT in the gate -> untouched
+        assert apply_risk(0.10, "player_sot_ge", self.GATE, self.BASE) == pytest.approx(0.10)
+        assert apply_risk(0.90, "corners_gt", self.GATE, self.BASE) == pytest.approx(0.90)
+
+    def test_base_rate_aware_keeps_justified_extreme(self):
+        from jumpprob.models.strategy import apply_risk
+        # if the model already sits at the base rate, nothing moves (no unjustified deviation)
+        assert apply_risk(0.525, "offsides_ge", self.GATE, self.BASE) == pytest.approx(0.525)
+
+    def test_risk_enabled_default_off(self, monkeypatch):
+        import jumpprob.models.strategy as S
+        monkeypatch.setattr(S, "_risk_env_loaded", True, raising=False)
+        monkeypatch.setenv("RISK_GATE_ENABLE", "0")
+        assert S.risk_enabled() is False
+        monkeypatch.setenv("RISK_GATE_ENABLE", "1")
+        assert S.risk_enabled() is True
+
+    def test_both_teams_sot_shrinks_toward_base(self):
+        # both-teams SoT is no-edge noise: confident 88/24 splits, Brier 0.33 vs
+        # 0.21 for the base rate (the -89 RBP leak found 2026-06-22). The LIVE gate
+        # must shrink it toward its empirical ~0.70 base so the over-confident calls
+        # don't go out raw. Single base (n=10 too thin to split full/half reliably).
+        from jumpprob.models.strategy import apply_risk, load_risk_gate, load_base_rates
+        gate, base = load_risk_gate(), load_base_rates()
+        assert "both_teams_sot_ge" in gate
+        b = base["both_teams_sot_ge"]
+        assert 0.6 < b < 0.8                                   # base lifted off the bogus 0.525
+        hi = apply_risk(0.93, "both_teams_sot_ge", gate, base)  # over-confident call shrinks down
+        assert b < hi < 0.93
+        lo = apply_risk(0.10, "both_teams_sot_ge", gate, base)  # under-confident call shrinks up
+        assert 0.10 < lo < b

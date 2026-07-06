@@ -79,6 +79,13 @@ def main() -> None:
     #    LOO-match CV, so a refit can only tighten the floor set, never regress it.
     _run("settled dataset", "scripts/build_settled_dataset.py", want_line="wrote settled_with_crowd")
     _run("confidence", "scripts/fit_confidence.py", want_line="wrote confidence_gate")
+    #    P1: refresh the per-archetype crowd prior (the submit-time catastrophic-deviation
+    #    clamp's proxy) as newly harvested crowd rows accumulate.
+    _run("crowd prior", "scripts/fit_crowd_prior.py", want_line="crowd_prior")
+    # 5. forward shadow-scorer for the open quant-review hypotheses (de-extremize /
+    #    A>B over-prediction). Append-only ledger, FIXED params -> validates on fresh
+    #    settled data before either touches the live path. Logged, never auto-applied.
+    _run("shadow hypotheses", "scripts/shadow_decalib.py", want_line="de-extremize")
 
     log("daily learn complete")
 

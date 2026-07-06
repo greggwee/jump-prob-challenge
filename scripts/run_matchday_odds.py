@@ -8,6 +8,18 @@ data/processed/odds_anchor_run.csv so closing-line value is measurable later.
 """
 
 import sys
+import json
+
+# The scheduler runs this via subprocess with a cp1252-encoded stdout pipe; printing a player
+# name outside cp1252 ('Demirović', U+0107) raised UnicodeEncodeError and KILLED the near-KO
+# tick before the PATCH loop (USA vs BIH 23:58Z). Force utf-8 + replace so a print can never
+# abort a submission.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        if _s is not None:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 import numpy as np
 import pandas as pd
@@ -21,6 +33,10 @@ from jumpprob.pipeline import Pipeline
 from jumpprob.simulate.mc_engine import MCEngine
 from jumpprob.submit.api_client import SportsPredictClient
 from jumpprob.submit.runner import Runner
+from jumpprob.submit.parser import parse_question
+from jumpprob.normalize.teams import canonical
+from jumpprob.submit.audit import (book_vs_model_divergence, is_anchor_regression,
+                                   previously_anchored_markets, load_crowd_prior, crowd_clamp)
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
@@ -29,7 +45,16 @@ live = "--live" in sys.argv
 client = SportsPredictClient("SPORTSPREDICT_KEY_A", dry_run=not live)
 
 print("fetching live odds...")
-events = odds_api.fetch_events()
+try:
+    events = odds_api.fetch_events()
+except Exception as e:
+    # Odds API quota exhaustion (401 at 0 credits) or an outage must NEVER kill a
+    # submission run — fall back to the most recent cached snapshot. A few-hours-old
+    # book anchor is far better than the pure model, and the anchor-regression guard
+    # protects previously anchored props if even the cache is empty.
+    events = odds_api.load_latest()
+    print(f"!! live odds fetch FAILED ({str(e)[:60]}) -> using the latest CACHED snapshot "
+          f"({len(events)} events). Check The Odds API quota.")
 anchors = odds_api.build_anchors(events)
 print(f"{len(anchors)} fixtures with book consensus")
 
@@ -55,14 +80,41 @@ all_markets = [m for m in client.markets(LOBBY)
 print(f"{len(all_markets)} open markets" + (f" (filtered to {matches_filter})" if matches_filter else ""))
 market_rows = [{**m, "match": m["match"]} for m in all_markets]
 
+# player-prop market anchor (verified live: SoT / scorer / assist). Fetch on a full run;
+# reuse the cached snapshot on a targeted scheduler tick (per-event prop credits add up).
+try:
+    player_props = odds_api.fetch_player_props() if matches_filter is None else odds_api.load_latest_props()
+    print(f"player props: {len(player_props)} fixtures")
+except Exception as e:
+    # same quota/outage resilience as the main odds fetch: cached props before model-only
+    try:
+        player_props = odds_api.load_latest_props()
+        print(f"!! props fetch FAILED ({str(e)[:50]}) -> latest CACHED props ({len(player_props)} fixtures)")
+    except Exception:
+        print(f"player props unavailable ({str(e)[:50]}) -> model-only")
+    player_props = {}
+
 # three passes for CLV (improvement #1): pure model (w=0, no anchors), the
 # odds-anchored blend we submit (w=0.85), and the pure closing line (w=1).
 pure, _ = runner.predictions_for(market_rows)
-anchored, skipped = runner.predictions_for(market_rows, anchors=anchors)
+anchored, skipped = runner.predictions_for(market_rows, anchors=anchors, player_props=player_props)
 blend_w = runner.w_market
 runner.w_market = 1.0
-market, _ = runner.predictions_for(market_rows, anchors=anchors)
+market, _ = runner.predictions_for(market_rows, anchors=anchors, player_props=player_props)
 runner.w_market = blend_w  # restore the blend weight
+
+# P5 template audit: every question that did NOT price is a potential new phrasing/market
+# type — surface it LOUDLY every run and persist a ledger. The header-goal and
+# any-player-2+ drops sat invisible for days because `skipped` was silently discarded;
+# a new R16 phrasing must be seen the first run it appears, not post-settlement.
+if skipped:
+    print(f"\n!! TEMPLATE AUDIT: {len(skipped)} open questions NOT priced (new phrasing/market type?):")
+    for s in skipped:
+        print(f"    [{s['match']}] ({s['reason']}) {s['question'][:70]}")
+    _tl = Path("data/processed/template_audit.csv")
+    _ta = pd.DataFrame(skipped)
+    _ta.insert(0, "ts", pd.Timestamp.now(tz="UTC").isoformat())
+    _ta.to_csv(_tl, mode="a", header=not _tl.exists(), index=False)
 pure_by_mkt = {r["market_id"]: r for r in pure}
 mkt_by_mkt = {r["market_id"]: r for r in market}
 
@@ -74,7 +126,50 @@ for r in anchored:
                  "sub_market": m.get("sub_a", r["sub_a"])})
 df = pd.DataFrame(rows)
 df["delta"] = df["sub_a"] - df["sub_pure"]
+
+# P1 crowd-proxy deviation clamp: pull any UNBACKED submission back to within 25 pts of the
+# archetype's crowd prior. Measured risk curve (336 crowd rows): 5-15 pt deviations from the
+# crowd are +EV; 25+ pt deviations were -0.095/mkt, every loss a bug-class extreme. Book-
+# anchored markets and fringe player LOWS (a validated edge) are exempt inside crowd_clamp.
+# OOS check: fires 0 times on the current fixed pipeline — pure tail insurance.
+_prior = load_crowd_prior()
+_clamps = []
+_ba = (df["sub_market"] - df["sub_pure"]).abs() >= 2
+_new = []
+for _r, _b in zip(df.itertuples(), _ba):
+    _np, _info = crowd_clamp(_r.archetype, _r.sub_a, bool(_b), _prior)
+    _new.append(_np)
+    if _info and _np != int(round(_r.sub_a)):
+        _clamps.append((_r.match, _r.archetype, _info["was"], _np, _info["proxy"], _r.question[:44]))
+df["sub_a"] = _new
+if _clamps:
+    print(f"\n!! crowd-proxy clamp fired on {len(_clamps)} markets (unbacked extreme deviations):")
+    for mt, a, was, now, px, qq in _clamps:
+        print(f"    {was} -> {now} (crowd prior {px:.0f}) [{mt}] {a}: {qq}")
+
 df.to_csv("data/processed/odds_anchor_run.csv", index=False)
+
+# Expert overrides: hand-curated, HARD/HISTORICAL-evidence-only values from the expert
+# sense-check (data/processed/expert_overrides.json, per-market, loudly printed). Applied
+# after the clamp so a fat-fingered override still can't produce a silent extreme; a
+# scheduler tick re-applies them, so they survive re-pricing until the market settles.
+try:
+    _ov = json.loads(Path("data/processed/expert_overrides.json").read_text())
+except Exception:
+    _ov = {}
+_hits = df["market_id"].astype(str).map(_ov.__contains__) if _ov else None
+if _ov and _hits is not None and _hits.any():
+    print("")
+    print(f"!! expert overrides applied to {int(_hits.sum())} markets:")
+    for _r in df[_hits].itertuples():
+        _o = _ov[str(_r.market_id)]
+        print(f"    {_r.sub_a} -> {_o['value']}  ({_o['why'][:80]}) | {_r.question[:44]}")
+        df.loc[df.market_id == _r.market_id, "sub_a"] = int(_o["value"])
+
+# Snapshot which markets were book-anchored on a PREVIOUS run BEFORE appending this run's
+# rows — the anchor-regression guard needs prior-run evidence, and appending first would let
+# this run's own props-less rows erase it.
+prev_anchored = previously_anchored_markets()
 
 # append to the persistent CLV ledger (pure / market-close / blend per market)
 ledger = Path("data/processed/clv_ledger.csv")
@@ -93,16 +188,66 @@ big = df.reindex(df["delta"].abs().sort_values(ascending=False).index).head(20)
 for r in big.itertuples():
     print(f"  {r.sub_pure:>2} -> {r.sub_a:<2} ({r.delta:+d})  [{r.match}] {r.question[:46]}")
 
+# Name-join audit (robust future-proofing): a player prop whose subject matches NO book key
+# despite the match having book data is a likely new spelling-miss class — this is exactly how
+# the Haaland (middle name) and Sørloth/Ødegaard (ø-dropped) drops were found. Surface them
+# every run so the next one is caught immediately instead of post-settlement.
+_PLAYER_ARCH = {"player_scores", "player_ga", "player_sot_ge"}
+anchor_misses = []
+for r in anchored:
+    if r["archetype"] not in _PLAYER_ARCH:
+        continue
+    teams = runner.resolve_teams(r["match"], [r["question"]])
+    pp = (player_props.get(teams) or player_props.get((teams[1], teams[0])) or {}) if teams else {}
+    if not pp:
+        continue                       # no book data for this match -> uncovered, not a miss
+    q = parse_question(r["question"], teams={canonical(t) for t in teams})
+    subj = q.subject if q else None
+    if subj and not odds_api.resolve_player(subj, pp):
+        anchor_misses.append((r["match"], subj, r["archetype"]))
+if anchor_misses:
+    print(f"\n!! {len(anchor_misses)} player props have book data but NO name match "
+          f"(possible new spelling miss -> extend norm_player/_TRANSLIT or resolve_player):")
+    for mt, subj, a in anchor_misses[:15]:
+        print(f"    [{mt}] {subj!r}  ({a})")
+
+# Book-vs-model divergence audit: a large gap between the pure model and the de-vigged book
+# is either a model DATA-GAP (Haaland 7 vs 52: rate not loaded) or a book market that doesn't
+# match the question (scope/threshold/semantics). At w_market=0.85 a bad anchor is costly, so
+# surface them every run + log a trend ledger. Reporting only — submissions are unchanged.
+div = book_vs_model_divergence(df, min_pts=20)
+if len(div):
+    print(f"\n!! {len(div)} markets where the BOOK diverges >=20pts from the model "
+          f"(data-gap or possible market mismatch — review, esp. player props):")
+    for r in div.head(20).itertuples():
+        print(f"    model {r.sub_pure:>2} -> book {r.sub_market:<3} final {r.sub_a:<3} "
+              f"({r.book_gap:+d}, lg {r.logit_gap}) [{r.match}] {r.archetype}: {r.question[:36]}")
+    _dl = Path("data/processed/divergence_audit.csv")
+    led = div[["market_id", "match", "archetype", "question",
+               "sub_pure", "sub_market", "sub_a", "book_gap", "logit_gap"]].copy()
+    led.insert(0, "ts", stamp)
+    led.to_csv(_dl, mode="a", header=not _dl.exists(), index=False)
+
 if not live:
     print("\nDRY RUN — rerun with --live to PATCH Bot A. Sheet: data/processed/odds_anchor_run.csv")
 else:
     preds = client.my_predictions(LOBBY)
     by_market = {p["market_id"]: p for p in preds}
-    n_patch = n_new = n_fail = 0
+    n_patch = n_new = n_fail = n_kept = 0
     failures = []
     for r in df.itertuples():
         existing = by_market.get(r.market_id)
         new = int(r.sub_a)
+        # Anchor-regression guard: don't let a run whose book prop momentarily vanished
+        # overwrite a previously anchored player prop with the bare model (the Diallo 50->24
+        # KO lock). was_anchored (prior-run ledger evidence) is REQUIRED — without it the guard
+        # kept a stale mis-parsed 'DR Congo scores' at 8% against the pipeline's corrected 42
+        # (crowd 37, out=YES, the single biggest R32 loss).
+        if is_anchor_regression(r.archetype, existing["probability"] if existing else None,
+                                r.sub_pure, r.sub_market,
+                                was_anchored=r.market_id in prev_anchored):
+            n_kept += 1
+            continue
         try:
             if existing is None:
                 client.submit_batch([{"market_id": r.market_id, "lobby_id": LOBBY, "probability": new}])
@@ -113,8 +258,8 @@ else:
         except Exception as e:  # one market's failure must not abort the batch
             n_fail += 1
             failures.append((r.market_id, str(e)[:80]))
-    print(f"\nLIVE: PATCHed {n_patch}, submitted {n_new} new, {n_fail} failed, "
-          f"{len(df) - n_patch - n_new - n_fail} already current.")
+    print(f"\nLIVE: PATCHed {n_patch}, submitted {n_new} new, {n_fail} failed, {n_kept} kept "
+          f"(anchor-regression guard), {len(df) - n_patch - n_new - n_fail - n_kept} already current.")
     if failures:
         print("failures (re-run to retry these):")
         for mid, err in failures[:10]:

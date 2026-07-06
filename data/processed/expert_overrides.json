@@ -1,0 +1,22 @@
+{
+ "fc3f2e1c-e17f-4caa-8c6f-7e370746fcf0": {
+  "value": 45,
+  "why": "HARD: Spain 7.0 SoT/match this WC; Costa 6 & 5 saves last two matches; model 24 violates the plan's pre-registered rail [.30,.55] (WC26 SoT-level drift)",
+  "set": "2026-07-06 expert sense-check"
+ },
+ "114c9f1a-6511-4344-9a98-7481f760519b": {
+  "value": 52,
+  "why": "HISTORICAL: StatsBomb base P(any team player 2+ SoT)=.485 over 600 team-matches; POR volume + WC26 SoT drift; structural model input under-leveled",
+  "set": "2026-07-06 expert sense-check"
+ },
+ "cfd8aa23-615c-4ffc-8b76-cdf72d4fa69d": {
+  "value": 50,
+  "why": "HARD-CURRENT: Spain 14.25 corners/match this WC (FOX team stats); count model under-leveled",
+  "set": "2026-07-06 expert sense-check"
+ },
+ "b55480b4-c269-4fe1-880e-3cec0bdbe9d1": {
+  "value": 45,
+  "why": "DE-RISK: uncalibrated first-card race model; expert historical read 45",
+  "set": "2026-07-06 expert sense-check"
+ }
+}

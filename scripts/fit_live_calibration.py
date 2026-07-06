@@ -51,10 +51,13 @@ c = pd.read_csv("data/processed/backtest_counts.csv")
 c = c[c["src"] == "model"]
 table["count"] = fit(c["p"], c["outcome"].to_numpy(), "count")
 
-praw = Path("data/processed/backtest_players_raw.csv")
-if praw.exists():
-    p = pd.read_csv(praw)
-    table["player"] = fit(p["p_model"], p["outcome"].to_numpy(), "player")
+# PLAYER: identity. The backtest Platt fit ([0.96, -0.26]) does NOT transfer to the
+# LIVE settled distribution -- 5-fold CV on the live settled player props: the fit
+# scores 0.2092 OOS vs 0.2058 for neutral (the -0.26 intercept pushed already-low,
+# now BOOK-ANCHORED props further DOWN, compounding under-prediction). Player props
+# are calibrated by the de-vigged book anchor now; shipping a non-transferring Platt
+# shift just adds harm. Re-enable only if a fit beats neutral on LIVE settled data.
+table["player"] = [1.0, 0.0]
 
 # OFFSIDES (#2): a StatsBomb->SportsPredict definition gap over-prices offsides
 # LIVE (backtest is calibrated; live n=8 had pred 0.50 vs realized 0.125). Fit a

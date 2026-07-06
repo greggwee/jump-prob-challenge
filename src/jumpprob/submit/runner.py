@@ -34,7 +34,10 @@ from jumpprob.normalize.teams import canonical
 from jumpprob.normalize.players import build_index as _club_index_fn, resolve as _club_resolve
 from jumpprob.simulate import markets as mk
 from jumpprob.simulate import mc_engine
+from jumpprob.models.dynamics import Dynamics, BUCKET
+from jumpprob.ingest.odds_api import norm_player, resolve_player
 from jumpprob.submit.parser import ParsedQuestion, parse_question
+from jumpprob.agents import panel as panel_mod  # out-of-band LLM blend (daemon reads cache only)
 
 # Archetype families (calibration + engine routing). Timing markets are the
 # subset the analytic engine only approximates — route them through the v2 MC
@@ -43,7 +46,13 @@ from jumpprob.submit.parser import ParsedQuestion, parse_question
 TIMING_ARCHS = {"ht_tied", "ht_leading", "h2_more_goals_than_h1", "first_goal_half",
                 "first_goal_and_win", "first_goal_and_opp_2h", "goals_gt_half"}
 GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge",
-              "team_scores_half", "half_total_ge", "team_goals_ge"} | TIMING_ARCHS
+              # R16 grid/lambda-derived templates: registering them makes anchored answers
+              # pass through instead of taking a 25% base-rate dilution (review §3.4)
+              "pen_shootout", "total_exact", "goal_each_half", "leads_at_any_point",
+              "extra_time", "halves_equal_goals",
+              "team_scores_half", "half_total_ge", "team_goals_ge",
+              "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
+              "advance"} | TIMING_ARCHS
 COUNT_ARCHS = {"corners_gt", "sot_gt", "fouls_gt", "cards_gt", "team_corners_ge",
                "team_sot_ge", "team_cards_ge", "cards_ge", "corners_total_ge",
                "total_sot_half_ge", "total_sot_ge", "offsides_ge", "both_teams_sot_ge"}
@@ -78,14 +87,93 @@ MINUTE_SCENARIOS = [(0.80, 80.0), (0.12, 25.0), (0.08, 0.0)]
 # (tougher opponents, less-familiar teammates). Fit on settled player props (see
 # scripts/fit_player_transfer.py); 1.0 = no discount.
 PLAYER_TRANSFER = 0.80   # validated flat optimum on settled player_ga (scripts/fit_player_transfer.py)
+# Model share of the PLAYER-prop book blend, as a fraction of the goal-market model share
+# (1-w_market). Fit 2026-07-01 on 51 settled anchored props: Brier is monotone toward the
+# pure book (model 0.250 / w=.85 0.206 / book 0.202) — the model is data-gapped on stars, so
+# it keeps only a 20% sliver of the goal-market share: live w_market=.85 -> player w=.97.
+PLAYER_MODEL_FRAC = 0.20
 CLUB_RATES = Path("data/processed/player_rates_combined.parquet")
 SOT_PER_SHOT = 0.37   # Understat has no SoT -> estimate from total shots
 P_RED_MATCH = 0.065   # P(>=1 red): 0.067 reds/match measured, 6 tournaments
 P_PEN_MATCH = 0.293   # A6
+# Knockout advancement (advance to next round = win THIS tie, incl. extra time + penalties).
+# Grounded on martj42: ET goals run 0.30/30min = 0.34x pro-rated regulation (unbiased over
+# 839 ET matches), and 81% of ET matches STILL go to penalties; shootouts are ~a coin flip
+# with a mild favorite tilt (0.49 even -> 0.57 big-favorite over 678 historical shootouts).
+ET_TEMPO = 0.35       # extra-time scoring as a fraction of pro-rated regulation
+PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
+
+# Event markets our 90-min minute profile can't reach. Stoppage goals scale with the
+# match's scoring (lambda_W = lambda_tot * goal-share); subs are ~fixed base rates.
+# Defaults are football norms, overridden by data/processed/event_baselines.json
+# (api-football WC2022, scripts/build_event_baselines.py).
+EVENT_BASE_DEFAULTS = {
+    "goal_share_1h_stoppage": 0.02, "goal_share_2h_stoppage": 0.08,
+    "sub_before_ht": 0.12, "substitute_scores": 0.18,
+    # own_goal: flat P(>=1 OG/match). Thinning-by-total-goals was TESTED and lost to flat
+    # (OGs don't scale with goals). 0.10 = WC-finals prior 0.062 shrunk with WC26's ~0.14 (the
+    # friendly-polluted all-comp pool of 0.019 badly under-prices the WC).
+    "own_goal": 0.10,
+    # outside_box_share: share of open-play goals from outside the box (StatsBomb). Validated
+    # as a Poisson thinning of the goal intensity (+0.021 Brier vs flat, calibrated).
+    "outside_box_share": 0.13,
+    # header_share: share of open-play goals headed in (StatsBomb). Validated thinning
+    # (+0.027 Brier vs flat on held-out matches, calibrated at 1-3 goals).
+    "header_share": 0.21,
+    # P(a named starter plays the full 90): ~5 subs over 10 outfield -> ~52% survive;
+    # attackers are subbed more -> 0.42. R16 template (plays_full_match), no book market.
+    "player_full90": 0.42,
+    # QF subs exceedance (WC2022 all 64, Laplace-shrunk, ET stratum from the 5 fetched
+    # ET matches — reg-subs 6,8,8,5,6): mixture weight = P(draw90) at answer time.
+    "subs_ge8_nonET": 0.836, "subs_ge9_nonET": 0.738, "subs_ge10_nonET": 0.443,
+    "subs_ge8_ET": 0.429, "subs_ge9_ET": 0.143, "subs_ge10_ET": 0.143,
+}
+_EVENT_BASE_PATH = Path("data/processed/event_baselines.json")
+
+# any-player markets: P(some player has >=2 of the team's goals | team scored g) and the
+# same for SoT — the "concentration" of a team's output onto one player (player_match,
+# 314 matches, monotone-cleaned). any-player rides the team goal/SoT distribution we
+# already model, so it lambda-scales (more team output -> more likely someone gets 2+).
+BRACE_BY_TEAM_GOALS = [0.0, 0.0, 0.156, 0.42, 0.77, 0.85, 1.0, 1.0, 1.0, 1.0, 1.0]
+SOTCONC_BY_TEAM_SOT = [0.0, 0.0, 0.13, 0.33, 0.58, 0.71, 0.88, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 BOT_A_BASE_WEIGHT = 0.25
 
 H1 = 1 - mk.SECOND_HALF_SHARE
 H2 = mk.SECOND_HALF_SHARE
+
+# Hydration/cooling-break windows: breaks at the 22' mark of EACH half, i.e. match
+# minute 22 and 45+22=67 (platform definition). "before the first break" = [0,22);
+# "after the second break" = [67,90) (+ stoppage). Match-level P(>=thr family events
+# in the minute window), integrated analytically from the minute-profile (no MC
+# change). archetype -> (dynamics family, slot_lo, slot_hi).
+_WINDOW = {
+    "goal_pre_hb1": ("goal", 0, 22), "goal_post_hb2": ("goal", 67, 90),
+    "corners_pre_hb1": ("corner", 0, 22), "cards_post_hb2": ("card", 67, 90),
+    "offsides_pre_hb1": ("offside", 0, 22),
+}
+_DYN_PATH = Path("data/processed/minute_dynamics.json")
+
+
+def book_sot_ge_from_one_plus(p1: float, k: int) -> float | None:
+    """Derive a player-differentiated P(>=k SoT) from the book's 1+ SoT (Over-0.5) line.
+
+    The book only ever quotes the 0.5 line, i.e. P(>=1 SoT). Treating SoT as Poisson(mu),
+    P(>=1) = 1 - e^-mu  =>  mu = -ln(1 - P(>=1)); then P(>=k) = 1 - Poisson.cdf(k-1, mu).
+    This re-uses the book's player RANKING (elite shooters carry a high 1+ line, fringe
+    players a low one) for the >=2/>=3 thresholds, instead of dropping the only
+    player-differentiated signal we have and falling back to a flat undifferentiated model.
+
+    Worked numbers (settled R32 props snapshot): Mbappe 1+=0.834 -> mu=1.80 -> P(>=2)=0.54
+    (vs our flat 19, crowd 63, out=1); Sorloth 1+=0.658 -> mu=1.07 -> P(>=2)=0.29 (stays
+    moderate, crowd 33, out=0); Isak 1+=0.478 -> mu=0.65 -> P(>=2)=0.14 (low, crowd 32).
+
+    Returns None for k<=1 (caller uses the raw 1+ line directly) or a degenerate input."""
+    if k <= 1:
+        return None
+    p1 = float(np.clip(p1, 1e-6, 1 - 1e-9))
+    mu = -np.log(1.0 - p1)
+    from scipy.stats import poisson
+    return float(np.clip(1.0 - poisson.cdf(k - 1, mu), 0.0, 1.0))
 
 
 def _norm_name(s: str) -> str:
@@ -112,6 +200,14 @@ class Runner:
         self.player_transfer = PLAYER_TRANSFER
         self._load_club_rates()  # club-history priors for player props (data fix)
         self.mc = mc                    # optional v2 MCEngine for timing markets (rec #3)
+        # minute profile for the hydration/stoppage window markets (reuse the MC's, or
+        # load standalone so the analytic window handlers work even without an engine)
+        self.dyn = mc.dyn if mc is not None else (Dynamics.from_json(_DYN_PATH) if _DYN_PATH.exists() else None)
+        # stoppage/sub base rates (api-football WC2022, default to football norms)
+        self.event_base = dict(EVENT_BASE_DEFAULTS)
+        if _EVENT_BASE_PATH.exists():
+            _d = json.loads(_EVENT_BASE_PATH.read_text())
+            self.event_base.update({k: float(_d[k]) for k in EVENT_BASE_DEFAULTS if _d.get(k) is not None})
         self.calib = calibration if calibration is not None else self._load_calibration()
         from jumpprob.models.market_anchor import W_MARKET
         self.w_market = W_MARKET if w_market is None else w_market  # odds-blend weight (CLV passes set 0/1)
@@ -123,6 +219,10 @@ class Runner:
         self.base_rates = strategy.load_base_rates()
         self.field_sharpness = strategy.load_field_sharpness()  # Phase C
         self.confidence = strategy.load_confidence_gate()       # Phase 1 asym. calibration
+        self.risk = strategy.load_risk_gate()                   # Phase R de-confidence (off unless RISK_GATE_ENABLE)
+        self.risk_on = strategy.risk_enabled()
+        self.panel = panel_mod.load_panel()                     # L0 LLM expert cache (shadow by default)
+        self.expert_gate = panel_mod.load_gate()                # L2 per-archetype blend gate (off unless AI_EXPERT_ENABLE)
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -143,6 +243,13 @@ class Runner:
         from jumpprob.models import strategy
         if anchored and arch not in TIMING_ARCHS and fam == "goal":
             return p  # direct anchored market = calibrated floor
+        # No-edge archetypes belong to the risk gate (stage 8), which shrinks them
+        # toward base. Extremizing them here would amplify the very noise the risk
+        # gate then has to undo, so the two layers fight (e.g. count earns k=1.3 but
+        # offsides/fouls/both_teams have no edge). Leverage only the markets within a
+        # family that actually earned it; leave the no-edge ones for the risk gate.
+        if arch in self.risk:
+            return p
         gate_fam = "timing" if arch in TIMING_ARCHS else fam
         if gate_fam is None:
             return p
@@ -158,6 +265,29 @@ class Runner:
         (no-op where the gate has no entry, e.g. archetypes we have edge on)."""
         from jumpprob.models import strategy
         return strategy.apply_confidence(p, arch, self.confidence)
+
+    def _risk(self, arch: str, p: float) -> float:
+        """Phase R: shrink no-edge archetypes toward the base rate (no-op otherwise)."""
+        from jumpprob.models import strategy
+        return strategy.apply_risk(p, arch, self.risk, self.base_rates)
+
+    def _window_event(self, ctx: MatchContext, fam: str, lo: int, hi: int, thr: int) -> float | None:
+        """Match-level P(>=thr `fam` events in slots [lo,hi)). The minute profile's
+        bucket weights give the window's share of the family's intensity; scale the
+        match's expected total by that share. Goals are Poisson; counts inherit the
+        count model's dispersion via cm.pmf."""
+        if self.dyn is None or fam not in self.dyn.alpha:
+            return None
+        w = np.exp(np.asarray(self.dyn.alpha[fam])[BUCKET])
+        frac = float(w[lo:hi].sum() / w.sum())
+        if fam == "goal":
+            return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * frac))   # all are "a goal" (thr=1)
+        cm = self.pl.count_model
+        if cm is None:
+            return None
+        cf = mc_engine.COUNT_FAMILY[fam]
+        mu_tot = sum(cm.mu(cf, h, ctx.lam_a, ctx.lam_b) + cm.mu(cf, h, ctx.lam_b, ctx.lam_a) for h in (1, 2))
+        return float(cm.pmf(cf, mu_tot * frac)[thr:].sum())
 
     def _family(self, arch: str) -> str | None:
         # offsides get their OWN calibration: a StatsBomb→SportsPredict definition
@@ -330,8 +460,185 @@ class Runner:
             return np.convolve(cpmf(fam, 1, s), cpmf(fam, 2, s))
 
         a = q.archetype
+        if a in _WINDOW:
+            return self._window_event(ctx, *_WINDOW[a], q.threshold or 1)
+        if a in ("goal_1h_stoppage", "goal_2h_stoppage"):
+            # stoppage goals beyond the 90-min profile: lambda_W = lambda_tot * goal-share
+            share = self.event_base["goal_share_1h_stoppage" if a == "goal_1h_stoppage"
+                                    else "goal_share_2h_stoppage"]
+            return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * share))
+        if a == "sub_before_ht":
+            return float(self.event_base["sub_before_ht"])          # ~injury base rate
+        if a == "substitute_scores":
+            # subs come on ~72' and score ~17% of all goals (WC2022 events, lineup-verified),
+            # so the chance a sub scores tracks the match's goal expectation -> scale the base
+            # rate by this match's total goals vs the league average (blowout > tight game).
+            lam0 = 2.0 * float(np.exp(self.pl.goal_model.b0))   # league-average total goals
+            s = -np.log(1.0 - self.event_base["substitute_scores"]) / lam0
+            return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * s))
+        if a == "any_player_goals_ge":   # "any player score 2+ goals" — over the goal grid
+            if (q.threshold or 2) > 2:   # brace curve is P(some player >=2 | team goals); no 3+ data
+                return None
+            def _team_any(marg):
+                return float(sum(marg[g] * (BRACE_BY_TEAM_GOALS[g] if g < len(BRACE_BY_TEAM_GOALS) else 1.0)
+                                 for g in range(len(marg))))
+            return float(1 - (1 - _team_any(ctx.grid.sum(axis=1))) * (1 - _team_any(ctx.grid.sum(axis=0))))
         if a == "win":
             return None if side is None else mk.p_win(ctx.grid, side)
+        if a == "draw":
+            return mk.p_draw(ctx.grid)
+        if a == "first_goal_match":
+            # P(side scores the match's first goal) = P(side scores first | any goal)
+            # x P(>=1 goal). Inherits the market view via the (anchored) intensities.
+            if side is None:
+                return None
+            lt, _ = lams(side)
+            tot = ctx.lam_a + ctx.lam_b
+            return float(lt / tot * (1 - np.exp(-tot)))
+        if a == "win_margin":
+            if side is None:
+                return None
+            n = q.threshold or 1
+            idx = np.arange(ctx.grid.shape[0])
+            margin = np.subtract.outer(idx, idx)            # rows(a) - cols(b)
+            mask = (margin >= n) if side == "a" else (margin <= -n)
+            return float(ctx.grid[mask].sum())
+        if a == "clean_sheet":                              # opponent scores 0
+            if side is None:
+                return None
+            return float(ctx.grid[:, 0].sum()) if side == "a" else float(ctx.grid[0, :].sum())
+        if a == "score_both_halves":
+            if side is None:
+                return None
+            lt, _ = lams(side)
+            return float(mk.p_scores_in_half(lt, 1) * mk.p_scores_in_half(lt, 2))
+        if a == "advance":
+            # advance to the next round = win THIS knockout tie:
+            #   P(adv) = P(win 90) + P(draw 90) * P(advance | drawn after 90),
+            #   P(advance | draw) = P(win ET) + P(ET also drawn) * P(win shootout).
+            # ET = a low-tempo 30-min grid off the same (anchored) intensities; the
+            # shootout is ~a coin flip with a mild favorite tilt (see ET_TEMPO/PEN_TILT).
+            if side is None:
+                return None
+            other = "b" if side == "a" else "a"
+            p_win90, p_draw90, p_lose90 = mk.p_win(ctx.grid, side), mk.p_draw(ctx.grid), mk.p_win(ctx.grid, other)
+            lt, lo = lams(side)
+            et = dc_grid(ET_TEMPO / 3 * lt, ET_TEMPO / 3 * lo, ctx.rho_dc)
+            p_win_et, p_et_draw = mk.p_win(et, "a"), mk.p_draw(et)
+            r = p_win90 / (p_win90 + p_lose90) if (p_win90 + p_lose90) > 0 else 0.5
+            s_pen = 0.5 + PEN_TILT * (r - 0.5)
+            q = p_win_et + p_et_draw * s_pen
+            return float(p_win90 + p_draw90 * q)
+        # --- QF templates (2026-07-05; docs/QF-TEMPLATES-PLAN.md) ---
+        if a == "extra_time":
+            # ET <=> drawn after 90; the anchored grid's draw mass ~= the de-vigged book X
+            return float(mk.p_draw(ctx.grid))
+        if a == "halves_equal_goals":
+            # P(G1h == G2h) = sum_N P(total=N) x P(N splits equally). Given N, each goal
+            # falls in H1 iid w.p. H1 (the goal share): P(equal | N=2k) = Binom(2k, H1).pmf(k);
+            # zero for odd N. Binomial split validated on 11,658+ martj42 matches (plan s1).
+            from scipy.stats import binom
+            g = ctx.grid; n = g.shape[0]
+            tg = [float(sum(g[i, k - i] for i in range(k + 1) if k - i < n and i < n))
+                  for k in range(2 * n - 1)]
+            return float(sum(pg * binom.pmf(k // 2, k, H1) for k, pg in enumerate(tg) if k % 2 == 0))
+        if a == "subs_total_ge":
+            # Regulation-only subs are quota consumption, NOT a count process (WC2022
+            # var/mean 0.175): stratified empirical exceedance mixed by P(ET) — ET-bound
+            # matches HOLD subs back (reg-subs 6,8,8,5,6 in the five WC2022 ET matches).
+            key_ne = "subs_ge%d_nonET" % (q.threshold or 0)
+            key_et = "subs_ge%d_ET" % (q.threshold or 0)
+            if key_ne not in self.event_base or key_et not in self.event_base:
+                return None                      # un-tabled threshold -> template audit
+            pd_ = float(mk.p_draw(ctx.grid))
+            return float((1 - pd_) * self.event_base[key_ne] + pd_ * self.event_base[key_et])
+        if a == "player_saves_ge":
+            # saves == SoT-against - goals-against (identity exact in 628/628 StatsBomb
+            # matches): P(saves >= t) = sum_s P(SoT_opp = s) x P(Bin(s, 1-conv) >= t), with
+            # the count model's overdispersed SoT pmf and conv = lam_opp / mu_SoT_opp.
+            # Keeper quality rides the (anchored) lambdas; no GK-saves book market exists.
+            kteam = canonical(q.other) if q.other else None
+            kside = "a" if kteam == ctx.team_a else "b" if kteam == ctx.team_b else None
+            if kside is None:
+                return None
+            from scipy.stats import binom
+            cm = self.pl.count_model
+            if "shots_on_target" not in cm.params:
+                return None
+            lam_opp, lam_own = (ctx.lam_b, ctx.lam_a) if kside == "a" else (ctx.lam_a, ctx.lam_b)
+            mu_opp = sum(cm.mu("shots_on_target", h, lam_opp, lam_own) for h in (1, 2))
+            spmf = cm.pmf("shots_on_target", mu_opp)
+            mu_sot = float(sum(k2 * w2 for k2, w2 in enumerate(spmf)))
+            conv = min(0.9, lam_opp / mu_sot) if mu_sot > 0 else 0.3
+            t = q.threshold or 1
+            return float(sum(w2 * float(binom.sf(t - 1, k2, 1 - conv))
+                             for k2, w2 in enumerate(spmf) if k2 >= t))
+        if a == "first_card_before_goal":
+            # Time-varying competing-risks race on the minute profiles: cards are LATE-
+            # loaded vs goals, so the constant-rate answer overstates card-first by ~9 pts
+            # (plan s2). Settlement ambiguity (card but no goal ever): permissive reading
+            # (counts as YES) weighted 0.6 vs strict (a goal must follow) 0.4.
+            if self.dyn is None or "card" not in self.dyn.alpha or "goal" not in self.dyn.alpha:
+                return None
+            cm = self.pl.count_model
+            mu_c = sum(cm.mu("cards", h, ctx.lam_a, ctx.lam_b) + cm.mu("cards", h, ctx.lam_b, ctx.lam_a)
+                       for h in (1, 2))
+            lam_t = ctx.lam_a + ctx.lam_b
+            wc = np.exp(np.asarray(self.dyn.alpha["card"])[BUCKET]); wc = wc / wc.sum()
+            wg = np.exp(np.asarray(self.dyn.alpha["goal"])[BUCKET]); wg = wg / wg.sum()
+            hc, hg = mu_c * wc, lam_t * wg
+            S = np.exp(-(np.cumsum(hc + hg) - (hc + hg)))          # survival to slot start
+            p_perm = float(np.sum(hc * S))                          # card first (goal may never come)
+            tail_g = np.concatenate([np.cumsum(hg[::-1])[::-1][1:], [0.0]])
+            p_strict = float(np.sum(hc * S * (1 - np.exp(-tail_g))))
+            return float(np.clip(0.6 * p_perm + 0.4 * p_strict, 0.01, 0.97))
+        # --- R16 templates (2026-07-04, caught by the P5 template audit) ---
+        if a == "pen_shootout":
+            # shootout <=> drawn after 90 AND ET also drawn — same ET grid as `advance`
+            p_draw90 = mk.p_draw(ctx.grid)
+            et = dc_grid(ET_TEMPO / 3 * ctx.lam_a, ET_TEMPO / 3 * ctx.lam_b, ctx.rho_dc)
+            return float(p_draw90 * mk.p_draw(et))
+        if a == "total_exact":
+            k = q.threshold or 0
+            g = ctx.grid
+            return float(sum(g[i, k - i] for i in range(k + 1) if k - i < g.shape[1] and i < g.shape[0]))
+        if a == "goal_each_half":
+            # >=1 goal (either team) in EACH half: the match-level version of
+            # score_both_halves, same half-share thinning of the total intensity.
+            lam_t = ctx.lam_a + ctx.lam_b
+            return float((1 - np.exp(-H1 * lam_t)) * (1 - np.exp(-H2 * lam_t)))
+        if a == "cards_gt_goals":
+            # P(total cards > total goals): count-model cards pmf x the grid's total-goals
+            # pmf (independence — cards/goals correlation is weak and second-order here).
+            cm = self.pl.count_model
+            if "cards" not in cm.params:
+                return None
+            mu_c = sum(cm.mu("cards", h, ctx.lam_a, ctx.lam_b) + cm.mu("cards", h, ctx.lam_b, ctx.lam_a)
+                       for h in (1, 2))
+            cpmf = cm.pmf("cards", mu_c)
+            g = ctx.grid
+            n = g.shape[0]
+            tg = [float(sum(g[i, k - i] for i in range(k + 1) if k - i < n and i < n)) for k in range(2 * n - 1)]
+            return float(sum(pg * float(cpmf[k + 1:].sum()) for k, pg in enumerate(tg) if k + 1 < len(cpmf)))
+        if a == "leads_at_any_point":
+            # P(team is strictly ahead at some point in 90') ~= P(team scores FIRST) plus a
+            # small comeback allowance (fall behind, then go ahead — rare; MC-quality path
+            # dynamics aren't warranted for one question). Crude but bounded and monotone.
+            if side is None:
+                return None
+            lt, lo = lams(side)
+            lam_t = lt + lo
+            p_first = (lt / lam_t) * (1 - np.exp(-lam_t)) if lam_t > 0 else 0.0
+            # comeback allowance 0.05 (martj42: .114 fall-behind-then-lead events/match ->
+            # ~+.05 per side) and the question EXCLUDES only the shootout, so a first lead
+            # in EXTRA TIME counts: + P(tied at FT) x share x P(>=1 ET goal). Review §3.3.
+            p_et = float(mk.p_draw(ctx.grid)) * (lt / lam_t if lam_t > 0 else 0.5) *                    (1 - np.exp(-ET_TEMPO * lam_t / 3))
+            return float(np.clip(p_first + 0.05 + p_et, 0.01, 0.97))
+        if a == "plays_full_match":
+            # P(a named starter plays all 90'): ~5 subs over 10 outfield starters -> ~52%
+            # survive; attacking players are subbed MORE (tactics/fatigue) -> base 0.42.
+            # No book market; LLM fitness/rotation nuance can be gated in later.
+            return float(self.event_base["player_full90"])
         if a == "btts":
             return mk.p_btts(ctx.grid)
         if a == "total_ge":
@@ -354,6 +661,14 @@ class Runner:
             return P_PEN_MATCH
         if a == "pen_or_red":
             return 1 - (1 - P_PEN_MATCH) * (1 - P_RED_MATCH)
+        if a == "red_card":
+            return P_RED_MATCH
+        if a == "own_goal":                          # near-random -> flat WC base rate (thinning tested worse)
+            return float(self.event_base["own_goal"])
+        if a == "goal_outside_box":                  # ~13% of open-play goals; Poisson thinning of the tempo
+            return float(1.0 - np.exp(-self.event_base["outside_box_share"] * (ctx.lam_a + ctx.lam_b)))
+        if a == "goal_header":                       # ~22% of open-play goals are headers; validated thinning
+            return float(1.0 - np.exp(-self.event_base["header_share"] * (ctx.lam_a + ctx.lam_b)))
         if a == "total_le":
             return 1.0 - mk.p_total_ge(ctx.grid, q.threshold + 1)
         if a == "team_goals_ge":
@@ -442,6 +757,26 @@ class Runner:
             return pa * pb
         if a == "offsides_ge":
             return None if side is None else float(side_pmf("offsides", side)[q.threshold:].sum())
+        if a == "total_shots_ge":      # total shots (on+off) — modeled from real data, not SoT/0.37
+            return p_sum_ge(side_pmf("shots", "a"), side_pmf("shots", "b"), q.threshold)
+        if a == "offsides_total_ge":   # both teams' offside calls combined
+            return p_sum_ge(side_pmf("offsides", "a"), side_pmf("offsides", "b"), q.threshold)
+        if a == "both_teams_cards":    # P(A>=thr cards AND B>=thr cards), independence given intensities
+            pa = float(side_pmf("cards", "a")[q.threshold:].sum())
+            pb = float(side_pmf("cards", "b")[q.threshold:].sum())
+            return pa * pb
+        if a == "any_player_sot_ge":   # "any player 2+ SoT" — over each team's SoT distribution
+            def _team_any_sot(s):
+                pmf = side_pmf("shots_on_target", s)
+                return float(sum(pmf[t] * (SOTCONC_BY_TEAM_SOT[t] if t < len(SOTCONC_BY_TEAM_SOT) else 1.0)
+                                 for t in range(len(pmf))))
+            return float(1 - (1 - _team_any_sot("a")) * (1 - _team_any_sot("b")))
+        if a == "any_team_player_sot_ge":  # team-scoped: P(some <team> player gets 2+ SoT)
+            if side is None or (q.threshold or 2) != 2:
+                return None                # concentration curve is fit for the 2+ line only
+            pmf2 = side_pmf("shots_on_target", side)
+            return float(sum(pmf2[t] * (SOTCONC_BY_TEAM_SOT[t] if t < len(SOTCONC_BY_TEAM_SOT) else 1.0)
+                             for t in range(len(pmf2))))
         if a in ("player_scores", "player_sot_ge", "player_ga"):
             rate_sot, rate_goal, rate_ga = self.player_rate(q.subject)
             rate = {"player_sot_ge": rate_sot, "player_scores": rate_goal, "player_ga": rate_ga}[a]
@@ -450,12 +785,18 @@ class Runner:
             # half-specific player questions: exposure = minutes x half share
             if q.half:
                 scale *= H1 if q.half == 1 else H2
-            return float(sum(w * (1 - np.exp(-rate * scale * m)) for w, m in MINUTE_SCENARIOS))
+            # threshold-aware: "2 or more shots on target" -> P(>=k), not P(>=1).
+            # scores/ga are >=1 questions (k defaults to 1, where 1 - Poisson.cdf(0, mu)
+            # == 1 - exp(-mu), i.e. identical to the prior formula -> no behaviour change).
+            from scipy.stats import poisson
+            k = q.threshold or 1
+            return float(sum(w * (1.0 - poisson.cdf(k - 1, rate * scale * m)) for w, m in MINUTE_SCENARIOS))
         return None
 
     # ------------------------------------------------------------------
     def predictions_for(self, market_rows: list[dict],
-                        anchors: dict[tuple[str, str], MatchAnchor] | None = None
+                        anchors: dict[tuple[str, str], MatchAnchor] | None = None,
+                        player_props: dict | None = None,
                         ) -> tuple[list[dict], list[dict]]:
         """Returns (payload rows with p for both bots, unanswered rows).
 
@@ -464,6 +805,7 @@ class Runner:
         answer directly (no shrink toward base — the market is already the
         conservative estimate)."""
         anchors = anchors or {}
+        player_props = player_props or {}
         by_match: dict[str, list[dict]] = {}
         for m in market_rows:
             by_match.setdefault(m["match"]["name"], []).append(m)
@@ -475,9 +817,11 @@ class Runner:
                 skipped.extend({"match": mname, "question": r["question"], "reason": "teams unresolved"} for r in rows)
                 continue
             anchor = anchors.get(teams) or anchors.get((teams[1], teams[0]))
+            pp = player_props.get(teams) or player_props.get((teams[1], teams[0])) or {}
+            team_set = {canonical(t) for t in teams}   # team-aware parse (player vs team SoT)
             ctx = self.context(*teams, anchor=anchor)
             for r in rows:
-                q = parse_question(r["question"])
+                q = parse_question(r["question"], teams=team_set)
                 if q is None:
                     skipped.append({"match": mname, "question": r["question"], "reason": "unparsed"})
                     continue
@@ -490,20 +834,69 @@ class Runner:
                 p = self.calibrate(q.archetype, p, ctx.anchored)
                 p = float(np.clip(p, 0.01, 0.99))
                 fam = self._family(q.archetype)
-                if ctx.anchored and fam == "goal":
+                # Market anchor for player props (verified live: player_shots_on_target /
+                # _goal_scorer_anytime / _assists). Blend the de-vigged book like a direct
+                # market and SKIP the model's base-blend, extremize and confidence floor —
+                # those patch the model we're now anchoring away from. See
+                # docs/MARKET-FIRST-ARCHITECTURE.md.
+                # resolve_player is robust to the book carrying middle names / initials
+                # ('erling braut haaland' vs 'Erling Haaland') — an exact-key lookup silently
+                # dropped the anchor and left the player on the shrinkage model.
+                pm = resolve_player(q.subject, pp).get(q.archetype) if (fam == "player" and q.subject) else None
+                # The book player_sot_ge value is the Over-0.5 (>=1 SoT) price. It must NOT be
+                # stamped directly onto a ">=2 shots on target" question (that submits ~P(>=1)
+                # for a >=2 market -> Brobbey 2+ SoT at 60% off a 66% 1+ line). But DROPPING it
+                # was also costly: the >=2 line then falls to a flat, undifferentiated model
+                # (Mbappe priced 19 like everyone, crowd 63, out=1 -> the single biggest R32 loss).
+                # Instead, convert the book's player-differentiated 1+ line into P(>=k) via the
+                # Poisson intensity (mu = -ln(1-P(>=1))). This keeps the book's player ranking for
+                # the higher thresholds: an elite 1+ line yields a materially higher P(>=2) than a
+                # fringe one, tracking the crowd, while still sitting strictly below P(>=1).
+                if pm is not None and q.archetype == "player_sot_ge" and (q.threshold or 1) >= 2:
+                    pm = book_sot_ge_from_one_plus(pm, q.threshold)
+                if pm is not None:
+                    # Player props anchor at a HIGHER book weight than goal markets. On 51
+                    # settled anchored props the Brier is MONOTONE in the book weight (raw model
+                    # 0.250, w=0.85 blend 0.206, pure book 0.202): the model side is data-gapped
+                    # for exactly the star players the book prices well (Jimenez model 7 vs book
+                    # 27, out=1; Kane raw ~9 dragging 54->45, out=1), so its logit is a large
+                    # negative drag, a systematic low bias vs book AND crowd — doubled at 2x.
+                    # Interpolate off w_market so the CLV passes keep their meaning
+                    # (w_market=1.0 closing-line pass -> pure book; live 0.85 -> 0.97).
+                    w_p = 1.0 - PLAYER_MODEL_FRAC * (1.0 - self.w_market)
+                    p_a = float(np.clip(blend([p, pm], [1 - w_p, w_p]), 0.01, 0.99))
+                elif ctx.anchored and fam == "goal":
                     p_a = p  # market is already calibrated/conservative — don't shrink
                 else:
                     p_base = self.answer(q, self._base_ctx)
                     p_a = blend([p_base, p], [BOT_A_BASE_WEIGHT, 1 - BOT_A_BASE_WEIGHT]) if p_base else p
-                # rec #2: evidence-gated extremizing (no-op until a family earns k>1)
-                p_a = float(np.clip(self._extremize(q.archetype, fam, p_a, ctx.anchored), 0.01, 0.99))
-                # Phase 1: asymmetric confidence calibration — floor confident-low bets on
-                # the archetypes where betting below the crowd loses catastrophically.
-                p_a = float(np.clip(self._confidence(q.archetype, p_a), 0.01, 0.99))
+                if pm is None:
+                    # rec #2: evidence-gated extremizing (no-op until a family earns k>1)
+                    p_a = float(np.clip(self._extremize(q.archetype, fam, p_a, ctx.anchored), 0.01, 0.99))
+                    # Phase 1: asymmetric confidence calibration — floor confident-low bets on
+                    # the archetypes where betting below the crowd loses catastrophically.
+                    p_a = float(np.clip(self._confidence(q.archetype, p_a), 0.01, 0.99))
+                # L0 LLM expert layer (out-of-band panel; shadow by default). Only when
+                # there is NO sharp book anchor (pm is None): a matched player prop is the
+                # sharpest signal and the LLM must not override it (else a stale panel opinion
+                # fights a fresh book line). For book-anchored props the book stands.
+                einfo: dict = {}
+                if pm is None:
+                    p_blend, einfo = panel_mod.apply_expert(r["id"], q.archetype, p_a, self.panel, self.expert_gate)
+                    p_a = float(np.clip(p_blend, 0.01, 0.99))
+                # Phase R risk management: shrink no-edge archetypes toward the base
+                # rate (don't bet over-confidently where we have no validated edge).
+                # Off unless RISK_GATE_ENABLE; no-op for archetypes not in the gate.
+                # HALF-SCOPED questions bypass: the gate bases are FULL-MATCH quantities
+                # (both_teams_sot_ge .70, cards .525) — shrinking a first-half price toward
+                # a full-match base silently undoes the scope (review §3.6 interaction trap).
+                if self.risk_on and q.half is None:
+                    p_a = float(np.clip(self._risk(q.archetype, p_a), 0.01, 0.99))
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,
                     "question": r["question"], "archetype": q.archetype,
                     "p_bot_a": round(p_a, 4), "sub_a": submit_int(p_a),
                     "p_bot_b": round(p, 4), "sub_b": submit_int(p),
+                    "p_expert": einfo.get("expert"), "expert_action": einfo.get("action"),
                 })
         return out, skipped

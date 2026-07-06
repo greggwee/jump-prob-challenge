@@ -1,25 +1,24 @@
-"""Near-kickoff submission tick — run every few minutes by Windows Task Scheduler.
+"""Closing-line submission tick — run every minute by Windows Task Scheduler.
 
-Strategy: most ticks do nothing (a cheap SportsPredict /matches check costs no
-odds credits). When an open match is inside the firing window before kickoff, it
-runs a TARGETED odds-anchored submission for just that match's markets via Bot A,
-capturing the latest (near-closing) line.
+Strategy: every market already has a baseline submission (the initial slate + any
+manual run), so the scheduler's job is just to refresh to the CLOSING line as late
+as is safe. It fires ONCE per match, inside a narrow window a minute or two before
+kickoff, then never again for that match. That:
+  * lands the final submission ~1-2 min before kickoff (captures the closing line),
+  * spends ONE odds fetch per match instead of 5-6 across a wide window — the Odds
+    API free tier is small (4 credits/fetch) and was being burned through fast.
 
-KICKOFF = opening_time, NOT closing_time. Verified 2026-06-14 against the Odds
-API: SportsPredict `opening_time` equals the true kickoff (commence_time), and
-`closing_time` is kickoff + ~2.5h (≈ match end). Markets LOCK at kickoff
-(opening_time), per the contest rules. The old code keyed off closing_time, so
-the window only matched ~2h after kickoff — by then markets were locked
-(open_market_count=0) and it never fired. Fixed to use opening_time.
+KICKOFF = opening_time (verified UTC). Markets LOCK at kickoff. WIN_MIN must exceed
+the worst-case targeted run time (~25-40s = ~0.5 min) plus margin so the PATCH lands
+before the lock — hence a 1.5-minute floor, not literally T-1 (a run started at T-1
+could finish after the market has locked).
 
-TIMEZONE: everything is UTC. opening_time is UTC, and datetime.now(timezone.utc)
-is UTC regardless of the desktop's local time-zone — correct anywhere you travel,
-as long as the machine clock is right (NTP). No local time is ever used.
+Once-per-match state is keyed by name+kickoff-date and set ONLY after a successful
+run, so a transient failure is retried on the next minute's tick while the match is
+still inside the window (free redundancy without extra fetches).
 
-Window: fire when WIN_MIN <= minutes_to_kickoff <= WIN_MAX. WIN_MIN must exceed
-the worst-case run time (~model load 2m + targeted submit ~30s) so the PATCH
-lands before the market locks at kickoff. A global throttle avoids back-to-back
-heavy runs.
+  .venv\\Scripts\\pythonw.exe scripts\\scheduler_tick.py          # live
+  .venv\\Scripts\\python.exe  scripts\\scheduler_tick.py --dry    # report only
 """
 
 import json
@@ -30,15 +29,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-os.chdir(ROOT)  # so .env and data/ relative paths resolve under Task Scheduler
+os.chdir(ROOT)
 sys.path.insert(0, str(ROOT / "src"))
 
 from jumpprob.submit.api_client import SportsPredictClient  # noqa: E402
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
-WIN_MIN, WIN_MAX = 6.0, 25.0      # minutes-to-kickoff (opening_time) firing window
-THROTTLE_MIN = 3.5                 # don't launch runs closer together than this
+WIN_MIN, WIN_MAX = 1.5, 2.5    # minutes-to-kickoff closing window (poll every 1 min)
+GLOBAL_THROTTLE_MIN = 1.0      # don't launch two heavy runs back-to-back
 DRY = "--dry" in sys.argv
 STATE = ROOT / "data" / "processed" / "scheduler_state.json"
 LOG = ROOT / "data" / "scheduler.log"
@@ -51,10 +50,19 @@ def log(msg: str) -> None:
     line = f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} {msg}"
     with LOG.open("a", encoding="utf-8") as f:
         f.write(line + "\n")
-    try:  # under pythonw.exe (Task Scheduler) stdout is None — file log is enough
+    try:
         print(line)
     except Exception:
         pass
+
+
+def _state() -> dict:
+    if STATE.exists():
+        try:
+            return json.loads(STATE.read_text())
+        except Exception:
+            return {}
+    return {}
 
 
 def main() -> None:
@@ -62,43 +70,44 @@ def main() -> None:
     client = SportsPredictClient("SPORTSPREDICT_KEY_A", dry_run=True)
     try:
         matches = client.matches(EVENT, LOBBY)
-    except Exception as e:  # transient API/network — try again next tick
+    except Exception as e:
         log(f"matches fetch failed ({e}); skip")
         return
 
-    near = []
+    st = _state()
+    submitted = st.get("submitted", {})            # {name|date: iso}
+    due = []
     for m in matches:
         if m.get("open_market_count", 0) <= 0:
             continue
-        ko = datetime.fromisoformat(m["opening_time"].replace("Z", "+00:00"))  # kickoff = lock
+        ko = datetime.fromisoformat(m["opening_time"].replace("Z", "+00:00"))
         mins = (ko - now).total_seconds() / 60.0
-        if WIN_MIN <= mins <= WIN_MAX:
-            near.append((m["name"], round(mins, 1)))
+        key = f"{m['name']}|{ko.date()}"
+        if WIN_MIN <= mins <= WIN_MAX and key not in submitted:
+            due.append((m["name"], key, round(mins, 1)))
 
-    if not near:
-        # quiet success; only log occasionally to avoid noise would be nicer, but
-        # a one-line skip is cheap and useful for auditing while travelling.
-        log(f"no match in [{WIN_MIN:.0f},{WIN_MAX:.0f}]m window; skip")
+    if not due:
+        log(f"no match due in [{WIN_MIN},{WIN_MAX}]m closing window; skip")
         return
 
-    # global throttle
-    last = None
-    if STATE.exists():
+    # global throttle (avoid overlapping heavy runs if kickoffs cluster)
+    last = st.get("last_run")
+    if last:
         try:
-            last = datetime.fromisoformat(json.loads(STATE.read_text())["last_run"])
+            if (now - datetime.fromisoformat(last)).total_seconds() / 60.0 < GLOBAL_THROTTLE_MIN:
+                log(f"due {due} but throttled (<{GLOBAL_THROTTLE_MIN}m since last run); retry next tick")
+                return
         except Exception:
-            last = None
-    if last and (now - last).total_seconds() / 60.0 < THROTTLE_MIN:
-        log(f"near {near} but throttled (<{THROTTLE_MIN}m since last run); skip")
-        return
+            pass
 
-    names = "||".join(n for n, _ in near)
+    names = "||".join(n for n, _, _ in due)
     if DRY:
-        log(f"[DRY] would submit Bot A for: {near}")
+        log(f"[DRY] would submit closing line for: {due}")
         return
 
-    log(f"near kickoff {near} -> targeted Bot A submission")
-    STATE.write_text(json.dumps({"last_run": now.isoformat()}))
+    log(f"closing window {due} -> targeted Bot A submission")
+    st["last_run"] = now.isoformat()
+    STATE.write_text(json.dumps(st))
     try:
         r = subprocess.run(
             [str(PYEXE), "scripts/run_matchday_odds.py", "--live", "--matches", names],
@@ -107,7 +116,12 @@ def main() -> None:
         )
         tail = (r.stdout.strip().splitlines() or ["<no output>"])[-1]
         log(f"submission exit={r.returncode}: {tail}")
-        if r.returncode != 0 and r.stderr:
+        if r.returncode == 0:                      # mark done ONLY on success (else retried next tick)
+            for _, key, _ in due:
+                submitted[key] = now.isoformat()
+            st["submitted"] = submitted
+            STATE.write_text(json.dumps(st))
+        elif r.stderr:
             log(f"  stderr: {r.stderr.strip().splitlines()[-1][:200]}")
     except subprocess.TimeoutExpired:
         log("submission timed out (>10m) — will retry next tick")

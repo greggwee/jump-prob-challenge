@@ -34,4 +34,9 @@ ALIASES: dict[str, str] = {
 
 def canonical(name: str) -> str:
     """Map a source team name to its canonical form (identity if unmapped)."""
-    return ALIASES.get(name.strip(), name.strip())
+    s = name.strip()
+    # The platform sometimes prefixes the definite article ("the United States",
+    # "the Netherlands"); no canonical name carries it, so drop it for matching.
+    if s[:4].lower() == "the " and s[4:].strip():
+        s = s[4:].strip()
+    return ALIASES.get(s, s)
