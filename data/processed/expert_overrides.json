@@ -18,5 +18,20 @@
   "value": 45,
   "why": "DE-RISK: uncalibrated first-card race model; expert historical read 45",
   "set": "2026-07-06 expert sense-check"
+ },
+ "b6f22284-3fe8-46c8-8eca-0f2ad6106d3d": {
+  "value": 40,
+  "why": "HARD/HISTORICAL: WC26 cards_ge realized 0.20 vs predicted 0.52 (n=15); crowd over-prices at 49; MEX/ENG among cleanest sides, ref Faghani strict keeps it off 0.30",
+  "set": "2026-07-06 expert sense-check MEX-ENG"
+ },
+ "f670e9bd-46f1-47f8-86b7-85336ade66be": {
+  "value": 52,
+  "why": "HISTORICAL: coupled to the WC26 card-drift-down; fewer cards -> lower P(cards>goals)",
+  "set": "2026-07-06 expert sense-check MEX-ENG"
+ },
+ "bde0b001-e9a4-44eb-bbca-ffa3094371fe": {
+  "value": 43,
+  "why": "HISTORICAL/HEDGE: crowd 44.6 + expert 46 both above our 37 on a strong-attack favorite; tempered below 46 as team_sot_ge is calibrated 0.41/0.40 in aggregate",
+  "set": "2026-07-06 expert sense-check MEX-ENG"
  }
 }
