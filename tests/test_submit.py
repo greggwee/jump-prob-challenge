@@ -354,15 +354,17 @@ def test_p5_skipped_questions_carry_reasons():
 def test_p2_fouls_offsides_near_flat():
     """P2: our per-match variation on fouls_gt/offsides_ge is ANTI-signal (flat beats both
     us and the crowd on all settled-with-crowd data), so the risk gate pins them near their
-    calibrated bases: fouls 0.55 (crowd~realized agree), offsides 0.40 (crowd .49 shrunk
-    toward realized .36). Deviations survive at <=~20%% strength; direction preserved."""
+    calibrated bases: fouls 0.50 (the symmetric coin-flip — retuned from 0.55 by the 2026-07-07
+    review, which found us over-pricing .58 vs realized .44), offsides 0.40 (crowd .49 shrunk
+    toward realized .36; the review VERIFIED we're well-calibrated, don't lift to crowd).
+    Deviations survive at <=~20%% strength; direction preserved."""
     import json
     from jumpprob.models import strategy
     g = json.loads(open("data/processed/risk_gate.json").read())
     b = json.loads(open("data/processed/base_rates.json").read())
     assert g["fouls_gt"] == 0.15 and g["offsides_ge"] == 0.15
-    assert b["fouls_gt"] == 0.55 and b["offsides_ge"] == 0.40
-    for arch, base in [("fouls_gt", 0.55), ("offsides_ge", 0.40)]:
+    assert b["fouls_gt"] == 0.50 and b["offsides_ge"] == 0.40
+    for arch, base in [("fouls_gt", 0.50), ("offsides_ge", 0.40)]:
         hi = strategy.apply_risk(base + 0.25, arch, g, b)
         lo = strategy.apply_risk(base - 0.25, arch, g, b)
         assert base < hi < base + 0.08          # hugged to base, direction kept
