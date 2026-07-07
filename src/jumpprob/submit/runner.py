@@ -50,12 +50,17 @@ GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge"
               # pass through instead of taking a 25% base-rate dilution (review §3.4)
               "pen_shootout", "total_exact", "goal_each_half", "leads_at_any_point",
               "extra_time", "halves_equal_goals",
+              # new QF templates (2026-07-07): all pure goal-grid / per-half-grid derivations
+              "win_both_halves", "first_goal_2h", "margin_exactly", "total_odd",
               "team_scores_half", "half_total_ge", "team_goals_ge",
               "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
               "advance"} | TIMING_ARCHS
 COUNT_ARCHS = {"corners_gt", "sot_gt", "fouls_gt", "cards_gt", "team_corners_ge",
                "team_sot_ge", "team_cards_ge", "cards_ge", "corners_total_ge",
-               "total_sot_half_ge", "total_sot_ge", "offsides_ge", "both_teams_sot_ge"}
+               "total_sot_half_ge", "total_sot_ge", "offsides_ge", "both_teams_sot_ge",
+               "corners_and_shots"}  # a corners+shots comparison (count-Platt like corners_gt)
+# NB card_each_half / card_stoppage are deliberately NOT count-family: the count Platt shifts UP
+# (b>0), which fights WC26 cards-running-LOW — price them raw-structural + P1-clamp-protected.
 PLAYER_ARCHS = {"player_scores", "player_sot_ge", "player_ga"}
 
 # parser archetype + side -> mc_engine.answer(archetype, side) for timing markets
@@ -181,7 +186,15 @@ _WINDOW = {
     "goal_pre_hb1": ("goal", 0, 22), "goal_post_hb2": ("goal", 67, 90),
     "corners_pre_hb1": ("corner", 0, 22), "cards_post_hb2": ("card", 67, 90),
     "offsides_pre_hb1": ("offside", 0, 22),
+    # "goal in H1 AFTER the first break" = [22,45); the post-break window carries MORE goal
+    # intensity than [0,22) (the hazard rises through a half), so this is not simply ½·P(H1 goal).
+    "goal_after_hb1": ("goal", 22, 45),
 }
+# New-template structural constants (2026-07-07 researcher):
+CARD_STOPPAGE_SHARE = 0.15   # share of card mass in stoppage time (cards are late-loaded; the 90'
+                             # profile truncates added time so this is a documented extrapolation) — LOW conf
+CORNERS_SHOTS_RHO = 0.05     # indicator corr of {more corners} & {more shots}: both load on attack
+                             # intensity but most variance is idiosyncratic -> small positive bump only
 _DYN_PATH = Path("data/processed/minute_dynamics.json")
 
 
@@ -686,6 +699,32 @@ class Runner:
             # score_both_halves, same half-share thinning of the total intensity.
             lam_t = ctx.lam_a + ctx.lam_b
             return float((1 - np.exp(-H1 * lam_t)) * (1 - np.exp(-H2 * lam_t)))
+        if a == "win_both_halves":
+            # EITHER team wins BOTH halves (strictly more goals each half). Build a grid per
+            # half at the share-thinned intensities and combine assuming halves independent
+            # (MC-confirmed: goal frailty across halves is negligible). Crowd over-prices this
+            # (~.35 "if one team's better it wins both") vs a true ~.18.
+            g1 = dc_grid(H1 * ctx.lam_a, H1 * ctx.lam_b, ctx.rho_dc)
+            g2 = dc_grid(H2 * ctx.lam_a, H2 * ctx.lam_b, ctx.rho_dc)
+            return float(mk.p_win(g1, "a") * mk.p_win(g2, "a")
+                         + mk.p_win(g1, "b") * mk.p_win(g2, "b"))
+        if a == "first_goal_2h":
+            # first goal falls in H2 <=> NO goal in H1 AND >=1 in H2 (0-0 => NO). Per-half goal
+            # independence is the engine convention; half-share measured on 47k goals.
+            lam_t = ctx.lam_a + ctx.lam_b
+            return float(np.exp(-H1 * lam_t) * (1 - np.exp(-H2 * lam_t)))
+        if a == "margin_exactly":
+            # decided by EXACTLY n goals (|a-b| == n; a draw is NO). Pure grid sum; the
+            # crowd tends to conflate "one-goal game" with "not a draw" (~.73).
+            n = q.threshold or 1
+            idx = np.arange(ctx.grid.shape[0])
+            return float(ctx.grid[np.abs(np.subtract.outer(idx, idx)) == n].sum())
+        if a == "total_odd":
+            # odd total goals. Certain-but-tiny EVEN tilt vs a crowd that anchors 0.50
+            # (independent Poissons give P(odd)=(1-e^-2L)/2 < .5; DC rho<0 tilts further even).
+            g = ctx.grid
+            idx = np.arange(g.shape[0])
+            return float(g[np.add.outer(idx, idx) % 2 == 1].sum())
         if a == "cards_gt_goals":
             # P(total cards > total goals): count-model cards pmf x the grid's total-goals
             # pmf (independence — cards/goals correlation is weak and second-order here).
@@ -816,6 +855,36 @@ class Runner:
                    "fouls_gt": "fouls", "cards_gt": "cards"}[a]
             other = "b" if side == "a" else "a"
             return p_a_gt_b(side_pmf(fam, side), side_pmf(fam, other))
+        if a == "corners_and_shots":
+            # P(side has MORE corners AND MORE total shots than opp). Both indicators load on
+            # attacking intensity, so they are weakly POSITIVELY correlated — a Gaussian-copula
+            # bump over the independence product (measured indicator corr ~0.05 -> +~1.2pt).
+            # Most count variance is idiosyncratic, so DON'T over-correct toward strong dependence.
+            if side is None:
+                return None
+            other = "b" if side == "a" else "a"
+            p_c = p_a_gt_b(side_pmf("corners", side), side_pmf("corners", other))
+            p_s = p_a_gt_b(side_pmf("shots", side), side_pmf("shots", other))
+            bump = CORNERS_SHOTS_RHO * float(np.sqrt(max(p_c * (1 - p_c) * p_s * (1 - p_s), 0.0)))
+            return float(np.clip(p_c * p_s + bump, 0.01, 0.99))
+        if a == "card_each_half":
+            # >=1 card in EACH half. cm.mu already carries the fitted H1/H2 card split (cards are
+            # 2nd-half-loaded, ~.36/.64), so read P(>=1) off each half's card pmf; halves ~indep
+            # (a shared-frailty bump is <1pt). Low-edge (WC26 cards run low) -> raw structural,
+            # NOT count-Platt (which shifts up); the P1 clamp bounds any crowd deviation.
+            def _card_half_mu(h):
+                return cm.mu("cards", h, ctx.lam_a, ctx.lam_b) + cm.mu("cards", h, ctx.lam_b, ctx.lam_a)
+            p1 = 1.0 - float(cm.pmf("cards", _card_half_mu(1))[0])
+            p2 = 1.0 - float(cm.pmf("cards", _card_half_mu(2))[0])
+            return float(p1 * p2)
+        if a == "card_stoppage":
+            # >=1 card in either half's stoppage time. Cards are late-loaded so stoppage carries
+            # more than its raw minute share; E[stoppage cards] ~= mu_card * CARD_STOPPAGE_SHARE.
+            # LOW confidence (WC26 card level + stoppage-minute mass outside the 90' profile) ->
+            # conservative, raw-structural, P1-clamp-protected.
+            mu_c = sum(cm.mu("cards", h, ctx.lam_a, ctx.lam_b) + cm.mu("cards", h, ctx.lam_b, ctx.lam_a)
+                       for h in (1, 2))
+            return float(1.0 - np.exp(-mu_c * CARD_STOPPAGE_SHARE))
         if a == "team_corners_ge":
             return None if side is None else float(side_pmf("corners", side)[q.threshold:].sum())
         if a == "team_sot_ge":

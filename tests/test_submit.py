@@ -252,6 +252,51 @@ def test_lineup_status_override():
     assert r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"] > 0.35
 
 
+def test_new_qf_templates_2026_07():
+    """The 8 new QF-era templates parse and price sanely from existing primitives:
+    win-both-halves, first-goal-2H, margin=1, odd-total, goal-after-HB1, card-each-half,
+    card-in-stoppage, corners-AND-shots. Ranges/directions per the researcher's structural
+    analysis (all with the '...in regulation (90 minutes + stoppage time)' suffix stripped)."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    even, lop = r.context("France", "Croatia"), r.context("Brazil", "Haiti")
+
+    def parse(q, arch):
+        p = parse_question(q)
+        assert p is not None and p.archetype == arch, (q, p and p.archetype)
+        return p
+    A = lambda q, arch, c: r.answer(parse(q, arch), c)
+    reg = " in regulation (90 minutes + stoppage time)"
+
+    wbh = A(f"Will either team win both halves{reg}?", "win_both_halves", even)
+    assert 0.05 < wbh < 0.40                                   # crowd over-prices ~.35 vs true ~.18
+    assert A(f"Will either team win both halves{reg}?", "win_both_halves", lop) > wbh  # lopsided higher
+
+    fg2 = A(f"Will the first goal of the match be scored in the second half{reg}?", "first_goal_2h", even)
+    assert 0.12 < fg2 < 0.38                                   # ~.25; below a crowd ~.40
+
+    m1 = A(f"Will the match be decided by exactly one goal{reg}?", "margin_exactly", even)
+    assert 0.30 < m1 < 0.50                                    # ~.40; below not-a-draw ~.73
+
+    odd = A("Will the total number of goals" + reg + " be an odd number?", "total_odd", even)
+    assert 0.42 < odd < 0.52                                   # near .5, marginally below (even tilt)
+
+    gah = A("Will a goal be scored in the first half after the first hydration break?", "goal_after_hb1", even)
+    goal_pre = r.answer(parse_question("Will a goal be scored before the first hydration break?"), even)
+    assert 0.25 < gah < 0.65 and gah > goal_pre                # post-break window holds MORE goal mass
+
+    ceh = A(f"Will at least one card be shown in each half{reg}?", "card_each_half", even)
+    assert 0.35 < ceh < 0.90
+
+    cst = A("Will a card be shown during first- or second-half stoppage time in regulation?", "card_stoppage", even)
+    assert 0.20 < cst < 0.65
+
+    cas = A(f"Will France have more corner kicks AND more total shots than Croatia{reg}?", "corners_and_shots", even)
+    assert 0.05 < cas < 0.60                                   # a joint AND -> below either marginal
+
+
 def test_r16_template_handlers():
     """The 6 R16 archetypes price sanely: shootout in the knockout-plausible band and higher
     for even matchups; exact-totals sum consistently with the >= family; goal-each-half below
