@@ -1,8 +1,8 @@
 {
  "advance": {
-  "n": 2,
-  "mean": 31.5,
-  "std": 0.7
+  "n": 3,
+  "mean": 39.7,
+  "std": 14.2
  },
  "any_player_goals_ge": {
   "n": 2,
@@ -20,9 +20,9 @@
   "std": 5.1
  },
  "btts": {
-  "n": 3,
-  "mean": 48.7,
-  "std": 8.1
+  "n": 4,
+  "mean": 49.0,
+  "std": 6.6
  },
  "btts_and_total_ge": {
   "n": 10,
@@ -30,14 +30,19 @@
   "std": 5.4
  },
  "cards_ge": {
-  "n": 13,
-  "mean": 48.7,
-  "std": 5.1
+  "n": 14,
+  "mean": 48.4,
+  "std": 5.0
  },
  "cards_gt": {
   "n": 5,
   "mean": 47.6,
   "std": 8.4
+ },
+ "cards_gt_goals": {
+  "n": 1,
+  "mean": 57.0,
+  "std": null
  },
  "cards_post_hb2": {
   "n": 1,
@@ -45,9 +50,9 @@
   "std": null
  },
  "corners_gt": {
-  "n": 11,
-  "mean": 44.5,
-  "std": 16.2
+  "n": 12,
+  "mean": 45.7,
+  "std": 16.0
  },
  "corners_total_ge": {
   "n": 3,
@@ -89,6 +94,11 @@
   "mean": 27.0,
   "std": null
  },
+ "goal_post_hb2": {
+  "n": 1,
+  "mean": 49.0,
+  "std": null
+ },
  "goal_pre_hb1": {
   "n": 4,
   "mean": 41.2,
@@ -115,9 +125,9 @@
   "std": 7.7
  },
  "ht_tied": {
-  "n": 6,
-  "mean": 42.7,
-  "std": 2.9
+  "n": 7,
+  "mean": 43.3,
+  "std": 3.1
  },
  "offsides_ge": {
   "n": 22,
@@ -144,6 +154,11 @@
   "mean": 37.7,
   "std": 3.0
  },
+ "pen_shootout": {
+  "n": 1,
+  "mean": 24.0,
+  "std": null
+ },
  "penalty_awarded": {
   "n": 3,
   "mean": 29.0,
@@ -155,13 +170,13 @@
   "std": 9.8
  },
  "player_scores": {
-  "n": 10,
-  "mean": 36.4,
+  "n": 12,
+  "mean": 36.8,
   "std": 7.4
  },
  "player_sot_ge": {
-  "n": 37,
-  "mean": 47.2,
+  "n": 39,
+  "mean": 47.1,
   "std": 10.9
  },
  "score_both_halves": {
@@ -200,9 +215,9 @@
   "std": 11.1
  },
  "team_sot_ge": {
-  "n": 12,
-  "mean": 44.6,
-  "std": 10.4
+  "n": 13,
+  "mean": 45.0,
+  "std": 10.0
  },
  "total_ge": {
   "n": 8,
@@ -210,14 +225,14 @@
   "std": 4.6
  },
  "total_le": {
-  "n": 7,
-  "mean": 48.3,
-  "std": 11.6
+  "n": 8,
+  "mean": 49.2,
+  "std": 11.1
  },
  "total_shots_ge": {
-  "n": 3,
-  "mean": 57.7,
-  "std": 5.7
+  "n": 4,
+  "mean": 60.8,
+  "std": 7.7
  },
  "total_sot_ge": {
   "n": 3,
