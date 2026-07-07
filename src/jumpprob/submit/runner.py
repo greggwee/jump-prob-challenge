@@ -193,8 +193,14 @@ _WINDOW = {
 # New-template structural constants (2026-07-07 researcher):
 CARD_STOPPAGE_SHARE = 0.15   # share of card mass in stoppage time (cards are late-loaded; the 90'
                              # profile truncates added time so this is a documented extrapolation) — LOW conf
-CORNERS_SHOTS_RHO = 0.05     # indicator corr of {more corners} & {more shots}: both load on attack
-                             # intensity but most variance is idiosyncratic -> small positive bump only
+CORNERS_SHOTS_RHO = 0.30     # WITHIN-match indicator corr of {more corners}&{more shots}. The count
+                             # model treats corners _|_ shots given lambda (corr~0), but the RESIDUAL
+                             # coupling BEYOND team quality is large: measured residual indicator corr
+                             # 0.41 on 314 matches (per-team-baseline partial; raw within-team corr .60)
+                             # -- a team having an attacking day gets BOTH. 0.30 sits below .41
+                             # (conservative for the additive-copula linearization); lands an even
+                             # match's joint ~.26. (2026-07-08 audit: the prior .05 under-coupled and
+                             # was the one new handler positioned to LOSE to the crowd.)
 _DYN_PATH = Path("data/processed/minute_dynamics.json")
 
 

@@ -294,7 +294,9 @@ def test_new_qf_templates_2026_07():
     assert 0.20 < cst < 0.65
 
     cas = A(f"Will France have more corner kicks AND more total shots than Croatia{reg}?", "corners_and_shots", even)
-    assert 0.05 < cas < 0.60                                   # a joint AND -> below either marginal
+    assert 0.05 < cas < 0.68                                   # joint AND + the within-match coupling bump
+    cas_lop = A(f"Will Brazil have more corner kicks AND more total shots than Haiti{reg}?", "corners_and_shots", lop)
+    assert cas_lop > cas                                       # a dominant team wins BOTH counts more often
 
 
 def test_r16_template_handlers():
