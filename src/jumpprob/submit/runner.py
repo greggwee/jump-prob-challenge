@@ -112,6 +112,17 @@ PLAYER_CROWD_PREM_PATH = Path("data/processed/player_crowd_premium.json")
 PLAYER_CROWD_LIFT = 0.5       # deliberate conservative under-shift (magnitude unidentified, p~.065)
 PLAYER_CROWD_LIFT_CAP = 0.06  # BINDING guardrail: max +6 pts/prop; caps SoT + any refit over-lift
 PLAYER_CROWD_LIFT_CEIL = 0.85  # skip props already priced high — crowd premium ~0 there (both agree)
+# Lineup-status override (2026-07-07): confirmed pre-match lineup news must beat the book anchor.
+# We MISSED De Bruyne (benched vs USA, submitted 44 -> Brier .194, out=0): the book hadn't absorbed
+# the benching by our closing tick, the WebPanel DID web-search it but the pm-guard discarded it
+# (book-anchored player props skip the expert layer), and P4b then LIFTED the stale starter price.
+# Fix: a benched/out flag (auto-detected by the WebPanel near KO -> lineup_status.json) overrides
+# the book with a BOUNDED sub-minutes ceiling and cancels the crowd lift. Bounded = a mis-scraped
+# "benched" caps a starter to the elite-sub base rate, not to zero. Benched/out named players only.
+LINEUP_STATUS_PATH = Path("data/processed/lineup_status.json")
+LINEUP_OUT_CEIL = 0.05        # ruled out / not in matchday squad -> ~won't feature
+LINEUP_BENCH_CAP = {"player_scores": 0.15, "player_ga": 0.18, "player_sot_ge": 0.35}  # elite off-the-bench (~25') ceilings
+LINEUP_FRESH_H = 12.0         # ignore stale status (the WebPanel refreshes per match near KO)
 CLUB_RATES = Path("data/processed/player_rates_combined.parquet")
 SOT_PER_SHOT = 0.37   # Understat has no SoT -> estimate from total shots
 P_RED_MATCH = 0.065   # P(>=1 red): 0.067 reds/match measured, 6 tournaments
@@ -208,6 +219,14 @@ def _load_crowd_prem() -> dict:
         return {}
 
 
+def _load_lineup_status() -> dict:
+    """Confirmed pre-match lineup status {norm_player: {status, team, ts, why}}; {} if unavailable."""
+    try:
+        return json.loads(LINEUP_STATUS_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
 @dataclass
 class MatchContext:
     team_a: str          # listed first in match name
@@ -252,6 +271,7 @@ class Runner:
         self.panel = panel_mod.load_panel()                     # L0 LLM expert cache (shadow by default)
         self.expert_gate = panel_mod.load_gate()                # L2 per-archetype blend gate (off unless AI_EXPERT_ENABLE)
         self.player_crowd_prem = _load_crowd_prem()             # P4b per-archetype crowd-premium lift
+        self.lineup_status = _load_lineup_status()              # confirmed benched/out (near-KO WebPanel)
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -299,6 +319,36 @@ class Runner:
         """Phase R: shrink no-edge archetypes toward the base rate (no-op otherwise)."""
         from jumpprob.models import strategy
         return strategy.apply_risk(p, arch, self.risk, self.base_rates)
+
+    def _lineup_override(self, subject: str | None, arch: str, teams) -> tuple[float, str] | None:
+        """Bounded ceiling for a player confirmed benched/out THIS match, else None.
+
+        Reads lineup_status.json (auto-written by the near-KO WebPanel). 'out' -> a hard
+        low ceiling; 'bench' -> an elite-sub ceiling per archetype. Applied as a MIN by the
+        caller, so it only ever lowers a starter-priced prop, never raises one — a bounded,
+        one-sided safety override that beats the book anchor (the pm-guard otherwise drops it).
+        Team-scoped + freshness-gated so a stale flag can't bleed into another match."""
+        if not subject or not self.lineup_status:
+            return None
+        ent = self.lineup_status.get(norm_player(subject))
+        if not ent:
+            return None
+        ts = ent.get("ts")
+        if ts:
+            try:
+                if (pd.Timestamp.now(tz="UTC") - pd.Timestamp(ts)).total_seconds() / 3600.0 > LINEUP_FRESH_H:
+                    return None
+            except Exception:
+                pass
+        team = ent.get("team")
+        if team and teams and canonical(team) not in {canonical(t) for t in teams if t}:
+            return None
+        status = str(ent.get("status", "")).lower()
+        if status == "out":
+            return LINEUP_OUT_CEIL, status
+        if status in ("bench", "benched") and arch in LINEUP_BENCH_CAP:
+            return LINEUP_BENCH_CAP[arch], "bench"
+        return None
 
     def _window_event(self, ctx: MatchContext, fam: str, lo: int, hi: int, thr: int) -> float | None:
         """Match-level P(>=thr `fam` events in slots [lo,hi)). The minute profile's
@@ -929,11 +979,25 @@ class Runner:
                 # a full-match base silently undoes the scope (review §3.6 interaction trap).
                 if self.risk_on and q.half is None:
                     p_a = float(np.clip(self._risk(q.archetype, p_a), 0.01, 0.99))
+                # Lineup-status override — the LAST word for player props (beats book, lift,
+                # expert, risk). A player confirmed benched/out this match is capped at a bounded
+                # sub-minutes ceiling; applied as a MIN so it only lowers a starter-priced prop.
+                # This is the De Bruyne fix: the pm-guard drops the WebPanel's lineup read for
+                # book-anchored props, so the override has to land here, after everything else.
+                lineup_cap = None
+                if fam == "player":
+                    _ovr = self._lineup_override(q.subject, q.archetype, (ctx.team_a, ctx.team_b))
+                    if _ovr is not None:
+                        cap, _st = _ovr
+                        if p_a > cap:
+                            p_a = float(np.clip(cap, 0.01, 0.99))
+                        lineup_cap = f"{_st}<={int(round(cap * 100))}"
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,
                     "question": r["question"], "archetype": q.archetype,
                     "p_bot_a": round(p_a, 4), "sub_a": submit_int(p_a),
                     "p_bot_b": round(p, 4), "sub_b": submit_int(p),
                     "p_expert": einfo.get("expert"), "expert_action": einfo.get("action"),
+                    "lineup": lineup_cap,
                 })
         return out, skipped

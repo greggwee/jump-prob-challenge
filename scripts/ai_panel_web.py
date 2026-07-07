@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -31,8 +32,10 @@ from pathlib import Path
 from jumpprob.agents import panel as P
 from jumpprob.agents.expert import client, web_forecast
 from jumpprob.ingest import odds_api
+from jumpprob.ingest.odds_api import norm_player
 from jumpprob.normalize.teams import canonical
 from jumpprob.submit.api_client import SportsPredictClient
+from jumpprob.submit.parser import parse_question
 from jumpprob.submit.runner import CODE_MAP
 
 
@@ -50,6 +53,36 @@ LOG = Path("data/ai_panel_web.log")
 STATE = Path("data/processed/ai_panel_web_state.json")
 LEDGER = Path("data/processed/ai_panel_web_ledger.csv")
 PREP = Path("data/processed/ai_panel_prep.json")
+LINEUP_STATUS = Path("data/processed/lineup_status.json")   # confirmed benched/out -> runner override
+
+
+def _subject_team(question: str) -> tuple[str | None, str | None]:
+    """Player subject + their team from a prop question ('... (Belgium) ...' -> 'Belgium')."""
+    q = parse_question(question)
+    subj = q.subject if q else None
+    m = re.search(r"\(([^,)#]+)", question or "")   # '(Belgium)' or '(Belgium, #10)'
+    return subj, (m.group(1).strip() if m else None)
+
+
+def _write_lineup_status(updates: dict) -> None:
+    """Merge confirmed benched/out flags into lineup_status.json; prune entries >24h old."""
+    cur = {}
+    if LINEUP_STATUS.exists():
+        try:
+            cur = json.loads(LINEUP_STATUS.read_text())
+        except Exception:
+            cur = {}
+    now = datetime.now(timezone.utc)
+    fresh = {}
+    for k, v in cur.items():
+        try:
+            if (now - datetime.fromisoformat(v["ts"])).total_seconds() / 3600.0 <= 24.0:
+                fresh[k] = v
+        except Exception:
+            pass
+    fresh.update(updates)
+    LINEUP_STATUS.write_text(json.dumps(fresh, indent=1))
+    log(f"lineup_status: {len(updates)} benched/out flag(s) {[u['status'] for u in updates.values()]} -> {LINEUP_STATUS}")
 # expert OFF for the model-number refresh -> grounding anchors on the pure model
 _ENV = {**os.environ, "AI_EXPERT_ENABLE": "0"}
 
@@ -162,10 +195,20 @@ def main() -> None:
 
     models = ["claude-opus-4-8", "claude-sonnet-4-6"][: max(1, args.models)]
     entries, rows, t0 = {}, [], time.time()
+    lineup_updates: dict = {}
     for i, it in enumerate(items, 1):
         res = web_forecast(it["question"], it["model_pct"], it.get("grounding"),
                            models=models, max_uses=args.max_uses)
         ens = res["p_ensemble"]
+        # confirmed benched/out (hard evidence only) -> bounded runner override, beats the book
+        lu = res.get("lineup_status", "unknown")
+        if lu in ("bench", "out"):
+            subj, team = _subject_team(it["question"])
+            if subj:
+                lineup_updates[norm_player(subj)] = {
+                    "status": lu, "team": team, "match": it["match"],
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "why": f"web-confirmed {lu} vs {it['match']}", "source": "web"}
         entries[str(it["market_id"])] = {
             "p_model": it["model_pct"], "p_ensemble": ens, "models": res["models"],
             "n": res["n"], "role": it["role"], "action": it["action"],
@@ -180,6 +223,8 @@ def main() -> None:
                      "evidence_strength": res.get("evidence_strength", "none")})
         log(f"  {i}/{len(items)} {it['archetype']:14s} model={it['model_pct']:.2f} web={ens}")
 
+    if lineup_updates:
+        _write_lineup_status(lineup_updates)
     P.merge_panel(entries, P.PANEL_PATH, meta={"web": names, "n": len(entries)})
     import csv
     new = not LEDGER.exists()

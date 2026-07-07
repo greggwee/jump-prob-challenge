@@ -213,6 +213,45 @@ def test_player_prop_crowd_lift():
     assert PLAYER_CROWD_LIFT_CEIL <= 1.0
 
 
+def test_lineup_status_override():
+    """A player confirmed benched/out THIS match is capped at a bounded sub-minutes ceiling,
+    overriding the book anchor AND the P4b lift (the De Bruyne fix: submitted 44 for a benched
+    player). Applied as a MIN (never raises), team-scoped, and freshness-gated."""
+    import pandas as pd
+    from datetime import datetime, timezone
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner, LINEUP_OUT_CEIL, LINEUP_BENCH_CAP
+    from jumpprob.normalize.teams import canonical
+    from jumpprob.ingest.odds_api import norm_player
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    t = ("Will Kevin De Bruyne (Belgium) score or assist a goal (excluding own goals) in "
+         "regulation (90 minutes + stoppage time)?")
+    pp = {(canonical("United States"), canonical("Belgium")):
+          {norm_player("Kevin De Bruyne"): {"player_ga": 0.44}}}
+    rows = [{"id": "m1", "lobby_id": "L", "match": {"name": "USA vs BEL"}, "question": t}]
+    now = datetime.now(timezone.utc).isoformat()
+    key = norm_player("Kevin De Bruyne")
+
+    r.lineup_status = {}                                          # baseline: book anchor holds him high
+    base = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    assert base > 0.35
+
+    r.lineup_status = {key: {"status": "bench", "team": "Belgium", "ts": now}}   # benched -> capped
+    o = r.predictions_for(rows, player_props=pp)[0][0]
+    assert o["p_bot_a"] <= LINEUP_BENCH_CAP["player_ga"] + 1e-9
+    assert o["lineup"] and "bench" in o["lineup"]
+
+    r.lineup_status = {key: {"status": "out", "team": "Belgium", "ts": now}}     # out -> hard low
+    assert r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"] <= LINEUP_OUT_CEIL + 1e-9
+
+    r.lineup_status = {key: {"status": "out", "team": "France", "ts": now}}      # wrong team -> no-op
+    assert r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"] > 0.35
+
+    r.lineup_status = {key: {"status": "out", "team": "Belgium",                 # stale -> no-op
+                             "ts": "2020-01-01T00:00:00+00:00"}}
+    assert r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"] > 0.35
+
+
 def test_r16_template_handlers():
     """The 6 R16 archetypes price sanely: shootout in the knockout-plausible band and higher
     for even matchups; exact-totals sum consistently with the >= family; goal-each-half below

@@ -30,3 +30,4 @@ data/processed/template_audit.csv
 data/processed/master_eval.parquet
 data/processed/gigabot2_plan.csv
 data/processed/scheduler_state_b.json
+data/processed/lineup_status.json
