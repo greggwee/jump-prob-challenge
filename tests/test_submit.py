@@ -213,6 +213,20 @@ def test_player_prop_crowd_lift():
     assert PLAYER_CROWD_LIFT_CEIL <= 1.0
 
 
+def test_player_name_suffix_resolves():
+    """The QF/SF question format 'Kylian Mbappé (France, #10)' must resolve to the player's rate,
+    not the population fallback — the bug that priced Mbappé to-score at 8 instead of ~30 on a
+    high-multiplier semifinal (same name-join class as De Bruyne / Haaland / DR Congo)."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    suffixed = r.player_rate("Kylian Mbappé (France, #10)")
+    clean = r.player_rate("Kylian Mbappe")
+    assert suffixed == clean                        # the (Team, #N) suffix is stripped before resolving
+    assert suffixed[1] > r.prior_goal * 1.5         # resolved to a real elite scorer, not the population prior
+
+
 def test_lineup_status_override():
     """A player confirmed benched/out THIS match is capped at a bounded sub-minutes ceiling,
     overriding the book anchor AND the P4b lift (the De Bruyne fix: submitted 44 for a benched

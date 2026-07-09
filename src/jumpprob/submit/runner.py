@@ -459,6 +459,13 @@ class Runner:
         on settled data the club rate over-predicts SoT (the tail is better handled by
         the Phase-1 floor) and erodes our genuine player_scores edge. The tournament
         appearances then shrink off the prior (Gamma-Poisson, M0=270/540)."""
+        # Strip a '(Team, #N)' subject suffix before resolving. The QF/SF question format is
+        # "Kylian Mbappé (France, #10)"; the parenthetical's tokens ('(france,', '#10)') match no
+        # player, so BOTH the club-prior resolve and the token-match miss and the best striker on
+        # the pitch collapses to the population prior (Mbappé scores 8 not ~32). The book/lineup
+        # paths already strip this via norm_player — this is the same name-join bug class as
+        # De Bruyne / Haaland / DR Congo, closed here for the model path.
+        name = name.split("(")[0].strip() or name
         club = self._club_prior(name)
         prior_sot, prior_goal = self.prior_sot, self.prior_goal
         prior_ga = self.player_transfer * club[2] if club else self.prior_ga
