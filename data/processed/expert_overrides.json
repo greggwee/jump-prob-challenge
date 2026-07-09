@@ -1,7 +1,12 @@
 {
  "85b4b0c3-68f7-4e41-a644-3f9e083564e8": {
-  "value": 34,
-  "why": "STRUCTURAL: Mbappe P(score) ~.39 (0.30 goal-share x France lambda 1.72 = .52 xG -> 1-e^-.52 = .40; resolved indiv rate .0054/min x90' = .49 -> .39). The model base-blend under-prices elite favored scorers (pulls .39 -> 24) and FRA/MAR has NO book anchor to correct it. Crowd ~37; P4b shows the crowd beats us on scorers, so a 13pt under-lean loses (and the 'low wins' claim rests on n=4, all non-scorers). Submit 34 (near structural, small hedge). Post-resolver-fix (was the 8 population-fallback bug).",
-  "set": "2026-07-09 FRA/MAR finetune"
+  "value": 42,
+  "why": "FORM+STRUCTURAL: Mbappe has 7 goals this WC (Golden Boot race), France's primary scorer + penalty taker. The model's Gamma-Poisson shrinkage (M0=540) pulls his hot rate to .0054/min (=.39), badly under-weighting genuine form; and Morocco's leading scorer Saibari is OUT (hamstring) so France is even more dominant. Structural P(score) ~.42-.50 (0.40 form-adj goal-share x FRA lambda 1.72), hedged for Morocco's elite defense. Crowd likely 40-48; P4b = crowd beats us on scorers, don't under-lean. Was 8 (resolver bug) -> 24 (model) -> 34 (pre-news) -> 42.",
+  "set": "2026-07-09 FRA/MAR lineup-news"
+ },
+ "1a199de3-0db7-4c21-96b8-899ab3174573": {
+  "value": 52,
+  "why": "INJURY: Morocco's main striker / leading scorer Ismael Saibari is OUT (hamstring vs Canada), replaced by the lesser Rahimi - reduces Morocco's on-target output beyond the goal-lambda effect (SoT concentrates on the striker). Edge-aligned: team_sot_ge is where we WIN by pricing below the over-pricing crowd, and Saibari-out is new info the model/odds only partly capture. Modest trim (3+ SoT is a low team bar) 57 -> 52.",
+  "set": "2026-07-09 FRA/MAR lineup-news"
  }
 }
