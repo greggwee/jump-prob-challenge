@@ -1,22 +1,7 @@
 {
- "fc3f2e1c-e17f-4caa-8c6f-7e370746fcf0": {
-  "value": 45,
-  "why": "HARD: Spain 7.0 SoT/match this WC; Costa 6 & 5 saves last two matches; model 24 violates the plan's pre-registered rail [.30,.55] (WC26 SoT-level drift)",
-  "set": "2026-07-06 expert sense-check"
- },
- "114c9f1a-6511-4344-9a98-7481f760519b": {
-  "value": 52,
-  "why": "HISTORICAL: StatsBomb base P(any team player 2+ SoT)=.485 over 600 team-matches; POR volume + WC26 SoT drift; structural model input under-leveled",
-  "set": "2026-07-06 expert sense-check"
- },
- "cfd8aa23-615c-4ffc-8b76-cdf72d4fa69d": {
-  "value": 50,
-  "why": "HARD-CURRENT: Spain 14.25 corners/match this WC (FOX team stats); count model under-leveled",
-  "set": "2026-07-06 expert sense-check"
- },
- "b55480b4-c269-4fe1-880e-3cec0bdbe9d1": {
-  "value": 45,
-  "why": "DE-RISK: uncalibrated first-card race model; expert historical read 45",
-  "set": "2026-07-06 expert sense-check"
+ "85b4b0c3-68f7-4e41-a644-3f9e083564e8": {
+  "value": 34,
+  "why": "STRUCTURAL: Mbappe P(score) ~.39 (0.30 goal-share x France lambda 1.72 = .52 xG -> 1-e^-.52 = .40; resolved indiv rate .0054/min x90' = .49 -> .39). The model base-blend under-prices elite favored scorers (pulls .39 -> 24) and FRA/MAR has NO book anchor to correct it. Crowd ~37; P4b shows the crowd beats us on scorers, so a 13pt under-lean loses (and the 'low wins' claim rests on n=4, all non-scorers). Submit 34 (near structural, small hedge). Post-resolver-fix (was the 8 population-fallback bug).",
+  "set": "2026-07-09 FRA/MAR finetune"
  }
 }
