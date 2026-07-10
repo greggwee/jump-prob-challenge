@@ -54,6 +54,7 @@ GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge"
               "win_both_halves", "first_goal_2h", "margin_exactly", "total_odd",
               "team_scores_half", "half_total_ge", "team_goals_ge",
               "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
+              "ht_scoreless",
               "advance"} | TIMING_ARCHS
 COUNT_ARCHS = {"corners_gt", "sot_gt", "fouls_gt", "cards_gt", "team_corners_ge",
                "team_sot_ge", "team_cards_ge", "cards_ge", "corners_total_ge",
@@ -113,6 +114,22 @@ PLAYER_MODEL_FRAC = 0.20
 # regularizer — it BINDS on SoT (biggest premium / most low-priced props, where a flat additive
 # lift most overshoots) and bounds any daily_learn refit. A price-interacted or logit-space lift
 # was tested and is worse/neutral at this n, so the flat-additive form stays.
+# Phase-0 endgame (2026-07-10): archetype crowd templates (data/processed/crowd_prior.json,
+# refit by daily_learn) back two safety nets. (1) UNRESOLVED player props (no club prior, no
+# tournament minutes) blend toward the archetype's crowd-template LEVEL instead of shipping the
+# naked population floor — the Haaland-8%/De Bruyne/DR-Congo catastrophic-tail class; adopted
+# from parkjpd ("generic player fallback defaults to crowd level, not the floor"). (2) The flat
+# event-base kinds where our model is a CONSTANT and the per-question crowd barely varies
+# (template std<=4) hug the crowd level — submitting ~the field's own mean banks the Jensen
+# field-variance bonus (mean-of-Briers > Brier-of-mean) instead of bleeding a fixed offset.
+# Whitelist ONLY: grid/count/player kinds keep their engine signal (validated edges), and
+# offsides/fouls stay risk-gate-flattened (the crowd OVER-prices those — do not chase it).
+CROWD_TEMPLATE_PATH = Path("data/processed/crowd_prior.json")
+UNRESOLVED_PLAYER_TEMPLATE_W = 0.5   # unknown player: 50/50 model / crowd level (interior blend)
+CROWD_HUG_KINDS = {"pen_or_red", "penalty_awarded", "substitute_scores"}
+CROWD_HUG_W = 0.6
+CROWD_HUG_MAX_STD = 4.0              # hug only where the crowd is near-constant per question
+CROWD_HUG_MIN_N = 3
 PLAYER_CROWD_PREM_PATH = Path("data/processed/player_crowd_premium.json")
 PLAYER_CROWD_LIFT = 0.5       # deliberate conservative under-shift (magnitude unidentified, p~.065)
 PLAYER_CROWD_LIFT_CAP = 0.06  # BINDING guardrail: max +6 pts/prop; caps SoT + any refit over-lift
@@ -146,6 +163,9 @@ PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
 EVENT_BASE_DEFAULTS = {
     "goal_share_1h_stoppage": 0.02, "goal_share_2h_stoppage": 0.08,
     "sub_before_ht": 0.12, "substitute_scores": 0.18,
+    # "either team makes a substitution AT halftime": 33/64 WC2022 matches had a subst event
+    # at elapsed=46 (the HT-interval change) -> Laplace (33+1)/(64+2)=0.515. Flat base.
+    "sub_at_ht": 0.52,
     # own_goal: flat P(>=1 OG/match). Thinning-by-total-goals was TESTED and lost to flat
     # (OGs don't scale with goals). 0.10 = WC-finals prior 0.062 shrunk with WC26's ~0.14 (the
     # friendly-polluted all-comp pool of 0.019 badly under-prices the WC).
@@ -246,6 +266,14 @@ def _load_lineup_status() -> dict:
         return {}
 
 
+def _load_crowd_template() -> dict:
+    """Per-archetype settled-crowd level {arch: {n, mean, std}} (percent points); {} if unavailable."""
+    try:
+        return json.loads(CROWD_TEMPLATE_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
 @dataclass
 class MatchContext:
     team_a: str          # listed first in match name
@@ -291,6 +319,7 @@ class Runner:
         self.expert_gate = panel_mod.load_gate()                # L2 per-archetype blend gate (off unless AI_EXPERT_ENABLE)
         self.player_crowd_prem = _load_crowd_prem()             # P4b per-archetype crowd-premium lift
         self.lineup_status = _load_lineup_status()              # confirmed benched/out (near-KO WebPanel)
+        self.crowd_template = _load_crowd_template()            # Phase-0 crowd levels (fallback + hug)
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -453,12 +482,22 @@ class Runner:
         return self.club_rates.get(match) if match else None
 
     def player_rate(self, name: str) -> tuple[float, float, float]:
-        """Per-minute (sot, goal, ga) rates. The GA prior uses the transfer-discounted
-        CLUB rate (club assists are our biggest blind spot — validated on settled props:
-        it cuts player_ga Brier ~0.19->0.16). SoT and scores keep the population prior:
-        on settled data the club rate over-predicts SoT (the tail is better handled by
-        the Phase-1 floor) and erodes our genuine player_scores edge. The tournament
-        appearances then shrink off the prior (Gamma-Poisson, M0=270/540)."""
+        """Per-minute (sot, goal, ga) rates, Gamma-Poisson-shrunk off a PLAYER-CENTERED prior.
+
+        Phase-0 endgame fix (2026-07-10): ALL THREE priors now use the transfer-discounted
+        CLUB rate when the player resolves (was GA-only; SoT/scores sat on the POPULATION
+        mean). The population prior + M0=270/540 shrinkage is 3-6 full matches of pull toward
+        "average WC player" — textbook over-shrinkage of exactly the elite outliers the KO
+        '(Player, #N) to score' questions are about. Measured leak: our player prices sat
+        -18..-28pt under the crowd, the gap SCALING with crowd level (elite signature);
+        Mbappe/Haaland-class no-book props collapsed to ~8-24. Re-centering the prior on the
+        player fixes the MODEL side at the source (works with no book and no crowd present).
+        The earlier "club over-predicts SoT" disable was an n-tiny call made WITHOUT the 0.80
+        transfer discount; revisit with Phase-1 full-harvest data.
+        Sets self._pr_resolved: False = neither club prior nor tournament minutes matched
+        (we know NOTHING about this player) -> the caller blends toward the archetype crowd
+        template instead of shipping the naked population floor (the De Bruyne/DR-Congo/
+        Haaland-8% catastrophic-tail class)."""
         # Strip a '(Team, #N)' subject suffix before resolving. The QF/SF question format is
         # "Kylian Mbappé (France, #10)"; the parenthetical's tokens ('(france,', '#10)') match no
         # player, so BOTH the club-prior resolve and the token-match miss and the best striker on
@@ -467,10 +506,12 @@ class Runner:
         # De Bruyne / Haaland / DR Congo, closed here for the model path.
         name = name.split("(")[0].strip() or name
         club = self._club_prior(name)
-        prior_sot, prior_goal = self.prior_sot, self.prior_goal
+        prior_sot = self.player_transfer * club[0] if club else self.prior_sot
+        prior_goal = self.player_transfer * club[1] if club else self.prior_goal
         prior_ga = self.player_transfer * club[2] if club else self.prior_ga
         tokens = _norm_name(name).split()
         hits = self.players[self.players["norm"].apply(lambda n: all(t in n for t in tokens))]
+        self._pr_resolved = bool(club) or len(hits) == 1
         if len(hits) == 1:
             h = hits.iloc[0]
             m = float(h["minutes"])
@@ -574,12 +615,19 @@ class Runner:
             return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * share))
         if a == "sub_before_ht":
             return float(self.event_base["sub_before_ht"])          # ~injury base rate
-        if a == "substitute_scores":
+        if a == "sub_at_ht":
+            return float(self.event_base["sub_at_ht"])              # HT-interval change, WC2022 33/64
+        if a in ("substitute_scores", "substitute_ga"):
             # subs come on ~72' and score ~17% of all goals (WC2022 events, lineup-verified),
             # so the chance a sub scores tracks the match's goal expectation -> scale the base
             # rate by this match's total goals vs the league average (blowout > tight game).
             lam0 = 2.0 * float(np.exp(self.pl.goal_model.b0))   # league-average total goals
             s = -np.log(1.0 - self.event_base["substitute_scores"]) / lam0
+            if a == "substitute_ga":
+                # "score OR ASSIST": widen the scoring hazard by the population GA/goal rate
+                # ratio (assists arrive at a similar clip to goals; capped at 2x). Structural,
+                # not fit — the score-or-assist phrasing first appeared in the QF round.
+                s *= min(self.prior_ga / max(self.prior_goal, 1e-9), 2.0)
             return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * s))
         if a == "any_player_goals_ge":   # "any player score 2+ goals" — over the goal grid
             if (q.threshold or 2) > 2:   # brace curve is P(some player >=2 | team goals); no 3+ data
@@ -783,6 +831,8 @@ class Runner:
             return mk.p_scores_in_half(lt, q.half)
         if a == "ht_tied":
             return float(np.trace(dc_grid(H1 * ctx.lam_a, H1 * ctx.lam_b, ctx.rho_dc)))
+        if a == "ht_scoreless":   # 0-0 at HT = the [0,0] cell of the half grid (QF phrasing)
+            return float(dc_grid(H1 * ctx.lam_a, H1 * ctx.lam_b, ctx.rho_dc)[0, 0])
         if a == "half_total_ge":
             share = H1 if q.half == 1 else H2
             lam = share * (ctx.lam_a + ctx.lam_b)
@@ -951,7 +1001,16 @@ class Runner:
             # == 1 - exp(-mu), i.e. identical to the prior formula -> no behaviour change).
             from scipy.stats import poisson
             k = q.threshold or 1
-            return float(sum(w * (1.0 - poisson.cdf(k - 1, rate * scale * m)) for w, m in MINUTE_SCENARIOS))
+            p = float(sum(w * (1.0 - poisson.cdf(k - 1, rate * scale * m)) for w, m in MINUTE_SCENARIOS))
+            # Phase-0: an UNRESOLVED player (no club prior, no tournament minutes — we know
+            # NOTHING about them) is priced off the population floor; blend toward the
+            # archetype's crowd-template level instead (the Haaland-8% tail class). k>=2
+            # lines excluded: the template mixes thresholds and reads as a 1+-line level.
+            if not getattr(self, "_pr_resolved", True) and k == 1:
+                t = (self.crowd_template or {}).get(a) or {}
+                if (t.get("n") or 0) >= CROWD_HUG_MIN_N and t.get("mean") is not None:
+                    p = (1 - UNRESOLVED_PLAYER_TEMPLATE_W) * p + UNRESOLVED_PLAYER_TEMPLATE_W * t["mean"] / 100.0
+            return p
         return None
 
     # ------------------------------------------------------------------
@@ -1061,6 +1120,16 @@ class Runner:
                 # a full-match base silently undoes the scope (review §3.6 interaction trap).
                 if self.risk_on and q.half is None:
                     p_a = float(np.clip(self._risk(q.archetype, p_a), 0.01, 0.99))
+                # Phase-0 crowd hug: flat event-base kinds where our model is a CONSTANT and
+                # the settled crowd barely varies per question (std<=4) — submit near the
+                # field's level and bank the field-variance bonus instead of bleeding a fixed
+                # offset every match. Whitelist only; never grid/count/player kinds.
+                if q.archetype in CROWD_HUG_KINDS and q.half is None:
+                    t = (self.crowd_template or {}).get(q.archetype) or {}
+                    if ((t.get("n") or 0) >= CROWD_HUG_MIN_N and t.get("mean") is not None
+                            and (t.get("std") if t.get("std") is not None else 99.0) <= CROWD_HUG_MAX_STD):
+                        p_a = float(np.clip((1 - CROWD_HUG_W) * p_a + CROWD_HUG_W * t["mean"] / 100.0,
+                                            0.01, 0.99))
                 # Lineup-status override — the LAST word for player props (beats book, lift,
                 # expert, risk). A player confirmed benched/out this match is capped at a bounded
                 # sub-minutes ceiling; applied as a MIN so it only lowers a starter-priced prop.

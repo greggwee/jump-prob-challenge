@@ -129,3 +129,16 @@ def test_any_team_player_sot_is_team_scoped():
     assert q.archetype == "any_team_player_sot_ge" and q.subject == "Portugal" and q.threshold == 2
     # the match-level phrasing is untouched
     assert parse_question("Will any player record 2 or more shots on target?").archetype == "any_player_sot_ge"
+
+
+def test_qf_wave2_phrasings_route_correctly():
+    """2026-07-10 QF phrasings: substitute score-or-assist must NOT be swallowed by player_ga
+    (was live at 15 vs crowd ~35-40); 'total cards' without 'shown'; 0-0 HT; HT substitution."""
+    assert parse_question("Will a substitute score or assist a goal (excluding own goals) in "
+                          "regulation (90 minutes + stoppage time)?").archetype == "substitute_ga"
+    assert parse_question("Will a substitute score a goal (excluding own goals) in regulation "
+                          "(90 minutes + stoppage time)?").archetype == "substitute_scores"
+    q = parse_question("Will there be 4 or more total cards in regulation (90 minutes + stoppage time)?")
+    assert q.archetype == "cards_ge" and q.threshold == 4
+    assert parse_question("Will the match be 0-0 at halftime?").archetype == "ht_scoreless"
+    assert parse_question("Will either team make a substitution at halftime?").archetype == "sub_at_ht"

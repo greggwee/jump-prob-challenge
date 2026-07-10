@@ -89,7 +89,8 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("team_cards_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will (.+?) have at least (\d+) corner kicks? in the (first|second) half", re.I),
      lambda m: ParsedQuestion("team_corners_ge", m[1], threshold=int(m[2]), half=1 if m[3].lower() == "first" else 2)),
-    (re.compile(r"will there be (\d+) or more total cards shown\?", re.I),
+    # QF phrasing drops the word "shown" ("4 or more total cards in regulation") -> optional
+    (re.compile(r"will there be (\d+) or more total cards( shown)?\?", re.I),
      lambda m: ParsedQuestion("cards_ge", threshold=int(m[1]), half=None)),
     (re.compile(r"will there be (\d+) or more total corner kicks in the (first|second) half", re.I),
      lambda m: ParsedQuestion("corners_total_ge", threshold=int(m[1]), half=1 if m[2].lower() == "first" else 2)),
@@ -101,12 +102,21 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("total_le", threshold=int(m[1]))),
     (re.compile(r"will the match be tied at halftime", re.I),
      lambda m: ParsedQuestion("ht_tied")),
+    # QF phrasings (2026-07-10): scoreless HT (stricter than tied) + the HT-interval sub
+    (re.compile(r"will the match be 0-0 at halftime", re.I),
+     lambda m: ParsedQuestion("ht_scoreless")),
+    (re.compile(r"will either team make a substitution at halftime", re.I),
+     lambda m: ParsedQuestion("sub_at_ht")),
     (re.compile(r"at halftime, will (.+?) be winning", re.I),
      lambda m: ParsedQuestion("ht_leading", m[1])),
     (re.compile(r"will (.+?) be (?:ahead|winning|leading) at halftime", re.I),
      lambda m: ParsedQuestion("ht_leading", m[1])),
     (re.compile(r"will the second half have more (?:total )?goals than the first", re.I),
      lambda m: ParsedQuestion("h2_more_goals_than_h1")),
+    # "a substitute score or assist" must NOT be swallowed as a player_ga subject (an
+    # unresolvable "player" -> population floor -> submitted 15 vs crowd ~35; live 2026-07-10)
+    (re.compile(r"will a substitute score (?:or assist )?a goal", re.I),
+     lambda m: ParsedQuestion("substitute_ga" if "assist" in m.group(0).lower() else "substitute_scores")),
     (re.compile(r"will (.+?) score or assist a goal", re.I),
      lambda m: ParsedQuestion("player_ga", m[1])),
     # --- knockout / derived goal archetypes (recovered from the 2026-06-28 drop audit);
@@ -160,8 +170,7 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("goal_2h_stoppage")),
     (re.compile(r"will a substitution be made before halftime", re.I),
      lambda m: ParsedQuestion("sub_before_ht")),
-    (re.compile(r"will a substitute score a goal", re.I),
-     lambda m: ParsedQuestion("substitute_scores")),
+    # (substitute score / score-or-assist handled ABOVE the player_ga pattern — ordering matters)
     # any-player markets (>=2): ride the team goal/SoT distribution x a concentration factor
     (re.compile(r"will any player record (\d+) or more shots on target", re.I),
      lambda m: ParsedQuestion("any_player_sot_ge", threshold=int(m[1]))),
