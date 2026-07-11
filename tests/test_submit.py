@@ -227,6 +227,30 @@ def test_player_name_suffix_resolves():
     assert suffixed[1] > r.prior_goal * 1.5         # resolved to a real elite scorer, not the population prior
 
 
+def test_endgame_dial_inert_by_default_and_allowlisted():
+    """Phase-2 endgame extremizer: absent env -> byte-identical; when set, it amplifies ONLY
+    the structural-edge allowlist (never player props), and only on the live pass."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    assert r.endgame_alpha == 1.0                       # default: dial off (env unset in CI)
+    rows = [
+        {"id": "e1", "lobby_id": "L", "match": {"name": "France vs Croatia"},
+         "question": "Will France have more corner kicks AND more total shots than Croatia in "
+                     "regulation (90 minutes + stoppage time)?"},
+        {"id": "e2", "lobby_id": "L", "match": {"name": "France vs Croatia"},
+         "question": "Will Kylian Mbappé (France, #10) score a goal (excluding own goals) in "
+                     "regulation (90 minutes + stoppage time)?"},
+    ]
+    base = {o["market_id"]: o["p_bot_a"] for o in r.predictions_for(rows)[0]}
+    r.endgame_alpha = 1.5
+    amp = {o["market_id"]: o["p_bot_a"] for o in r.predictions_for(rows)[0]}
+    assert amp["e2"] == base["e2"]                      # player prop NEVER extremized
+    b, a = base["e1"], amp["e1"]                        # allowlisted kind moves away from 0.5
+    assert a != b and abs(a - 0.5) > abs(b - 0.5)
+
+
 def test_lineup_status_override():
     """A player confirmed benched/out THIS match is capped at a bounded sub-minutes ceiling,
     overriding the book anchor AND the P4b lift (the De Bruyne fix: submitted 44 for a benched

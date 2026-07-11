@@ -124,6 +124,19 @@ PLAYER_MODEL_FRAC = 0.20
 # field-variance bonus (mean-of-Briers > Brier-of-mean) instead of bleeding a fixed offset.
 # Whitelist ONLY: grid/count/player kinds keep their engine signal (validated edges), and
 # offsides/fouls stay risk-gate-flattened (the crowd OVER-prices those — do not chase it).
+# Phase-2 endgame lever (2026-07-11, default OFF): a graded rank-chase dial for the SF/final,
+# per the endgame MC — blanket variance is a trap (zero mean, multipliers hit losses too;
+# honest +481±379 vs blanket +475±760), so escalation is (a) env-gated (ENDGAME_EXTREMIZE=<a>,
+# e.g. 1.25/1.5; absent -> byte-identical submissions), (b) restricted to the STRUCTURAL-EDGE
+# allowlist below (grid templates where the crowd uses provably-naive heuristics + the team-count
+# kinds where we measurably beat the crowd), and (c) live-pass only (CLV passes stay pure).
+# NEVER extremize: player props (crowd beats us), offsides/fouls (flattened by design),
+# anchored goal markets (the book IS the floor), cards timing (mis-calibrated).
+# Operate via scripts/endgame_policy.py: it sizes the needed rate vs the cutoff and prints the
+# recommended tier; a human sets the env. Escalate only as far as the deficit demands.
+ENDGAME_KINDS = {"win_both_halves", "first_goal_2h", "margin_exactly", "total_odd",
+                 "goal_after_hb1", "ht_scoreless", "corners_and_shots",
+                 "team_sot_ge", "team_corners_ge", "sot_gt", "cards_gt"}
 CROWD_TEMPLATE_PATH = Path("data/processed/crowd_prior.json")
 UNRESOLVED_PLAYER_TEMPLATE_W = 0.5   # unknown player: 50/50 model / crowd level (interior blend)
 CROWD_HUG_KINDS = {"pen_or_red", "penalty_awarded", "substitute_scores"}
@@ -320,6 +333,11 @@ class Runner:
         self.player_crowd_prem = _load_crowd_prem()             # P4b per-archetype crowd-premium lift
         self.lineup_status = _load_lineup_status()              # confirmed benched/out (near-KO WebPanel)
         self.crowd_template = _load_crowd_template()            # Phase-0 crowd levels (fallback + hug)
+        import os as _os
+        try:                                                    # Phase-2 endgame dial (default off)
+            self.endgame_alpha = float(_os.environ.get("ENDGAME_EXTREMIZE", "1.0") or 1.0)
+        except ValueError:
+            self.endgame_alpha = 1.0
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -1130,6 +1148,12 @@ class Runner:
                             and (t.get("std") if t.get("std") is not None else 99.0) <= CROWD_HUG_MAX_STD):
                         p_a = float(np.clip((1 - CROWD_HUG_W) * p_a + CROWD_HUG_W * t["mean"] / 100.0,
                                             0.01, 0.99))
+                # Phase-2 endgame dial: graded logit amplification, STRUCTURAL-EDGE kinds only,
+                # live pass only, inert unless ENDGAME_EXTREMIZE is set (see ENDGAME_KINDS note).
+                if (self.endgame_alpha > 1.0 and q.archetype in ENDGAME_KINDS
+                        and 0.0 < self.w_market < 1.0):
+                    p_a = float(np.clip(inv_logit(self.endgame_alpha * logit(
+                        float(np.clip(p_a, 0.03, 0.97)))), 0.03, 0.97))
                 # Lineup-status override — the LAST word for player props (beats book, lift,
                 # expert, risk). A player confirmed benched/out this match is capped at a bounded
                 # sub-minutes ceiling; applied as a MIN so it only lowers a starter-priced prop.
