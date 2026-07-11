@@ -222,6 +222,9 @@ _WINDOW = {
     # "goal in H1 AFTER the first break" = [22,45); the post-break window carries MORE goal
     # intensity than [0,22) (the hazard rises through a half), so this is not simply ½·P(H1 goal).
     "goal_after_hb1": ("goal", 22, 45),
+    # SF phrasing: between the two breaks = match minutes [22, 67) — the fattest window
+    # (~55% of total goal intensity: late-H1 rise + all of early/mid H2)
+    "goal_between_hbs": ("goal", 22, 67),
 }
 # New-template structural constants (2026-07-07 researcher):
 CARD_STOPPAGE_SHARE = 0.15   # share of card mass in stoppage time (cards are late-loaded; the 90'

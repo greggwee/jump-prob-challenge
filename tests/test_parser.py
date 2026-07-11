@@ -142,3 +142,14 @@ def test_qf_wave2_phrasings_route_correctly():
     assert q.archetype == "cards_ge" and q.threshold == 4
     assert parse_question("Will the match be 0-0 at halftime?").archetype == "ht_scoreless"
     assert parse_question("Will either team make a substitution at halftime?").archetype == "sub_at_ht"
+
+
+def test_sf_phrasings_route_correctly():
+    """SF (FRA/ESP) phrasings 2026-07-11: mid-hydration-window goal, offsides-combined, ET variant."""
+    assert parse_question("Will a goal be scored after the first hydration break but before the "
+                          "second hydration break?").archetype == "goal_between_hbs"
+    q = parse_question("Will there be 4 or more offsides (both teams combined) in regulation "
+                       "(90 minutes + stoppage time)?")
+    assert q.archetype == "offsides_total_ge" and q.threshold == 4
+    assert parse_question("Will the match be tied at the end of regulation (90 minutes + stoppage "
+                          "time) and go to extra time?").archetype == "extra_time"

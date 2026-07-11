@@ -149,6 +149,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("goal_pre_hb1")),
     (re.compile(r"will a goal be scored after the second hydration break", re.I),
      lambda m: ParsedQuestion("goal_post_hb2")),
+    # SF phrasing: the mid-window between the two breaks (match minutes [22, 67))
+    (re.compile(r"will a goal be scored after the first hydration break but before the second", re.I),
+     lambda m: ParsedQuestion("goal_between_hbs")),
     (re.compile(r"will (\d+) or more corner kicks be taken before the first hydration break", re.I),
      lambda m: ParsedQuestion("corners_pre_hb1", threshold=int(m[1]))),
     (re.compile(r"will a card be shown after the second hydration break", re.I),
@@ -160,6 +163,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"will there be (\d+) or more total shots \(on and off target\)", re.I),
      lambda m: ParsedQuestion("total_shots_ge", threshold=int(m[1]))),
     (re.compile(r"will there be (\d+) or more offside calls", re.I),
+     lambda m: ParsedQuestion("offsides_total_ge", threshold=int(m[1]))),
+    # SF phrasing: "4 or more offsides (both teams combined)"
+    (re.compile(r"will there be (\d+) or more offsides \(both teams combined\)", re.I),
      lambda m: ParsedQuestion("offsides_total_ge", threshold=int(m[1]))),
     (re.compile(r"will both teams receive at least one card", re.I),
      lambda m: ParsedQuestion("both_teams_cards", threshold=1)),
@@ -211,6 +217,10 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("goal_header")),
     # --- QF templates (first seen 2026-07-05, caught by the P5 template audit) ---
     (re.compile(r"will the match go to extra time", re.I),
+     lambda m: ParsedQuestion("extra_time")),
+    # SF phrasing of the same event ("tied at the end of regulation ... and go to extra time");
+    # NOTE the suffix-stripper removes "of regulation (90 ...)" -> "tied at the end and go to ..."
+    (re.compile(r"will the match be tied at the end.*go to extra time", re.I),
      lambda m: ParsedQuestion("extra_time")),
     (re.compile(r"will both halves have the same number of goals", re.I),
      lambda m: ParsedQuestion("halves_equal_goals")),

@@ -1,12 +1,7 @@
 {
- "85b4b0c3-68f7-4e41-a644-3f9e083564e8": {
-  "value": 42,
-  "why": "FORM+STRUCTURAL: Mbappe has 7 goals this WC (Golden Boot race), France's primary scorer + penalty taker. The model's Gamma-Poisson shrinkage (M0=540) pulls his hot rate to .0054/min (=.39), badly under-weighting genuine form; and Morocco's leading scorer Saibari is OUT (hamstring) so France is even more dominant. Structural P(score) ~.42-.50 (0.40 form-adj goal-share x FRA lambda 1.72), hedged for Morocco's elite defense. Crowd likely 40-48; P4b = crowd beats us on scorers, don't under-lean. Was 8 (resolver bug) -> 24 (model) -> 34 (pre-news) -> 42.",
-  "set": "2026-07-09 FRA/MAR lineup-news"
- },
- "1a199de3-0db7-4c21-96b8-899ab3174573": {
-  "value": 52,
-  "why": "INJURY: Morocco's main striker / leading scorer Ismael Saibari is OUT (hamstring vs Canada), replaced by the lesser Rahimi - reduces Morocco's on-target output beyond the goal-lambda effect (SoT concentrates on the striker). Edge-aligned: team_sot_ge is where we WIN by pricing below the over-pricing crowd, and Saibari-out is new info the model/odds only partly capture. Modest trim (3+ SoT is a low team bar) 57 -> 52.",
-  "set": "2026-07-09 FRA/MAR lineup-news"
+ "1c591c57-d961-4f5f-bbb0-c821e1fb4906": {
+  "value": 57,
+  "why": "HARD(suspension)+reported-injury: Quansah SUSPENDED (red vs MEX) + Guehi reported out (hamstring) -> England back line reshuffled (Stones+Konsa); Norway scored in ALL 5 matches, Haaland 14-game international scoring streak. We sat 2 BELOW the book (model 46 drags the 0.85 blend down) on the side the evidence supports. Align TO book 57, not beyond (Stones+Konsa is still a strong pairing). Expert sense-check 2026-07-11; if the closing book moves above 57 this pin is mildly stale - acceptable.",
+  "set": "2026-07-11 NOR/ENG expert sense-check (Turpin ref confirmed card-neutral; 14 other markets KEEP)"
  }
 }
