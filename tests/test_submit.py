@@ -845,3 +845,33 @@ def test_qf_templates_price_sanely():
     assert 0.25 < race < 0.70
     # un-tabled subs threshold -> None (template audit), never a guess
     assert r.answer(parse_question("Will there be 6 or more total substitutions (both teams combined) in regulation (90 minutes + stoppage time)?"), ctx) is None
+
+
+def test_sf_novel_kinds_price_sanely():
+    """The 3 FRA/ESP novel kinds (2026-07-13): single-digit first scorer = P(goal incl ET) x
+    the WC2022-measured 40% share; first-sub race = near-coin tilted toward the likelier
+    trailer; VAR on-field review = measured monitor-review base + ET exposure."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner, SINGLE_DIGIT_FIRST_SHARE
+    from jumpprob.submit.parser import parse_question
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    even, lop = r.context("France", "Spain"), r.context("Brazil", "Haiti")
+    A = lambda t, c: r.answer(parse_question(t), c)
+    sd = A("Will the first goal of the match (including extra time, excluding penalty shootout) "
+           "be scored by a player wearing a single-digit shirt number (1-9)? Resolves No if the "
+           "score is 0-0 after extra time.", even)
+    assert 0.30 < sd < 0.42                    # ~0.93 x 0.40; strictly below the raw share
+    assert sd < SINGLE_DIGIT_FIRST_SHARE
+    sub_esp = A("Will Spain make the first substitution of the match in regulation "
+                "(90 minutes + stoppage time)?", even)
+    assert 0.45 < sub_esp < 0.58               # near-coin, tilted toward the likelier trailer
+    dog = A("Will Haiti make the first substitution of the match in regulation "
+            "(90 minutes + stoppage time)?", lop)
+    fav = A("Will Brazil make the first substitution of the match in regulation "
+            "(90 minutes + stoppage time)?", lop)
+    assert dog > 0.5 > fav                     # the big underdog is the likelier trailer
+    var = A("Will the referee conduct an on-field review at the pitchside VAR monitor at any "
+            "point in regulation (90 minutes + stoppage time) or extra time? Reviews during "
+            "the penalty shootout do not count.", even)
+    assert 0.20 < var < 0.36

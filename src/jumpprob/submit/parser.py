@@ -222,6 +222,16 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     # NOTE the suffix-stripper removes "of regulation (90 ...)" -> "tied at the end and go to ..."
     (re.compile(r"will the match be tied at the end.*go to extra time", re.I),
      lambda m: ParsedQuestion("extra_time")),
+    # --- SF novel kinds (first seen FRA/ESP 2026-07-11) ---
+    # first goal (incl ET, excl shootout) by a single-digit (1-9) shirt; 0-0 after ET -> NO
+    (re.compile(r"first goal of the match \(including extra time.*single-?digit shirt number", re.I),
+     lambda m: ParsedQuestion("first_goal_single_digit")),
+    # "<Team> makes the first substitution of the match" (subject resolved to a side downstream)
+    (re.compile(r"will (.+?) make the first substitution of the match", re.I),
+     lambda m: ParsedQuestion("first_sub_team", m[1])),
+    # referee conducts an on-field review at the pitchside VAR monitor (reg + ET, excl shootout)
+    (re.compile(r"conduct an on-field review at the pitchside var monitor", re.I),
+     lambda m: ParsedQuestion("var_ofr")),
     (re.compile(r"will both halves have the same number of goals", re.I),
      lambda m: ParsedQuestion("halves_equal_goals")),
     (re.compile(r"will the first card of the match be shown before the first goal", re.I),

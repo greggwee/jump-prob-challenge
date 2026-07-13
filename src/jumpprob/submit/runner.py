@@ -49,7 +49,7 @@ GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge"
               # R16 grid/lambda-derived templates: registering them makes anchored answers
               # pass through instead of taking a 25% base-rate dilution (review §3.4)
               "pen_shootout", "total_exact", "goal_each_half", "leads_at_any_point",
-              "extra_time", "halves_equal_goals",
+              "extra_time", "halves_equal_goals", "first_goal_single_digit",
               # new QF templates (2026-07-07): all pure goal-grid / per-half-grid derivations
               "win_both_halves", "first_goal_2h", "margin_exactly", "total_odd",
               "team_scores_half", "half_total_ge", "team_goals_ge",
@@ -167,6 +167,20 @@ P_PEN_MATCH = 0.293   # A6
 # 839 ET matches), and 81% of ET matches STILL go to penalties; shootouts are ~a coin flip
 # with a mild favorite tilt (0.49 even -> 0.57 big-favorite over 678 historical shootouts).
 ET_TEMPO = 0.35       # extra-time scoring as a fraction of pro-rated regulation
+# --- SF novel kinds (FRA/ESP 2026-07-13), bases measured on the cached WC2022 api-football set ---
+# P(first scorer wears #1-9 | a goal): 14/35 = 40.0% on WC2022 first-goal/lineup joins (n=35,
+# SE ~8pt). Structural cross-check for FRA/ESP agrees (~.38-.43): FRA's non-Mbappe attack is
+# single-digit-heavy (Thuram 9, Dembele 7; Mbappe 10 EXCLUDED) while ESP's creative core is
+# double-digit (Yamal 19, Pedri 20 excluded; Gavi 9 in). #10 is the modal first-scorer shirt --
+# the naive "9 of ~23 numbers" intuition overprices; the empirical base already carries that.
+SINGLE_DIGIT_FIRST_SHARE = 0.40
+# On-field VAR reviews: WC2022 api-football 'Var' events hit 35.9% of matches, but the detail
+# split (penalty confirmed/cancelled 13, card upgrade 1, goal cancellations mostly semi-automated
+# offside = NO monitor) puts true monitor-review matches at ~22-27%. Poisson mean per 90':
+VAR_OFR_LAMBDA = 0.30  # -> P(>=1) ~26% in regulation; ET exposure added per-match
+# First-substitution race: game-state dominated (the trailing side subs first); tilt the coin
+# by the win-prob gap, small (manager idiosyncrasy + injury randomness keep it near 50/50).
+FIRST_SUB_TILT = 0.10
 PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
 
 # Event markets our 90-min minute profile can't reach. Stoppage goals scale with the
@@ -707,6 +721,26 @@ class Runner:
         if a == "extra_time":
             # ET <=> drawn after 90; the anchored grid's draw mass ~= the de-vigged book X
             return float(mk.p_draw(ctx.grid))
+        if a == "first_goal_single_digit":
+            # P(a goal exists in reg+ET) x P(first scorer wears 1-9 | goal). No-goal-ever =
+            # 0-0 after 90 (ET then always follows) x no ET goal at the ET tempo. 0-0 -> NO.
+            p00 = float(ctx.grid[0, 0])
+            lam_et = ET_TEMPO * (ctx.lam_a + ctx.lam_b) / 3.0
+            p_goal_ever = 1.0 - p00 * float(np.exp(-lam_et))
+            return p_goal_ever * SINGLE_DIGIT_FIRST_SHARE
+        if a == "first_sub_team":
+            # Trailing side subs first; tilt the coin by the OPPONENT-minus-SIDE win-prob gap
+            # (side more likely to trail -> more likely to sub first). Bounded near 50/50.
+            if side is None:
+                return None
+            other = "b" if side == "a" else "a"
+            gap = float(mk.p_win(ctx.grid, other)) - float(mk.p_win(ctx.grid, side))
+            return float(np.clip(0.5 + FIRST_SUB_TILT * gap, 0.40, 0.60))
+        if a == "var_ofr":
+            # P(>=1 on-field monitor review, reg + ET, shootout excluded): Poisson at the
+            # measured per-90 mean, exposure extended by P(ET) x a third of a match.
+            lam = VAR_OFR_LAMBDA * (1.0 + float(mk.p_draw(ctx.grid)) / 3.0)
+            return float(1.0 - np.exp(-lam))
         if a == "halves_equal_goals":
             # P(G1h == G2h) = sum_N P(total=N) x P(N splits equally). Given N, each goal
             # falls in H1 iid w.p. H1 (the goal share): P(equal | N=2k) = Binom(2k, H1).pmf(k);
