@@ -858,11 +858,14 @@ def test_sf_novel_kinds_price_sanely():
     r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
     even, lop = r.context("France", "Spain"), r.context("Brazil", "Haiti")
     A = lambda t, c: r.answer(parse_question(t), c)
-    sd = A("Will the first goal of the match (including extra time, excluding penalty shootout) "
+    sdq = ("Will the first goal of the match (including extra time, excluding penalty shootout) "
            "be scored by a player wearing a single-digit shirt number (1-9)? Resolves No if the "
-           "score is 0-0 after extra time.", even)
-    assert 0.30 < sd < 0.42                    # ~0.93 x 0.40; strictly below the raw share
+           "score is 0-0 after extra time.")
+    sd = A(sdq, even)                          # FRA/ESP: both teams' top scorer is double-digit
+    assert 0.25 < sd < 0.36                    # bottom-up sits BELOW the .365 flat base
     assert sd < SINGLE_DIGIT_FIRST_SHARE
+    # the bottom-up differentiates: a single-digit-heavy matchup prices materially higher
+    assert r.answer(parse_question(sdq), lop) > sd + 0.08
     sub_esp = A("Will Spain make the first substitution of the match in regulation "
                 "(90 minutes + stoppage time)?", even)
     assert 0.45 < sub_esp < 0.58               # near-coin, tilted toward the likelier trailer
@@ -874,4 +877,4 @@ def test_sf_novel_kinds_price_sanely():
     var = A("Will the referee conduct an on-field review at the pitchside VAR monitor at any "
             "point in regulation (90 minutes + stoppage time) or extra time? Reviews during "
             "the penalty shootout do not count.", even)
-    assert 0.20 < var < 0.36
+    assert 0.28 < var < 0.42                    # WC26-reconstructed OFR base (~35%, up from 26%)

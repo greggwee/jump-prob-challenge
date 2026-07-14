@@ -168,16 +168,34 @@ P_PEN_MATCH = 0.293   # A6
 # with a mild favorite tilt (0.49 even -> 0.57 big-favorite over 678 historical shootouts).
 ET_TEMPO = 0.35       # extra-time scoring as a fraction of pro-rated regulation
 # --- SF novel kinds (FRA/ESP 2026-07-13), bases measured on the cached WC2022 api-football set ---
-# P(first scorer wears #1-9 | a goal): 14/35 = 40.0% on WC2022 first-goal/lineup joins (n=35,
-# SE ~8pt). Structural cross-check for FRA/ESP agrees (~.38-.43): FRA's non-Mbappe attack is
-# single-digit-heavy (Thuram 9, Dembele 7; Mbappe 10 EXCLUDED) while ESP's creative core is
-# double-digit (Yamal 19, Pedri 20 excluded; Gavi 9 in). #10 is the modal first-scorer shirt --
-# the naive "9 of ~23 numbers" intuition overprices; the empirical base already carries that.
-SINGLE_DIGIT_FIRST_SHARE = 0.40
+# P(first scorer wears #1-9 | a goal), RECENCY-WEIGHTED (2026-07-14): WC26 ITSELF measured
+# 32/90 = 35.6% (martj42 first scorers x Wikipedia squad numbers, 100% join) vs WC2022
+# 14/35 = 40.0% (api-football joins). 2:1 recency blend -> 36.3%; use 0.365. The double-digit-
+# attacker pattern is STRONGER in 2026 (#10 modal with 11 firsts, #11 x8, #19 x6 — Yamal-class
+# young stars wear high numbers). The naive "9 of ~23 numbers" intuition overprices YES.
+# FRA/ESP structural cross-check: Thuram 9/Dembele 7 in; Mbappe 10, Yamal 19, Pedri 20 out.
+SINGLE_DIGIT_FIRST_SHARE = 0.365   # fallback for teams with no tournament-scoring on file
+# BOTTOM-UP refinement (2026-07-14): rather than a flat tournament base, allocate by the two
+# TEAMS' actual single-digit GOAL shares. Poisson-superposition makes the first scorer ~ each
+# player's goal intensity, so P(single-digit | goal) = lambda-weighted mean of the teams' shares.
+# Self-consistency validated: WC26 ALL-goal single-digit share 35.4% == first-scorer 35.6%.
+# data/processed/single_digit_team_share.json holds each team's share (WC26 goals x Wikipedia
+# squad numbers, shrunk K=10 toward the .355 base). FRA .329 / ESP .328 (double-digit stars
+# Mbappe #10, Yamal #19) -> both BELOW base; ENG .455 / ARG .198 for the other SF.
+SINGLE_DIGIT_TEAM_SHARE_PATH = Path("data/processed/single_digit_team_share.json")
+OWN_GOAL_SHARE = 0.05      # ~5% of goals are OGs; the OG scorer's shirt is ~random (defender)
+OWN_GOAL_SINGLE_DIGIT = 0.40   # defenders skew low numbers (2-6) -> ~40% single-digit
 # On-field VAR reviews: WC2022 api-football 'Var' events hit 35.9% of matches, but the detail
 # split (penalty confirmed/cancelled 13, card upgrade 1, goal cancellations mostly semi-automated
 # offside = NO monitor) puts true monitor-review matches at ~22-27%. Poisson mean per 90':
-VAR_OFR_LAMBDA = 0.30  # -> P(>=1) ~26% in regulation; ET exposure added per-match
+# On-field VAR monitor reviews. RE-EXAMINED 2026-07-14: my WC22-only 0.30 (~26%) was too low.
+# Reconstructed the WC22 TRUE-OFR rate from the cached api-football 'Var' events, counting only
+# monitor trips (penalty confirmed/cancelled, card upgrade, subjective-goal review) and EXCLUDING
+# semi-automated offside (no monitor): lambda_WC22 ~= 0.32 (P>=1 = 28%; OFR in 25% of matches).
+# WC26 discipline is inflated -- red cards up ~9x (0.141/match vs 0.016) and penalties ~0.20/match,
+# both primary OFR triggers -- so scale up ~1.25x: lambda ~= 0.40 -> P(>=1 reg) ~33%, +ET ~35%
+# (middle of the reconstructed 33-38% range; a likely-high crowd makes erring low the costlier way).
+VAR_OFR_LAMBDA = 0.40
 # First-substitution race: game-state dominated (the trailing side subs first); tilt the coin
 # by the win-prob gap, small (manager idiosyncrasy + injury randomness keep it near 50/50).
 FIRST_SUB_TILT = 0.10
@@ -304,6 +322,14 @@ def _load_crowd_template() -> dict:
         return {}
 
 
+def _load_single_digit_share() -> dict:
+    """Per-team single-digit GOAL share {canonical_team: share}; {} if unavailable (-> flat base)."""
+    try:
+        return json.loads(SINGLE_DIGIT_TEAM_SHARE_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
 @dataclass
 class MatchContext:
     team_a: str          # listed first in match name
@@ -350,6 +376,7 @@ class Runner:
         self.player_crowd_prem = _load_crowd_prem()             # P4b per-archetype crowd-premium lift
         self.lineup_status = _load_lineup_status()              # confirmed benched/out (near-KO WebPanel)
         self.crowd_template = _load_crowd_template()            # Phase-0 crowd levels (fallback + hug)
+        self.single_digit_share = _load_single_digit_share()    # per-team single-digit goal share (bottom-up)
         import os as _os
         try:                                                    # Phase-2 endgame dial (default off)
             self.endgame_alpha = float(_os.environ.get("ENDGAME_EXTREMIZE", "1.0") or 1.0)
@@ -727,7 +754,17 @@ class Runner:
             p00 = float(ctx.grid[0, 0])
             lam_et = ET_TEMPO * (ctx.lam_a + ctx.lam_b) / 3.0
             p_goal_ever = 1.0 - p00 * float(np.exp(-lam_et))
-            return p_goal_ever * SINGLE_DIGIT_FIRST_SHARE
+            # bottom-up: lambda-weight the two teams' single-digit GOAL shares (first scorer ~
+            # goal intensity); fall back to the flat base if either team is unknown. Then blend
+            # in the own-goal term (OG scorer's shirt is ~random defender).
+            shA = self.single_digit_share.get(ctx.team_a)
+            shB = self.single_digit_share.get(ctx.team_b)
+            if shA is not None and shB is not None:
+                share = (ctx.lam_a * shA + ctx.lam_b * shB) / (ctx.lam_a + ctx.lam_b)
+            else:
+                share = SINGLE_DIGIT_FIRST_SHARE
+            share = (1 - OWN_GOAL_SHARE) * share + OWN_GOAL_SHARE * OWN_GOAL_SINGLE_DIGIT
+            return p_goal_ever * share
         if a == "first_sub_team":
             # Trailing side subs first; tilt the coin by the OPPONENT-minus-SIDE win-prob gap
             # (side more likely to trail -> more likely to sub first). Bounded near 50/50.
