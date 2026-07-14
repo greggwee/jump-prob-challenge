@@ -193,9 +193,12 @@ OWN_GOAL_SINGLE_DIGIT = 0.40   # defenders skew low numbers (2-6) -> ~40% single
 # monitor trips (penalty confirmed/cancelled, card upgrade, subjective-goal review) and EXCLUDING
 # semi-automated offside (no monitor): lambda_WC22 ~= 0.32 (P>=1 = 28%; OFR in 25% of matches).
 # WC26 discipline is inflated -- red cards up ~9x (0.141/match vs 0.016) and penalties ~0.20/match,
-# both primary OFR triggers -- so scale up ~1.25x: lambda ~= 0.40 -> P(>=1 reg) ~33%, +ET ~35%
-# (middle of the reconstructed 33-38% range; a likely-high crowd makes erring low the costlier way).
-VAR_OFR_LAMBDA = 0.40
+# both primary OFR triggers. BUT the local settled data tempers this: pen_or_red (the closest
+# OUTCOME class) realized only 0.226 (n=31) while the crowd priced it 0.386 -- the trigger is
+# rarer than the "reds up 9x" headline implies for the games we price, AND the crowd OVER-prices
+# this class. So 0.40 (->35%) overshot toward a high crowd; settle at lambda 0.33 -> ~30%,
+# above the WC22 base (knockout intensity + no-change reviews) but below the over-pricing crowd.
+VAR_OFR_LAMBDA = 0.33
 # First-substitution race: game-state dominated (the trailing side subs first); tilt the coin
 # by the win-prob gap, small (manager idiosyncrasy + injury randomness keep it near 50/50).
 FIRST_SUB_TILT = 0.10
