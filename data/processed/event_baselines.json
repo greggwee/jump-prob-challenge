@@ -22,5 +22,7 @@
  "subs_ge8_ET": 0.429,
  "subs_ge9_ET": 0.143,
  "subs_ge10_ET": 0.143,
- "subs_source": "WC2022 api-football, ALL 64 matches (5 ET matches fetched 2026-07-05 \u2014 informative censoring: ET-bound reg-subs 6,8,8,5,6, P(>=9)=0/5). Laplace (k+1)/(n+2) per stratum; mixture weight = P(draw90) from the anchored grid."
+ "subs_source": "WC2022 api-football, ALL 64 matches (5 ET matches fetched 2026-07-05 \u2014 informative censoring: ET-bound reg-subs 6,8,8,5,6, P(>=9)=0/5). Laplace (k+1)/(n+2) per stratum; mixture weight = P(draw90) from the anchored grid.",
+ "sub_at_ht": 0.52,
+ "sub_at_ht_source": "WC2022 api-football events: 33/64 matches had a subst at elapsed=46 (the HT-interval change); Laplace (33+1)/(64+2)=0.515"
 }

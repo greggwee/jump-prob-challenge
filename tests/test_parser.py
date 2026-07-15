@@ -129,3 +129,40 @@ def test_any_team_player_sot_is_team_scoped():
     assert q.archetype == "any_team_player_sot_ge" and q.subject == "Portugal" and q.threshold == 2
     # the match-level phrasing is untouched
     assert parse_question("Will any player record 2 or more shots on target?").archetype == "any_player_sot_ge"
+
+
+def test_qf_wave2_phrasings_route_correctly():
+    """2026-07-10 QF phrasings: substitute score-or-assist must NOT be swallowed by player_ga
+    (was live at 15 vs crowd ~35-40); 'total cards' without 'shown'; 0-0 HT; HT substitution."""
+    assert parse_question("Will a substitute score or assist a goal (excluding own goals) in "
+                          "regulation (90 minutes + stoppage time)?").archetype == "substitute_ga"
+    assert parse_question("Will a substitute score a goal (excluding own goals) in regulation "
+                          "(90 minutes + stoppage time)?").archetype == "substitute_scores"
+    q = parse_question("Will there be 4 or more total cards in regulation (90 minutes + stoppage time)?")
+    assert q.archetype == "cards_ge" and q.threshold == 4
+    assert parse_question("Will the match be 0-0 at halftime?").archetype == "ht_scoreless"
+    assert parse_question("Will either team make a substitution at halftime?").archetype == "sub_at_ht"
+
+
+def test_sf_phrasings_route_correctly():
+    """SF (FRA/ESP) phrasings 2026-07-11: mid-hydration-window goal, offsides-combined, ET variant."""
+    assert parse_question("Will a goal be scored after the first hydration break but before the "
+                          "second hydration break?").archetype == "goal_between_hbs"
+    q = parse_question("Will there be 4 or more offsides (both teams combined) in regulation "
+                       "(90 minutes + stoppage time)?")
+    assert q.archetype == "offsides_total_ge" and q.threshold == 4
+    assert parse_question("Will the match be tied at the end of regulation (90 minutes + stoppage "
+                          "time) and go to extra time?").archetype == "extra_time"
+
+
+def test_sf2_phrasings_route_correctly():
+    """ENG/ARG SF2 phrasings (2026-07-15): total-SoT-combined, lead-at-halftime, the
+    card-before-goal competing-risks variant, and either-half stoppage goal."""
+    q = parse_question("Will there be 8 or more total shots on target (both teams combined) in "
+                       "regulation (90 minutes + stoppage time)?")
+    assert q.archetype == "total_sot_ge" and q.threshold == 8
+    assert parse_question("Will England lead at halftime?").archetype == "ht_leading"
+    assert parse_question("Will a card be shown before the first goal of the match in regulation "
+                          "(90 minutes + stoppage time)?").archetype == "first_card_before_goal"
+    assert parse_question("Will a goal be scored during first- or second-half stoppage time in "
+                          "regulation?").archetype == "goal_stoppage"

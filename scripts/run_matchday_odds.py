@@ -166,6 +166,16 @@ if _ov and _hits is not None and _hits.any():
         print(f"    {_r.sub_a} -> {_o['value']}  ({_o['why'][:80]}) | {_r.question[:44]}")
         df.loc[df.market_id == _r.market_id, "sub_a"] = int(_o["value"])
 
+# Lineup-status overrides (auto, near-KO): surface any player prop the runner capped for a
+# confirmed benched/out player. Applied inside the runner (already in sub_a); printed here so a
+# bad lineup scrape is loudly visible before it ships. The De Bruyne fix.
+if "lineup" in df.columns and df["lineup"].notna().any():
+    _lu = df[df["lineup"].notna()]
+    print("")
+    print(f"!! LINEUP overrides applied to {len(_lu)} player props (benched/out, capped):")
+    for _r in _lu.itertuples():
+        print(f"    -> {_r.sub_a} [{_r.lineup}] | {_r.question[:56]}")
+
 # Snapshot which markets were book-anchored on a PREVIOUS run BEFORE appending this run's
 # rows — the anchor-regression guard needs prior-run evidence, and appending first would let
 # this run's own props-less rows erase it.

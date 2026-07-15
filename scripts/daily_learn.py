@@ -57,6 +57,7 @@ def main() -> None:
         try:
             p = subprocess.run([str(PYEXE), script],
                                cwd=str(ROOT), capture_output=True, text=True, timeout=300,
+                               encoding="utf-8", errors="replace",
                                creationflags=CREATE_NO_WINDOW)
             lines = p.stdout.strip().splitlines() or [""]
             tail = next((ln for ln in lines if want_line in ln), lines[-1])
@@ -82,6 +83,9 @@ def main() -> None:
     #    P1: refresh the per-archetype crowd prior (the submit-time catastrophic-deviation
     #    clamp's proxy) as newly harvested crowd rows accumulate.
     _run("crowd prior", "scripts/fit_crowd_prior.py", want_line="crowd_prior")
+    #    P4b: refit the player-prop crowd premium (crowd prices these props above the book we
+    #    anchor to; the runner lifts book-anchored player props toward the crowd by this amount).
+    _run("crowd premium", "scripts/fit_player_crowd_premium.py", want_line="player_crowd_premium")
     # 5. forward shadow-scorer for the open quant-review hypotheses (de-extremize /
     #    A>B over-prediction). Append-only ledger, FIXED params -> validates on fresh
     #    settled data before either touches the live path. Logged, never auto-applied.

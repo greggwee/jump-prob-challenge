@@ -55,10 +55,15 @@ def archetype_base_rates() -> dict:
     # (fouls: flat .245 vs crowd .263 vs us .277, n=21; offsides: flat@.40 .233 vs crowd
     # .253 vs us .280, n=22). Pin the levels the risk gate shrinks toward (risk_gate.json
     # holds the matching strong shrink s=0.15):
-    #   fouls_gt 0.55   = crowd prior 55.2 ~= realized 0.57 (they agree);
-    #   offsides_ge 0.40 = crowd 0.49 shrunk toward realized 0.36 (the StatsBomb->live
-    #   definition gap makes the crowd itself too HIGH here; 0.40 beats the crowd +0.021).
-    rates["fouls_gt"] = 0.55
+    #   fouls_gt 0.50   = the SYMMETRIC coin-flip. fouls_gt compares exchangeable teams, so it
+    #     must sit at/below 0.50 (P(A>B)=P(B>A)<0.5 once tie mass is removed). The realized rate
+    #     is sample-unstable (0.57 n=21 @2026-07-02 vs 0.44 n=16 @2026-07-08) with no structural
+    #     reason for a first-named-team foul bias, so 0.50 is the robust hug (was 0.55, which the
+    #     2026-07-07 settled-match review flagged as over-priced: our .58 vs realized .44);
+    #   offsides_ge 0.40 = crowd 0.49 shrunk toward realized 0.36 (the StatsBomb->live definition
+    #     gap makes the crowd itself too HIGH; 0.40 tracks realized .39 — 2026-07-07 review VERIFIED
+    #     we're well-calibrated here, do NOT lift toward the crowd).
+    rates["fouls_gt"] = 0.50
     rates["offsides_ge"] = 0.40
     praw = PROC / "backtest_players_raw.csv"
     if praw.exists():

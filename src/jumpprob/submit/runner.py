@@ -49,13 +49,19 @@ GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge"
               # R16 grid/lambda-derived templates: registering them makes anchored answers
               # pass through instead of taking a 25% base-rate dilution (review §3.4)
               "pen_shootout", "total_exact", "goal_each_half", "leads_at_any_point",
-              "extra_time", "halves_equal_goals",
+              "extra_time", "halves_equal_goals", "first_goal_single_digit",
+              # new QF templates (2026-07-07): all pure goal-grid / per-half-grid derivations
+              "win_both_halves", "first_goal_2h", "margin_exactly", "total_odd",
               "team_scores_half", "half_total_ge", "team_goals_ge",
               "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
+              "ht_scoreless",
               "advance"} | TIMING_ARCHS
 COUNT_ARCHS = {"corners_gt", "sot_gt", "fouls_gt", "cards_gt", "team_corners_ge",
                "team_sot_ge", "team_cards_ge", "cards_ge", "corners_total_ge",
-               "total_sot_half_ge", "total_sot_ge", "offsides_ge", "both_teams_sot_ge"}
+               "total_sot_half_ge", "total_sot_ge", "offsides_ge", "both_teams_sot_ge",
+               "corners_and_shots"}  # a corners+shots comparison (count-Platt like corners_gt)
+# NB card_each_half / card_stoppage are deliberately NOT count-family: the count Platt shifts UP
+# (b>0), which fights WC26 cards-running-LOW — price them raw-structural + P1-clamp-protected.
 PLAYER_ARCHS = {"player_scores", "player_sot_ge", "player_ga"}
 
 # parser archetype + side -> mc_engine.answer(archetype, side) for timing markets
@@ -92,6 +98,66 @@ PLAYER_TRANSFER = 0.80   # validated flat optimum on settled player_ga (scripts/
 # pure book (model 0.250 / w=.85 0.206 / book 0.202) — the model is data-gapped on stars, so
 # it keeps only a 20% sliver of the goal-market share: live w_market=.85 -> player w=.97.
 PLAYER_MODEL_FRAC = 0.20
+# P4b player-prop crowd premium — the Jump crowd we are SCORED against prices these props
+# systematically ABOVE the book we anchor to (crowd .223 vs book .258 Brier, n=29 settled anchored
+# props). Quant audit 2026-07-06 confirmed the edge is real, NOT an artifact: the gap survives
+# dropping any single match, outcome reconstruction is clean (0/29 mismatch), and it is LARGER
+# without the anchored-only filter. Root cause is a book LOW-SIDE miscalibration — book prices in
+# [0,.34) realize .44. We can't see the crowd pre-lock; lift book-anchored player props toward it
+# by the fitted per-archetype premium, DAMPED and CAPPED. Refit in daily_learn.
+# MAGNITUDE IS NOT DATA-IDENTIFIED (audited): the LOO-Brier-vs-shift curve is MONOTONE (more lift =
+# lower Brier, no interior optimum; bootstrap argmin sits at the grid edge), the raw crowd-beats-
+# book edge is only borderline (p~.065) and its DIRECTION is a 15-14 coin flip — the win is
+# magnitude on mid-priced props, not hit-rate. So PLAYER_CROWD_LIFT is a deliberate CONSERVATIVE
+# under-shift for safety, NOT a fitted optimum: 0.5 keeps ~70% of the modelled gain while ~halving
+# the calm-match downside; let forward settlement earn any increase. The CAP is the real
+# regularizer — it BINDS on SoT (biggest premium / most low-priced props, where a flat additive
+# lift most overshoots) and bounds any daily_learn refit. A price-interacted or logit-space lift
+# was tested and is worse/neutral at this n, so the flat-additive form stays.
+# Phase-0 endgame (2026-07-10): archetype crowd templates (data/processed/crowd_prior.json,
+# refit by daily_learn) back two safety nets. (1) UNRESOLVED player props (no club prior, no
+# tournament minutes) blend toward the archetype's crowd-template LEVEL instead of shipping the
+# naked population floor — the Haaland-8%/De Bruyne/DR-Congo catastrophic-tail class; adopted
+# from parkjpd ("generic player fallback defaults to crowd level, not the floor"). (2) The flat
+# event-base kinds where our model is a CONSTANT and the per-question crowd barely varies
+# (template std<=4) hug the crowd level — submitting ~the field's own mean banks the Jensen
+# field-variance bonus (mean-of-Briers > Brier-of-mean) instead of bleeding a fixed offset.
+# Whitelist ONLY: grid/count/player kinds keep their engine signal (validated edges), and
+# offsides/fouls stay risk-gate-flattened (the crowd OVER-prices those — do not chase it).
+# Phase-2 endgame lever (2026-07-11, default OFF): a graded rank-chase dial for the SF/final,
+# per the endgame MC — blanket variance is a trap (zero mean, multipliers hit losses too;
+# honest +481±379 vs blanket +475±760), so escalation is (a) env-gated (ENDGAME_EXTREMIZE=<a>,
+# e.g. 1.25/1.5; absent -> byte-identical submissions), (b) restricted to the STRUCTURAL-EDGE
+# allowlist below (grid templates where the crowd uses provably-naive heuristics + the team-count
+# kinds where we measurably beat the crowd), and (c) live-pass only (CLV passes stay pure).
+# NEVER extremize: player props (crowd beats us), offsides/fouls (flattened by design),
+# anchored goal markets (the book IS the floor), cards timing (mis-calibrated).
+# Operate via scripts/endgame_policy.py: it sizes the needed rate vs the cutoff and prints the
+# recommended tier; a human sets the env. Escalate only as far as the deficit demands.
+ENDGAME_KINDS = {"win_both_halves", "first_goal_2h", "margin_exactly", "total_odd",
+                 "goal_after_hb1", "ht_scoreless", "corners_and_shots",
+                 "team_sot_ge", "team_corners_ge", "sot_gt", "cards_gt"}
+CROWD_TEMPLATE_PATH = Path("data/processed/crowd_prior.json")
+UNRESOLVED_PLAYER_TEMPLATE_W = 0.5   # unknown player: 50/50 model / crowd level (interior blend)
+CROWD_HUG_KINDS = {"pen_or_red", "penalty_awarded", "substitute_scores"}
+CROWD_HUG_W = 0.6
+CROWD_HUG_MAX_STD = 4.0              # hug only where the crowd is near-constant per question
+CROWD_HUG_MIN_N = 3
+PLAYER_CROWD_PREM_PATH = Path("data/processed/player_crowd_premium.json")
+PLAYER_CROWD_LIFT = 0.5       # deliberate conservative under-shift (magnitude unidentified, p~.065)
+PLAYER_CROWD_LIFT_CAP = 0.06  # BINDING guardrail: max +6 pts/prop; caps SoT + any refit over-lift
+PLAYER_CROWD_LIFT_CEIL = 0.85  # skip props already priced high — crowd premium ~0 there (both agree)
+# Lineup-status override (2026-07-07): confirmed pre-match lineup news must beat the book anchor.
+# We MISSED De Bruyne (benched vs USA, submitted 44 -> Brier .194, out=0): the book hadn't absorbed
+# the benching by our closing tick, the WebPanel DID web-search it but the pm-guard discarded it
+# (book-anchored player props skip the expert layer), and P4b then LIFTED the stale starter price.
+# Fix: a benched/out flag (auto-detected by the WebPanel near KO -> lineup_status.json) overrides
+# the book with a BOUNDED sub-minutes ceiling and cancels the crowd lift. Bounded = a mis-scraped
+# "benched" caps a starter to the elite-sub base rate, not to zero. Benched/out named players only.
+LINEUP_STATUS_PATH = Path("data/processed/lineup_status.json")
+LINEUP_OUT_CEIL = 0.05        # ruled out / not in matchday squad -> ~won't feature
+LINEUP_BENCH_CAP = {"player_scores": 0.15, "player_ga": 0.18, "player_sot_ge": 0.35}  # elite off-the-bench (~25') ceilings
+LINEUP_FRESH_H = 12.0         # ignore stale status (the WebPanel refreshes per match near KO)
 CLUB_RATES = Path("data/processed/player_rates_combined.parquet")
 SOT_PER_SHOT = 0.37   # Understat has no SoT -> estimate from total shots
 P_RED_MATCH = 0.065   # P(>=1 red): 0.067 reds/match measured, 6 tournaments
@@ -101,6 +167,41 @@ P_PEN_MATCH = 0.293   # A6
 # 839 ET matches), and 81% of ET matches STILL go to penalties; shootouts are ~a coin flip
 # with a mild favorite tilt (0.49 even -> 0.57 big-favorite over 678 historical shootouts).
 ET_TEMPO = 0.35       # extra-time scoring as a fraction of pro-rated regulation
+# --- SF novel kinds (FRA/ESP 2026-07-13), bases measured on the cached WC2022 api-football set ---
+# P(first scorer wears #1-9 | a goal), RECENCY-WEIGHTED (2026-07-14): WC26 ITSELF measured
+# 32/90 = 35.6% (martj42 first scorers x Wikipedia squad numbers, 100% join) vs WC2022
+# 14/35 = 40.0% (api-football joins). 2:1 recency blend -> 36.3%; use 0.365. The double-digit-
+# attacker pattern is STRONGER in 2026 (#10 modal with 11 firsts, #11 x8, #19 x6 — Yamal-class
+# young stars wear high numbers). The naive "9 of ~23 numbers" intuition overprices YES.
+# FRA/ESP structural cross-check: Thuram 9/Dembele 7 in; Mbappe 10, Yamal 19, Pedri 20 out.
+SINGLE_DIGIT_FIRST_SHARE = 0.365   # fallback for teams with no tournament-scoring on file
+# BOTTOM-UP refinement (2026-07-14): rather than a flat tournament base, allocate by the two
+# TEAMS' actual single-digit GOAL shares. Poisson-superposition makes the first scorer ~ each
+# player's goal intensity, so P(single-digit | goal) = lambda-weighted mean of the teams' shares.
+# Self-consistency validated: WC26 ALL-goal single-digit share 35.4% == first-scorer 35.6%.
+# data/processed/single_digit_team_share.json holds each team's share (WC26 goals x Wikipedia
+# squad numbers, shrunk K=10 toward the .355 base). FRA .329 / ESP .328 (double-digit stars
+# Mbappe #10, Yamal #19) -> both BELOW base; ENG .455 / ARG .198 for the other SF.
+SINGLE_DIGIT_TEAM_SHARE_PATH = Path("data/processed/single_digit_team_share.json")
+OWN_GOAL_SHARE = 0.05      # ~5% of goals are OGs; the OG scorer's shirt is ~random (defender)
+OWN_GOAL_SINGLE_DIGIT = 0.40   # defenders skew low numbers (2-6) -> ~40% single-digit
+# On-field VAR reviews: WC2022 api-football 'Var' events hit 35.9% of matches, but the detail
+# split (penalty confirmed/cancelled 13, card upgrade 1, goal cancellations mostly semi-automated
+# offside = NO monitor) puts true monitor-review matches at ~22-27%. Poisson mean per 90':
+# On-field VAR monitor reviews. RE-EXAMINED 2026-07-14: my WC22-only 0.30 (~26%) was too low.
+# Reconstructed the WC22 TRUE-OFR rate from the cached api-football 'Var' events, counting only
+# monitor trips (penalty confirmed/cancelled, card upgrade, subjective-goal review) and EXCLUDING
+# semi-automated offside (no monitor): lambda_WC22 ~= 0.32 (P>=1 = 28%; OFR in 25% of matches).
+# WC26 discipline is inflated -- red cards up ~9x (0.141/match vs 0.016) and penalties ~0.20/match,
+# both primary OFR triggers. BUT the local settled data tempers this: pen_or_red (the closest
+# OUTCOME class) realized only 0.226 (n=31) while the crowd priced it 0.386 -- the trigger is
+# rarer than the "reds up 9x" headline implies for the games we price, AND the crowd OVER-prices
+# this class. So 0.40 (->35%) overshot toward a high crowd; settle at lambda 0.33 -> ~30%,
+# above the WC22 base (knockout intensity + no-change reviews) but below the over-pricing crowd.
+VAR_OFR_LAMBDA = 0.33
+# First-substitution race: game-state dominated (the trailing side subs first); tilt the coin
+# by the win-prob gap, small (manager idiosyncrasy + injury randomness keep it near 50/50).
+FIRST_SUB_TILT = 0.10
 PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
 
 # Event markets our 90-min minute profile can't reach. Stoppage goals scale with the
@@ -110,6 +211,9 @@ PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
 EVENT_BASE_DEFAULTS = {
     "goal_share_1h_stoppage": 0.02, "goal_share_2h_stoppage": 0.08,
     "sub_before_ht": 0.12, "substitute_scores": 0.18,
+    # "either team makes a substitution AT halftime": 33/64 WC2022 matches had a subst event
+    # at elapsed=46 (the HT-interval change) -> Laplace (33+1)/(64+2)=0.515. Flat base.
+    "sub_at_ht": 0.52,
     # own_goal: flat P(>=1 OG/match). Thinning-by-total-goals was TESTED and lost to flat
     # (OGs don't scale with goals). 0.10 = WC-finals prior 0.062 shrunk with WC26's ~0.14 (the
     # friendly-polluted all-comp pool of 0.019 badly under-prices the WC).
@@ -150,7 +254,24 @@ _WINDOW = {
     "goal_pre_hb1": ("goal", 0, 22), "goal_post_hb2": ("goal", 67, 90),
     "corners_pre_hb1": ("corner", 0, 22), "cards_post_hb2": ("card", 67, 90),
     "offsides_pre_hb1": ("offside", 0, 22),
+    # "goal in H1 AFTER the first break" = [22,45); the post-break window carries MORE goal
+    # intensity than [0,22) (the hazard rises through a half), so this is not simply ½·P(H1 goal).
+    "goal_after_hb1": ("goal", 22, 45),
+    # SF phrasing: between the two breaks = match minutes [22, 67) — the fattest window
+    # (~55% of total goal intensity: late-H1 rise + all of early/mid H2)
+    "goal_between_hbs": ("goal", 22, 67),
 }
+# New-template structural constants (2026-07-07 researcher):
+CARD_STOPPAGE_SHARE = 0.15   # share of card mass in stoppage time (cards are late-loaded; the 90'
+                             # profile truncates added time so this is a documented extrapolation) — LOW conf
+CORNERS_SHOTS_RHO = 0.30     # WITHIN-match indicator corr of {more corners}&{more shots}. The count
+                             # model treats corners _|_ shots given lambda (corr~0), but the RESIDUAL
+                             # coupling BEYOND team quality is large: measured residual indicator corr
+                             # 0.41 on 314 matches (per-team-baseline partial; raw within-team corr .60)
+                             # -- a team having an attacking day gets BOTH. 0.30 sits below .41
+                             # (conservative for the additive-copula linearization); lands an even
+                             # match's joint ~.26. (2026-07-08 audit: the prior .05 under-coupled and
+                             # was the one new handler positioned to LOSE to the crowd.)
 _DYN_PATH = Path("data/processed/minute_dynamics.json")
 
 
@@ -178,6 +299,38 @@ def book_sot_ge_from_one_plus(p1: float, k: int) -> float | None:
 
 def _norm_name(s: str) -> str:
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+
+
+def _load_crowd_prem() -> dict:
+    """Fitted per-archetype player-prop crowd premium (prob units); {} if unavailable."""
+    try:
+        return json.loads(PLAYER_CROWD_PREM_PATH.read_text()).get("premium", {})
+    except (OSError, ValueError):
+        return {}
+
+
+def _load_lineup_status() -> dict:
+    """Confirmed pre-match lineup status {norm_player: {status, team, ts, why}}; {} if unavailable."""
+    try:
+        return json.loads(LINEUP_STATUS_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _load_crowd_template() -> dict:
+    """Per-archetype settled-crowd level {arch: {n, mean, std}} (percent points); {} if unavailable."""
+    try:
+        return json.loads(CROWD_TEMPLATE_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _load_single_digit_share() -> dict:
+    """Per-team single-digit GOAL share {canonical_team: share}; {} if unavailable (-> flat base)."""
+    try:
+        return json.loads(SINGLE_DIGIT_TEAM_SHARE_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
 
 
 @dataclass
@@ -223,6 +376,15 @@ class Runner:
         self.risk_on = strategy.risk_enabled()
         self.panel = panel_mod.load_panel()                     # L0 LLM expert cache (shadow by default)
         self.expert_gate = panel_mod.load_gate()                # L2 per-archetype blend gate (off unless AI_EXPERT_ENABLE)
+        self.player_crowd_prem = _load_crowd_prem()             # P4b per-archetype crowd-premium lift
+        self.lineup_status = _load_lineup_status()              # confirmed benched/out (near-KO WebPanel)
+        self.crowd_template = _load_crowd_template()            # Phase-0 crowd levels (fallback + hug)
+        self.single_digit_share = _load_single_digit_share()    # per-team single-digit goal share (bottom-up)
+        import os as _os
+        try:                                                    # Phase-2 endgame dial (default off)
+            self.endgame_alpha = float(_os.environ.get("ENDGAME_EXTREMIZE", "1.0") or 1.0)
+        except ValueError:
+            self.endgame_alpha = 1.0
         self.aggression = aggression
         # league-average context for Bot A's base-rate blend
         lam0 = float(np.exp(self.pl.goal_model.b0))
@@ -270,6 +432,36 @@ class Runner:
         """Phase R: shrink no-edge archetypes toward the base rate (no-op otherwise)."""
         from jumpprob.models import strategy
         return strategy.apply_risk(p, arch, self.risk, self.base_rates)
+
+    def _lineup_override(self, subject: str | None, arch: str, teams) -> tuple[float, str] | None:
+        """Bounded ceiling for a player confirmed benched/out THIS match, else None.
+
+        Reads lineup_status.json (auto-written by the near-KO WebPanel). 'out' -> a hard
+        low ceiling; 'bench' -> an elite-sub ceiling per archetype. Applied as a MIN by the
+        caller, so it only ever lowers a starter-priced prop, never raises one — a bounded,
+        one-sided safety override that beats the book anchor (the pm-guard otherwise drops it).
+        Team-scoped + freshness-gated so a stale flag can't bleed into another match."""
+        if not subject or not self.lineup_status:
+            return None
+        ent = self.lineup_status.get(norm_player(subject))
+        if not ent:
+            return None
+        ts = ent.get("ts")
+        if ts:
+            try:
+                if (pd.Timestamp.now(tz="UTC") - pd.Timestamp(ts)).total_seconds() / 3600.0 > LINEUP_FRESH_H:
+                    return None
+            except Exception:
+                pass
+        team = ent.get("team")
+        if team and teams and canonical(team) not in {canonical(t) for t in teams if t}:
+            return None
+        status = str(ent.get("status", "")).lower()
+        if status == "out":
+            return LINEUP_OUT_CEIL, status
+        if status in ("bench", "benched") and arch in LINEUP_BENCH_CAP:
+            return LINEUP_BENCH_CAP[arch], "bench"
+        return None
 
     def _window_event(self, ctx: MatchContext, fam: str, lo: int, hi: int, thr: int) -> float | None:
         """Match-level P(>=thr `fam` events in slots [lo,hi)). The minute profile's
@@ -355,17 +547,36 @@ class Runner:
         return self.club_rates.get(match) if match else None
 
     def player_rate(self, name: str) -> tuple[float, float, float]:
-        """Per-minute (sot, goal, ga) rates. The GA prior uses the transfer-discounted
-        CLUB rate (club assists are our biggest blind spot — validated on settled props:
-        it cuts player_ga Brier ~0.19->0.16). SoT and scores keep the population prior:
-        on settled data the club rate over-predicts SoT (the tail is better handled by
-        the Phase-1 floor) and erodes our genuine player_scores edge. The tournament
-        appearances then shrink off the prior (Gamma-Poisson, M0=270/540)."""
+        """Per-minute (sot, goal, ga) rates, Gamma-Poisson-shrunk off a PLAYER-CENTERED prior.
+
+        Phase-0 endgame fix (2026-07-10): ALL THREE priors now use the transfer-discounted
+        CLUB rate when the player resolves (was GA-only; SoT/scores sat on the POPULATION
+        mean). The population prior + M0=270/540 shrinkage is 3-6 full matches of pull toward
+        "average WC player" — textbook over-shrinkage of exactly the elite outliers the KO
+        '(Player, #N) to score' questions are about. Measured leak: our player prices sat
+        -18..-28pt under the crowd, the gap SCALING with crowd level (elite signature);
+        Mbappe/Haaland-class no-book props collapsed to ~8-24. Re-centering the prior on the
+        player fixes the MODEL side at the source (works with no book and no crowd present).
+        The earlier "club over-predicts SoT" disable was an n-tiny call made WITHOUT the 0.80
+        transfer discount; revisit with Phase-1 full-harvest data.
+        Sets self._pr_resolved: False = neither club prior nor tournament minutes matched
+        (we know NOTHING about this player) -> the caller blends toward the archetype crowd
+        template instead of shipping the naked population floor (the De Bruyne/DR-Congo/
+        Haaland-8% catastrophic-tail class)."""
+        # Strip a '(Team, #N)' subject suffix before resolving. The QF/SF question format is
+        # "Kylian Mbappé (France, #10)"; the parenthetical's tokens ('(france,', '#10)') match no
+        # player, so BOTH the club-prior resolve and the token-match miss and the best striker on
+        # the pitch collapses to the population prior (Mbappé scores 8 not ~32). The book/lineup
+        # paths already strip this via norm_player — this is the same name-join bug class as
+        # De Bruyne / Haaland / DR Congo, closed here for the model path.
+        name = name.split("(")[0].strip() or name
         club = self._club_prior(name)
-        prior_sot, prior_goal = self.prior_sot, self.prior_goal
+        prior_sot = self.player_transfer * club[0] if club else self.prior_sot
+        prior_goal = self.player_transfer * club[1] if club else self.prior_goal
         prior_ga = self.player_transfer * club[2] if club else self.prior_ga
         tokens = _norm_name(name).split()
         hits = self.players[self.players["norm"].apply(lambda n: all(t in n for t in tokens))]
+        self._pr_resolved = bool(club) or len(hits) == 1
         if len(hits) == 1:
             h = hits.iloc[0]
             m = float(h["minutes"])
@@ -467,14 +678,26 @@ class Runner:
             share = self.event_base["goal_share_1h_stoppage" if a == "goal_1h_stoppage"
                                     else "goal_share_2h_stoppage"]
             return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * share))
+        if a == "goal_stoppage":
+            # SF2 phrasing: EITHER stoppage period — sum both windows' goal shares
+            share = (self.event_base["goal_share_1h_stoppage"]
+                     + self.event_base["goal_share_2h_stoppage"])
+            return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * share))
         if a == "sub_before_ht":
             return float(self.event_base["sub_before_ht"])          # ~injury base rate
-        if a == "substitute_scores":
+        if a == "sub_at_ht":
+            return float(self.event_base["sub_at_ht"])              # HT-interval change, WC2022 33/64
+        if a in ("substitute_scores", "substitute_ga"):
             # subs come on ~72' and score ~17% of all goals (WC2022 events, lineup-verified),
             # so the chance a sub scores tracks the match's goal expectation -> scale the base
             # rate by this match's total goals vs the league average (blowout > tight game).
             lam0 = 2.0 * float(np.exp(self.pl.goal_model.b0))   # league-average total goals
             s = -np.log(1.0 - self.event_base["substitute_scores"]) / lam0
+            if a == "substitute_ga":
+                # "score OR ASSIST": widen the scoring hazard by the population GA/goal rate
+                # ratio (assists arrive at a similar clip to goals; capped at 2x). Structural,
+                # not fit — the score-or-assist phrasing first appeared in the QF round.
+                s *= min(self.prior_ga / max(self.prior_goal, 1e-9), 2.0)
             return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * s))
         if a == "any_player_goals_ge":   # "any player score 2+ goals" — over the goal grid
             if (q.threshold or 2) > 2:   # brace curve is P(some player >=2 | team goals); no 3+ data
@@ -533,6 +756,36 @@ class Runner:
         if a == "extra_time":
             # ET <=> drawn after 90; the anchored grid's draw mass ~= the de-vigged book X
             return float(mk.p_draw(ctx.grid))
+        if a == "first_goal_single_digit":
+            # P(a goal exists in reg+ET) x P(first scorer wears 1-9 | goal). No-goal-ever =
+            # 0-0 after 90 (ET then always follows) x no ET goal at the ET tempo. 0-0 -> NO.
+            p00 = float(ctx.grid[0, 0])
+            lam_et = ET_TEMPO * (ctx.lam_a + ctx.lam_b) / 3.0
+            p_goal_ever = 1.0 - p00 * float(np.exp(-lam_et))
+            # bottom-up: lambda-weight the two teams' single-digit GOAL shares (first scorer ~
+            # goal intensity); fall back to the flat base if either team is unknown. Then blend
+            # in the own-goal term (OG scorer's shirt is ~random defender).
+            shA = self.single_digit_share.get(ctx.team_a)
+            shB = self.single_digit_share.get(ctx.team_b)
+            if shA is not None and shB is not None:
+                share = (ctx.lam_a * shA + ctx.lam_b * shB) / (ctx.lam_a + ctx.lam_b)
+            else:
+                share = SINGLE_DIGIT_FIRST_SHARE
+            share = (1 - OWN_GOAL_SHARE) * share + OWN_GOAL_SHARE * OWN_GOAL_SINGLE_DIGIT
+            return p_goal_ever * share
+        if a == "first_sub_team":
+            # Trailing side subs first; tilt the coin by the OPPONENT-minus-SIDE win-prob gap
+            # (side more likely to trail -> more likely to sub first). Bounded near 50/50.
+            if side is None:
+                return None
+            other = "b" if side == "a" else "a"
+            gap = float(mk.p_win(ctx.grid, other)) - float(mk.p_win(ctx.grid, side))
+            return float(np.clip(0.5 + FIRST_SUB_TILT * gap, 0.40, 0.60))
+        if a == "var_ofr":
+            # P(>=1 on-field monitor review, reg + ET, shootout excluded): Poisson at the
+            # measured per-90 mean, exposure extended by P(ET) x a third of a match.
+            lam = VAR_OFR_LAMBDA * (1.0 + float(mk.p_draw(ctx.grid)) / 3.0)
+            return float(1.0 - np.exp(-lam))
         if a == "halves_equal_goals":
             # P(G1h == G2h) = sum_N P(total=N) x P(N splits equally). Given N, each goal
             # falls in H1 iid w.p. H1 (the goal share): P(equal | N=2k) = Binom(2k, H1).pmf(k);
@@ -607,6 +860,32 @@ class Runner:
             # score_both_halves, same half-share thinning of the total intensity.
             lam_t = ctx.lam_a + ctx.lam_b
             return float((1 - np.exp(-H1 * lam_t)) * (1 - np.exp(-H2 * lam_t)))
+        if a == "win_both_halves":
+            # EITHER team wins BOTH halves (strictly more goals each half). Build a grid per
+            # half at the share-thinned intensities and combine assuming halves independent
+            # (MC-confirmed: goal frailty across halves is negligible). Crowd over-prices this
+            # (~.35 "if one team's better it wins both") vs a true ~.18.
+            g1 = dc_grid(H1 * ctx.lam_a, H1 * ctx.lam_b, ctx.rho_dc)
+            g2 = dc_grid(H2 * ctx.lam_a, H2 * ctx.lam_b, ctx.rho_dc)
+            return float(mk.p_win(g1, "a") * mk.p_win(g2, "a")
+                         + mk.p_win(g1, "b") * mk.p_win(g2, "b"))
+        if a == "first_goal_2h":
+            # first goal falls in H2 <=> NO goal in H1 AND >=1 in H2 (0-0 => NO). Per-half goal
+            # independence is the engine convention; half-share measured on 47k goals.
+            lam_t = ctx.lam_a + ctx.lam_b
+            return float(np.exp(-H1 * lam_t) * (1 - np.exp(-H2 * lam_t)))
+        if a == "margin_exactly":
+            # decided by EXACTLY n goals (|a-b| == n; a draw is NO). Pure grid sum; the
+            # crowd tends to conflate "one-goal game" with "not a draw" (~.73).
+            n = q.threshold or 1
+            idx = np.arange(ctx.grid.shape[0])
+            return float(ctx.grid[np.abs(np.subtract.outer(idx, idx)) == n].sum())
+        if a == "total_odd":
+            # odd total goals. Certain-but-tiny EVEN tilt vs a crowd that anchors 0.50
+            # (independent Poissons give P(odd)=(1-e^-2L)/2 < .5; DC rho<0 tilts further even).
+            g = ctx.grid
+            idx = np.arange(g.shape[0])
+            return float(g[np.add.outer(idx, idx) % 2 == 1].sum())
         if a == "cards_gt_goals":
             # P(total cards > total goals): count-model cards pmf x the grid's total-goals
             # pmf (independence — cards/goals correlation is weak and second-order here).
@@ -652,6 +931,8 @@ class Runner:
             return mk.p_scores_in_half(lt, q.half)
         if a == "ht_tied":
             return float(np.trace(dc_grid(H1 * ctx.lam_a, H1 * ctx.lam_b, ctx.rho_dc)))
+        if a == "ht_scoreless":   # 0-0 at HT = the [0,0] cell of the half grid (QF phrasing)
+            return float(dc_grid(H1 * ctx.lam_a, H1 * ctx.lam_b, ctx.rho_dc)[0, 0])
         if a == "half_total_ge":
             share = H1 if q.half == 1 else H2
             lam = share * (ctx.lam_a + ctx.lam_b)
@@ -737,6 +1018,36 @@ class Runner:
                    "fouls_gt": "fouls", "cards_gt": "cards"}[a]
             other = "b" if side == "a" else "a"
             return p_a_gt_b(side_pmf(fam, side), side_pmf(fam, other))
+        if a == "corners_and_shots":
+            # P(side has MORE corners AND MORE total shots than opp). Both indicators load on
+            # attacking intensity, so they are weakly POSITIVELY correlated — a Gaussian-copula
+            # bump over the independence product (measured indicator corr ~0.05 -> +~1.2pt).
+            # Most count variance is idiosyncratic, so DON'T over-correct toward strong dependence.
+            if side is None:
+                return None
+            other = "b" if side == "a" else "a"
+            p_c = p_a_gt_b(side_pmf("corners", side), side_pmf("corners", other))
+            p_s = p_a_gt_b(side_pmf("shots", side), side_pmf("shots", other))
+            bump = CORNERS_SHOTS_RHO * float(np.sqrt(max(p_c * (1 - p_c) * p_s * (1 - p_s), 0.0)))
+            return float(np.clip(p_c * p_s + bump, 0.01, 0.99))
+        if a == "card_each_half":
+            # >=1 card in EACH half. cm.mu already carries the fitted H1/H2 card split (cards are
+            # 2nd-half-loaded, ~.36/.64), so read P(>=1) off each half's card pmf; halves ~indep
+            # (a shared-frailty bump is <1pt). Low-edge (WC26 cards run low) -> raw structural,
+            # NOT count-Platt (which shifts up); the P1 clamp bounds any crowd deviation.
+            def _card_half_mu(h):
+                return cm.mu("cards", h, ctx.lam_a, ctx.lam_b) + cm.mu("cards", h, ctx.lam_b, ctx.lam_a)
+            p1 = 1.0 - float(cm.pmf("cards", _card_half_mu(1))[0])
+            p2 = 1.0 - float(cm.pmf("cards", _card_half_mu(2))[0])
+            return float(p1 * p2)
+        if a == "card_stoppage":
+            # >=1 card in either half's stoppage time. Cards are late-loaded so stoppage carries
+            # more than its raw minute share; E[stoppage cards] ~= mu_card * CARD_STOPPAGE_SHARE.
+            # LOW confidence (WC26 card level + stoppage-minute mass outside the 90' profile) ->
+            # conservative, raw-structural, P1-clamp-protected.
+            mu_c = sum(cm.mu("cards", h, ctx.lam_a, ctx.lam_b) + cm.mu("cards", h, ctx.lam_b, ctx.lam_a)
+                       for h in (1, 2))
+            return float(1.0 - np.exp(-mu_c * CARD_STOPPAGE_SHARE))
         if a == "team_corners_ge":
             return None if side is None else float(side_pmf("corners", side)[q.threshold:].sum())
         if a == "team_sot_ge":
@@ -790,7 +1101,16 @@ class Runner:
             # == 1 - exp(-mu), i.e. identical to the prior formula -> no behaviour change).
             from scipy.stats import poisson
             k = q.threshold or 1
-            return float(sum(w * (1.0 - poisson.cdf(k - 1, rate * scale * m)) for w, m in MINUTE_SCENARIOS))
+            p = float(sum(w * (1.0 - poisson.cdf(k - 1, rate * scale * m)) for w, m in MINUTE_SCENARIOS))
+            # Phase-0: an UNRESOLVED player (no club prior, no tournament minutes — we know
+            # NOTHING about them) is priced off the population floor; blend toward the
+            # archetype's crowd-template level instead (the Haaland-8% tail class). k>=2
+            # lines excluded: the template mixes thresholds and reads as a 1+-line level.
+            if not getattr(self, "_pr_resolved", True) and k == 1:
+                t = (self.crowd_template or {}).get(a) or {}
+                if (t.get("n") or 0) >= CROWD_HUG_MIN_N and t.get("mean") is not None:
+                    p = (1 - UNRESOLVED_PLAYER_TEMPLATE_W) * p + UNRESOLVED_PLAYER_TEMPLATE_W * t["mean"] / 100.0
+            return p
         return None
 
     # ------------------------------------------------------------------
@@ -865,6 +1185,14 @@ class Runner:
                     # (w_market=1.0 closing-line pass -> pure book; live 0.85 -> 0.97).
                     w_p = 1.0 - PLAYER_MODEL_FRAC * (1.0 - self.w_market)
                     p_a = float(np.clip(blend([p, pm], [1 - w_p, w_p]), 0.01, 0.99))
+                    # P4b: lift toward the crowd we're scored against (it prices these props
+                    # above the book AND calibrates better). Damped half-shift, capped, one-sided
+                    # (up only), and only on the live 0.85 pass — the w=0/1 CLV passes stay pure so
+                    # the divergence audit still measures the raw book anchor. Skip already-high
+                    # props (>=CEIL): there the book and crowd agree and there's no headroom.
+                    prem = self.player_crowd_prem.get(q.archetype, 0.0)
+                    if prem and 0.0 < self.w_market < 1.0 and p_a < PLAYER_CROWD_LIFT_CEIL:
+                        p_a = float(np.clip(p_a + min(PLAYER_CROWD_LIFT * prem, PLAYER_CROWD_LIFT_CAP), 0.01, 0.99))
                 elif ctx.anchored and fam == "goal":
                     p_a = p  # market is already calibrated/conservative — don't shrink
                 else:
@@ -892,11 +1220,41 @@ class Runner:
                 # a full-match base silently undoes the scope (review §3.6 interaction trap).
                 if self.risk_on and q.half is None:
                     p_a = float(np.clip(self._risk(q.archetype, p_a), 0.01, 0.99))
+                # Phase-0 crowd hug: flat event-base kinds where our model is a CONSTANT and
+                # the settled crowd barely varies per question (std<=4) — submit near the
+                # field's level and bank the field-variance bonus instead of bleeding a fixed
+                # offset every match. Whitelist only; never grid/count/player kinds.
+                if q.archetype in CROWD_HUG_KINDS and q.half is None:
+                    t = (self.crowd_template or {}).get(q.archetype) or {}
+                    if ((t.get("n") or 0) >= CROWD_HUG_MIN_N and t.get("mean") is not None
+                            and (t.get("std") if t.get("std") is not None else 99.0) <= CROWD_HUG_MAX_STD):
+                        p_a = float(np.clip((1 - CROWD_HUG_W) * p_a + CROWD_HUG_W * t["mean"] / 100.0,
+                                            0.01, 0.99))
+                # Phase-2 endgame dial: graded logit amplification, STRUCTURAL-EDGE kinds only,
+                # live pass only, inert unless ENDGAME_EXTREMIZE is set (see ENDGAME_KINDS note).
+                if (self.endgame_alpha > 1.0 and q.archetype in ENDGAME_KINDS
+                        and 0.0 < self.w_market < 1.0):
+                    p_a = float(np.clip(inv_logit(self.endgame_alpha * logit(
+                        float(np.clip(p_a, 0.03, 0.97)))), 0.03, 0.97))
+                # Lineup-status override — the LAST word for player props (beats book, lift,
+                # expert, risk). A player confirmed benched/out this match is capped at a bounded
+                # sub-minutes ceiling; applied as a MIN so it only lowers a starter-priced prop.
+                # This is the De Bruyne fix: the pm-guard drops the WebPanel's lineup read for
+                # book-anchored props, so the override has to land here, after everything else.
+                lineup_cap = None
+                if fam == "player":
+                    _ovr = self._lineup_override(q.subject, q.archetype, (ctx.team_a, ctx.team_b))
+                    if _ovr is not None:
+                        cap, _st = _ovr
+                        if p_a > cap:
+                            p_a = float(np.clip(cap, 0.01, 0.99))
+                        lineup_cap = f"{_st}<={int(round(cap * 100))}"
                 out.append({
                     "market_id": r["id"], "lobby_id": r["lobby_id"], "match": mname,
                     "question": r["question"], "archetype": q.archetype,
                     "p_bot_a": round(p_a, 4), "sub_a": submit_int(p_a),
                     "p_bot_b": round(p, 4), "sub_b": submit_int(p),
                     "p_expert": einfo.get("expert"), "expert_action": einfo.get("action"),
+                    "lineup": lineup_cap,
                 })
         return out, skipped

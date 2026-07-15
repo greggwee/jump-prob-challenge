@@ -89,7 +89,8 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("team_cards_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will (.+?) have at least (\d+) corner kicks? in the (first|second) half", re.I),
      lambda m: ParsedQuestion("team_corners_ge", m[1], threshold=int(m[2]), half=1 if m[3].lower() == "first" else 2)),
-    (re.compile(r"will there be (\d+) or more total cards shown\?", re.I),
+    # QF phrasing drops the word "shown" ("4 or more total cards in regulation") -> optional
+    (re.compile(r"will there be (\d+) or more total cards( shown)?\?", re.I),
      lambda m: ParsedQuestion("cards_ge", threshold=int(m[1]), half=None)),
     (re.compile(r"will there be (\d+) or more total corner kicks in the (first|second) half", re.I),
      lambda m: ParsedQuestion("corners_total_ge", threshold=int(m[1]), half=1 if m[2].lower() == "first" else 2)),
@@ -97,16 +98,31 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("corners_total_ge", threshold=int(m[1]))),
     (re.compile(r"will there be (\d+) or more total shots on target\?", re.I),
      lambda m: ParsedQuestion("total_sot_ge", threshold=int(m[1]))),
+    # SF2 phrasing: "(both teams combined)"
+    (re.compile(r"will there be (\d+) or more total shots on target \(both teams combined\)", re.I),
+     lambda m: ParsedQuestion("total_sot_ge", threshold=int(m[1]))),
     (re.compile(r"will the match have (\d+) or fewer total goals", re.I),
      lambda m: ParsedQuestion("total_le", threshold=int(m[1]))),
     (re.compile(r"will the match be tied at halftime", re.I),
      lambda m: ParsedQuestion("ht_tied")),
+    # QF phrasings (2026-07-10): scoreless HT (stricter than tied) + the HT-interval sub
+    (re.compile(r"will the match be 0-0 at halftime", re.I),
+     lambda m: ParsedQuestion("ht_scoreless")),
+    (re.compile(r"will either team make a substitution at halftime", re.I),
+     lambda m: ParsedQuestion("sub_at_ht")),
     (re.compile(r"at halftime, will (.+?) be winning", re.I),
      lambda m: ParsedQuestion("ht_leading", m[1])),
     (re.compile(r"will (.+?) be (?:ahead|winning|leading) at halftime", re.I),
      lambda m: ParsedQuestion("ht_leading", m[1])),
+    # SF2 phrasing: "Will England lead at halftime?"
+    (re.compile(r"will (.+?) lead at halftime", re.I),
+     lambda m: ParsedQuestion("ht_leading", m[1])),
     (re.compile(r"will the second half have more (?:total )?goals than the first", re.I),
      lambda m: ParsedQuestion("h2_more_goals_than_h1")),
+    # "a substitute score or assist" must NOT be swallowed as a player_ga subject (an
+    # unresolvable "player" -> population floor -> submitted 15 vs crowd ~35; live 2026-07-10)
+    (re.compile(r"will a substitute score (?:or assist )?a goal", re.I),
+     lambda m: ParsedQuestion("substitute_ga" if "assist" in m.group(0).lower() else "substitute_scores")),
     (re.compile(r"will (.+?) score or assist a goal", re.I),
      lambda m: ParsedQuestion("player_ga", m[1])),
     # --- knockout / derived goal archetypes (recovered from the 2026-06-28 drop audit);
@@ -139,6 +155,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("goal_pre_hb1")),
     (re.compile(r"will a goal be scored after the second hydration break", re.I),
      lambda m: ParsedQuestion("goal_post_hb2")),
+    # SF phrasing: the mid-window between the two breaks (match minutes [22, 67))
+    (re.compile(r"will a goal be scored after the first hydration break but before the second", re.I),
+     lambda m: ParsedQuestion("goal_between_hbs")),
     (re.compile(r"will (\d+) or more corner kicks be taken before the first hydration break", re.I),
      lambda m: ParsedQuestion("corners_pre_hb1", threshold=int(m[1]))),
     (re.compile(r"will a card be shown after the second hydration break", re.I),
@@ -151,6 +170,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("total_shots_ge", threshold=int(m[1]))),
     (re.compile(r"will there be (\d+) or more offside calls", re.I),
      lambda m: ParsedQuestion("offsides_total_ge", threshold=int(m[1]))),
+    # SF phrasing: "4 or more offsides (both teams combined)"
+    (re.compile(r"will there be (\d+) or more offsides \(both teams combined\)", re.I),
+     lambda m: ParsedQuestion("offsides_total_ge", threshold=int(m[1]))),
     (re.compile(r"will both teams receive at least one card", re.I),
      lambda m: ParsedQuestion("both_teams_cards", threshold=1)),
     # stoppage-time goals + substitutions (base rates from api-football WC2022, runner.event_base)
@@ -158,10 +180,12 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("goal_1h_stoppage")),
     (re.compile(r"will a goal be scored in second-half stoppage", re.I),
      lambda m: ParsedQuestion("goal_2h_stoppage")),
+    # SF2: either stoppage period combined
+    (re.compile(r"will a goal be scored during (?:first|second|either)[\w -]*stoppage", re.I),
+     lambda m: ParsedQuestion("goal_stoppage")),
     (re.compile(r"will a substitution be made before halftime", re.I),
      lambda m: ParsedQuestion("sub_before_ht")),
-    (re.compile(r"will a substitute score a goal", re.I),
-     lambda m: ParsedQuestion("substitute_scores")),
+    # (substitute score / score-or-assist handled ABOVE the player_ga pattern — ordering matters)
     # any-player markets (>=2): ride the team goal/SoT distribution x a concentration factor
     (re.compile(r"will any player record (\d+) or more shots on target", re.I),
      lambda m: ParsedQuestion("any_player_sot_ge", threshold=int(m[1]))),
@@ -203,9 +227,26 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     # --- QF templates (first seen 2026-07-05, caught by the P5 template audit) ---
     (re.compile(r"will the match go to extra time", re.I),
      lambda m: ParsedQuestion("extra_time")),
+    # SF phrasing of the same event ("tied at the end of regulation ... and go to extra time");
+    # NOTE the suffix-stripper removes "of regulation (90 ...)" -> "tied at the end and go to ..."
+    (re.compile(r"will the match be tied at the end.*go to extra time", re.I),
+     lambda m: ParsedQuestion("extra_time")),
+    # --- SF novel kinds (first seen FRA/ESP 2026-07-11) ---
+    # first goal (incl ET, excl shootout) by a single-digit (1-9) shirt; 0-0 after ET -> NO
+    (re.compile(r"first goal of the match \(including extra time.*single-?digit shirt number", re.I),
+     lambda m: ParsedQuestion("first_goal_single_digit")),
+    # "<Team> makes the first substitution of the match" (subject resolved to a side downstream)
+    (re.compile(r"will (.+?) make the first substitution of the match", re.I),
+     lambda m: ParsedQuestion("first_sub_team", m[1])),
+    # referee conducts an on-field review at the pitchside VAR monitor (reg + ET, excl shootout)
+    (re.compile(r"conduct an on-field review at the pitchside var monitor", re.I),
+     lambda m: ParsedQuestion("var_ofr")),
     (re.compile(r"will both halves have the same number of goals", re.I),
      lambda m: ParsedQuestion("halves_equal_goals")),
     (re.compile(r"will the first card of the match be shown before the first goal", re.I),
+     lambda m: ParsedQuestion("first_card_before_goal")),
+    # SF2 phrasing of the same competing-risks race
+    (re.compile(r"will a card be shown before the first goal of the match", re.I),
      lambda m: ParsedQuestion("first_card_before_goal")),
     (re.compile(r"will (.+?) \((.+?)\) make (\d+) or more saves", re.I),
      lambda m: ParsedQuestion("player_saves_ge", m[1], m[2], threshold=int(m[3]))),
@@ -224,6 +265,24 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("plays_full_match", m[1])),
     (re.compile(r"will at least one goal be scored in each half", re.I),
      lambda m: ParsedQuestion("goal_each_half")),
+    # --- new QF/knockout templates (2026-07-07 researcher; all derived from existing grid/
+    #     count/window primitives — see runner.answer. Ordered before the win/SoT catch-alls). ---
+    (re.compile(r"will either team win both halves", re.I),
+     lambda m: ParsedQuestion("win_both_halves")),
+    (re.compile(r"will the first goal of the match be scored in the second half", re.I),
+     lambda m: ParsedQuestion("first_goal_2h")),
+    (re.compile(r"will the match be decided by exactly one goal", re.I),
+     lambda m: ParsedQuestion("margin_exactly", threshold=1)),
+    (re.compile(r"will the total number of goals.*be an odd number", re.I),
+     lambda m: ParsedQuestion("total_odd")),
+    (re.compile(r"will a goal be scored in the first half after the first hydration break", re.I),
+     lambda m: ParsedQuestion("goal_after_hb1")),
+    (re.compile(r"will at least one card be shown in each half", re.I),
+     lambda m: ParsedQuestion("card_each_half")),
+    (re.compile(r"will a card be shown during (?:first|second|either)[\w -]*stoppage", re.I),
+     lambda m: ParsedQuestion("card_stoppage")),
+    (re.compile(r"will (.+?) have more corner kicks and more (?:total )?shots than (.+?)\?", re.I),
+     lambda m: ParsedQuestion("corners_and_shots", m[1], m[2])),
     (re.compile(r"will (.+?) have more shots on target than (.+?) in the second half", re.I),
      lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=2)),
     (re.compile(r"will (.+?) have more shots on target than (.+?) in the first half", re.I),

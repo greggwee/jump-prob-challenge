@@ -197,12 +197,20 @@ def forecast_one(question: str, model_pct: float, model: str, role: str = "tacti
 
 _PROB_RE = re.compile(r"PROBABILITY:\s*([0-9]*\.?[0-9]+)\s*(%?)", re.I)
 _EVIDENCE_RE = re.compile(r"EVIDENCE_STRENGTH:\s*(hard|soft|none)", re.I)
+_LINEUP_RE = re.compile(r"LINEUP:\s*(start|bench|benched|out|unknown)", re.I)
 
 
 def _parse_evidence_strength(text: str) -> str:
     """Pull the web reviewer's 'EVIDENCE_STRENGTH: <hard|soft|none>' line. Default 'none'."""
     m = _EVIDENCE_RE.findall(text or "")
     return m[-1].lower() if m else "none"
+
+
+def _parse_lineup_status(text: str) -> str:
+    """Pull the web reviewer's 'LINEUP: <start|bench|out|unknown>' line. Default 'unknown'."""
+    m = _LINEUP_RE.findall(text or "")
+    s = m[-1].lower() if m else "unknown"
+    return "bench" if s == "benched" else s
 
 
 def _parse_prob(text: str) -> float | None:
@@ -234,11 +242,15 @@ def forecast_web(question: str, model_pct: float, grounding: dict | None = None,
         "the player's recent form, and any injury, suspension, or rotation news for THIS specific "
         "match — then review the model's estimate. If a player is benched, doubtful, or out, weight "
         "that heavily. Stay strictly pre-match (never use the actual result). End your reply with "
-        "EXACTLY these two final lines:\n"
+        "EXACTLY these three final lines:\n"
         "PROBABILITY: <p>   (your reviewed YES probability, 0-1)\n"
         "EVIDENCE_STRENGTH: <hard|soft|none>   ('hard' ONLY for a verifiable fact you actually found "
         "in search — a confirmed XI, an official suspension or injury ruling; 'soft' for form/opinion; "
-        "'none' if nothing concrete contradicts the model)"
+        "'none' if nothing concrete contradicts the model)\n"
+        "LINEUP: <start|bench|out|unknown>   (the SUBJECT player's status for THIS match: 'start' if "
+        "in the confirmed XI, 'bench' if named among substitutes, 'out' if injured/suspended/not in "
+        "the squad, 'unknown' if the XI is not yet confirmed — use 'start'/'bench'/'out' ONLY with a "
+        "confirmed team sheet, else 'unknown')"
     )
     user = build_user(question, model_pct, grounding)
     tool = {**WEB_SEARCH_TOOL, "max_uses": max_uses}
@@ -280,8 +292,13 @@ def web_forecast(question: str, model_pct: float, grounding: dict | None = None,
     probs = [p for p in out.values() if p is not None]
     # evidence_strength only counts from panelists that actually returned a probability
     strengths = [_parse_evidence_strength(texts[m]) for m, p in out.items() if p is not None]
+    # lineup status: only trust bench/out from a panelist with HARD evidence (a confirmed XI),
+    # so a hedged 'benched?' can't cap a starter. Take the most-severe confirmed status.
+    hard_status = [_parse_lineup_status(texts[m]) for m, p in out.items()
+                   if p is not None and _parse_evidence_strength(texts[m]) == "hard"]
+    lineup = "out" if "out" in hard_status else ("bench" if "bench" in hard_status else "unknown")
     return {"models": out, "p_ensemble": combine_logodds(probs), "n": len(probs),
-            "texts": texts, "evidence_strength": agg_evidence(strengths)}
+            "texts": texts, "evidence_strength": agg_evidence(strengths), "lineup_status": lineup}
 
 
 def panel_forecast(question: str, model_pct: float, role: str = "tactical",

@@ -167,12 +167,174 @@ def test_player_prop_anchor_weight_near_book():
 
     assert PLAYER_MODEL_FRAC <= 0.25          # the fix: players keep only a sliver of model
     r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    r.player_crowd_prem = {}                  # isolate the anchor WEIGHT; crowd lift tested below
     t = "Will Raúl Jiménez (Mexico) score a goal (excluding own goals) in regulation (90 minutes + stoppage time)?"
     pp = {(canonical("Mexico"), canonical("Ecuador")):
           {norm_player("Raúl Jiménez"): {"player_scores": 0.27}}}
     rows = [{"id": "m1", "lobby_id": "L", "match": {"name": "Mexico vs Ecuador"}, "question": t}]
     out = r.predictions_for(rows, player_props=pp)[0]
     assert abs(out[0]["p_bot_a"] - 0.27) < 0.02, out[0]   # was 0.22 at the old 0.85 weight
+
+
+def test_player_prop_crowd_lift():
+    """P4b: book-anchored player props are lifted toward the Jump crowd we are SCORED against
+    (it prices these props above the book AND calibrates better: LOO Brier .223 vs book .258 on
+    29 settled anchored props). The lift is one-sided (up), a fixed fraction of the fitted
+    per-archetype premium, capped, applied only on the live 0.85 pass — the w=1 closing-line
+    (CLV) pass stays pure book — and skipped for props already priced high (no crowd headroom)."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import (Runner, PLAYER_CROWD_LIFT, PLAYER_CROWD_LIFT_CAP,
+                                        PLAYER_CROWD_LIFT_CEIL)
+    from jumpprob.normalize.teams import canonical
+    from jumpprob.ingest.odds_api import norm_player
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    t = "Will Raúl Jiménez (Mexico) score a goal (excluding own goals) in regulation (90 minutes + stoppage time)?"
+    pp = {(canonical("Mexico"), canonical("Ecuador")):
+          {norm_player("Raúl Jiménez"): {"player_scores": 0.27}}}
+    rows = [{"id": "m1", "lobby_id": "L", "match": {"name": "Mexico vs Ecuador"}, "question": t}]
+
+    r.player_crowd_prem = {}                                  # baseline: pure anchor
+    base = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    prem = 0.08
+    r.player_crowd_prem = {"player_scores": prem}             # lifted by exactly LIFT*prem (< cap)
+    lifted = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    assert lifted > base
+    assert abs((lifted - base) - min(PLAYER_CROWD_LIFT * prem, PLAYER_CROWD_LIFT_CAP)) < 1e-6
+
+    r.player_crowd_prem = {"player_scores": 0.40}             # a huge premium is CAPPED
+    capped = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    assert abs((capped - base) - PLAYER_CROWD_LIFT_CAP) < 1e-6
+
+    r.player_crowd_prem = {"player_scores": prem}
+    r.w_market = 1.0                                          # closing-line pass: NOT lifted
+    closing = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    assert abs(closing - 0.27) < 0.02
+    assert PLAYER_CROWD_LIFT_CEIL <= 1.0
+
+
+def test_player_name_suffix_resolves():
+    """The QF/SF question format 'Kylian Mbappé (France, #10)' must resolve to the player's rate,
+    not the population fallback — the bug that priced Mbappé to-score at 8 instead of ~30 on a
+    high-multiplier semifinal (same name-join class as De Bruyne / Haaland / DR Congo)."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    suffixed = r.player_rate("Kylian Mbappé (France, #10)")
+    clean = r.player_rate("Kylian Mbappe")
+    assert suffixed == clean                        # the (Team, #N) suffix is stripped before resolving
+    assert suffixed[1] > r.prior_goal * 1.5         # resolved to a real elite scorer, not the population prior
+
+
+def test_endgame_dial_inert_by_default_and_allowlisted():
+    """Phase-2 endgame extremizer: absent env -> byte-identical; when set, it amplifies ONLY
+    the structural-edge allowlist (never player props), and only on the live pass."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    assert r.endgame_alpha == 1.0                       # default: dial off (env unset in CI)
+    rows = [
+        {"id": "e1", "lobby_id": "L", "match": {"name": "France vs Croatia"},
+         "question": "Will France have more corner kicks AND more total shots than Croatia in "
+                     "regulation (90 minutes + stoppage time)?"},
+        {"id": "e2", "lobby_id": "L", "match": {"name": "France vs Croatia"},
+         "question": "Will Kylian Mbappé (France, #10) score a goal (excluding own goals) in "
+                     "regulation (90 minutes + stoppage time)?"},
+    ]
+    base = {o["market_id"]: o["p_bot_a"] for o in r.predictions_for(rows)[0]}
+    r.endgame_alpha = 1.5
+    amp = {o["market_id"]: o["p_bot_a"] for o in r.predictions_for(rows)[0]}
+    assert amp["e2"] == base["e2"]                      # player prop NEVER extremized
+    b, a = base["e1"], amp["e1"]                        # allowlisted kind moves away from 0.5
+    assert a != b and abs(a - 0.5) > abs(b - 0.5)
+
+
+def test_lineup_status_override():
+    """A player confirmed benched/out THIS match is capped at a bounded sub-minutes ceiling,
+    overriding the book anchor AND the P4b lift (the De Bruyne fix: submitted 44 for a benched
+    player). Applied as a MIN (never raises), team-scoped, and freshness-gated."""
+    import pandas as pd
+    from datetime import datetime, timezone
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner, LINEUP_OUT_CEIL, LINEUP_BENCH_CAP
+    from jumpprob.normalize.teams import canonical
+    from jumpprob.ingest.odds_api import norm_player
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    t = ("Will Kevin De Bruyne (Belgium) score or assist a goal (excluding own goals) in "
+         "regulation (90 minutes + stoppage time)?")
+    pp = {(canonical("United States"), canonical("Belgium")):
+          {norm_player("Kevin De Bruyne"): {"player_ga": 0.44}}}
+    rows = [{"id": "m1", "lobby_id": "L", "match": {"name": "USA vs BEL"}, "question": t}]
+    now = datetime.now(timezone.utc).isoformat()
+    key = norm_player("Kevin De Bruyne")
+
+    r.lineup_status = {}                                          # baseline: book anchor holds him high
+    base = r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"]
+    assert base > 0.35
+
+    r.lineup_status = {key: {"status": "bench", "team": "Belgium", "ts": now}}   # benched -> capped
+    o = r.predictions_for(rows, player_props=pp)[0][0]
+    assert o["p_bot_a"] <= LINEUP_BENCH_CAP["player_ga"] + 1e-9
+    assert o["lineup"] and "bench" in o["lineup"]
+
+    r.lineup_status = {key: {"status": "out", "team": "Belgium", "ts": now}}     # out -> hard low
+    assert r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"] <= LINEUP_OUT_CEIL + 1e-9
+
+    r.lineup_status = {key: {"status": "out", "team": "France", "ts": now}}      # wrong team -> no-op
+    assert r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"] > 0.35
+
+    r.lineup_status = {key: {"status": "out", "team": "Belgium",                 # stale -> no-op
+                             "ts": "2020-01-01T00:00:00+00:00"}}
+    assert r.predictions_for(rows, player_props=pp)[0][0]["p_bot_a"] > 0.35
+
+
+def test_new_qf_templates_2026_07():
+    """The 8 new QF-era templates parse and price sanely from existing primitives:
+    win-both-halves, first-goal-2H, margin=1, odd-total, goal-after-HB1, card-each-half,
+    card-in-stoppage, corners-AND-shots. Ranges/directions per the researcher's structural
+    analysis (all with the '...in regulation (90 minutes + stoppage time)' suffix stripped)."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    even, lop = r.context("France", "Croatia"), r.context("Brazil", "Haiti")
+
+    def parse(q, arch):
+        p = parse_question(q)
+        assert p is not None and p.archetype == arch, (q, p and p.archetype)
+        return p
+    A = lambda q, arch, c: r.answer(parse(q, arch), c)
+    reg = " in regulation (90 minutes + stoppage time)"
+
+    wbh = A(f"Will either team win both halves{reg}?", "win_both_halves", even)
+    assert 0.05 < wbh < 0.40                                   # crowd over-prices ~.35 vs true ~.18
+    assert A(f"Will either team win both halves{reg}?", "win_both_halves", lop) > wbh  # lopsided higher
+
+    fg2 = A(f"Will the first goal of the match be scored in the second half{reg}?", "first_goal_2h", even)
+    assert 0.12 < fg2 < 0.38                                   # ~.25; below a crowd ~.40
+
+    m1 = A(f"Will the match be decided by exactly one goal{reg}?", "margin_exactly", even)
+    assert 0.30 < m1 < 0.50                                    # ~.40; below not-a-draw ~.73
+
+    odd = A("Will the total number of goals" + reg + " be an odd number?", "total_odd", even)
+    assert 0.42 < odd < 0.52                                   # near .5, marginally below (even tilt)
+
+    gah = A("Will a goal be scored in the first half after the first hydration break?", "goal_after_hb1", even)
+    goal_pre = r.answer(parse_question("Will a goal be scored before the first hydration break?"), even)
+    assert 0.25 < gah < 0.65 and gah > goal_pre                # post-break window holds MORE goal mass
+
+    ceh = A(f"Will at least one card be shown in each half{reg}?", "card_each_half", even)
+    assert 0.35 < ceh < 0.90
+
+    cst = A("Will a card be shown during first- or second-half stoppage time in regulation?", "card_stoppage", even)
+    assert 0.20 < cst < 0.65
+
+    cas = A(f"Will France have more corner kicks AND more total shots than Croatia{reg}?", "corners_and_shots", even)
+    assert 0.05 < cas < 0.68                                   # joint AND + the within-match coupling bump
+    cas_lop = A(f"Will Brazil have more corner kicks AND more total shots than Haiti{reg}?", "corners_and_shots", lop)
+    assert cas_lop > cas                                       # a dominant team wins BOTH counts more often
 
 
 def test_r16_template_handlers():
@@ -232,15 +394,17 @@ def test_p5_skipped_questions_carry_reasons():
 def test_p2_fouls_offsides_near_flat():
     """P2: our per-match variation on fouls_gt/offsides_ge is ANTI-signal (flat beats both
     us and the crowd on all settled-with-crowd data), so the risk gate pins them near their
-    calibrated bases: fouls 0.55 (crowd~realized agree), offsides 0.40 (crowd .49 shrunk
-    toward realized .36). Deviations survive at <=~20%% strength; direction preserved."""
+    calibrated bases: fouls 0.50 (the symmetric coin-flip — retuned from 0.55 by the 2026-07-07
+    review, which found us over-pricing .58 vs realized .44), offsides 0.40 (crowd .49 shrunk
+    toward realized .36; the review VERIFIED we're well-calibrated, don't lift to crowd).
+    Deviations survive at <=~20%% strength; direction preserved."""
     import json
     from jumpprob.models import strategy
     g = json.loads(open("data/processed/risk_gate.json").read())
     b = json.loads(open("data/processed/base_rates.json").read())
     assert g["fouls_gt"] == 0.15 and g["offsides_ge"] == 0.15
-    assert b["fouls_gt"] == 0.55 and b["offsides_ge"] == 0.40
-    for arch, base in [("fouls_gt", 0.55), ("offsides_ge", 0.40)]:
+    assert b["fouls_gt"] == 0.50 and b["offsides_ge"] == 0.40
+    for arch, base in [("fouls_gt", 0.50), ("offsides_ge", 0.40)]:
         hi = strategy.apply_risk(base + 0.25, arch, g, b)
         lo = strategy.apply_risk(base - 0.25, arch, g, b)
         assert base < hi < base + 0.08          # hugged to base, direction kept
@@ -681,3 +845,36 @@ def test_qf_templates_price_sanely():
     assert 0.25 < race < 0.70
     # un-tabled subs threshold -> None (template audit), never a guess
     assert r.answer(parse_question("Will there be 6 or more total substitutions (both teams combined) in regulation (90 minutes + stoppage time)?"), ctx) is None
+
+
+def test_sf_novel_kinds_price_sanely():
+    """The 3 FRA/ESP novel kinds (2026-07-13): single-digit first scorer = P(goal incl ET) x
+    the WC2022-measured 40% share; first-sub race = near-coin tilted toward the likelier
+    trailer; VAR on-field review = measured monitor-review base + ET exposure."""
+    import pandas as pd
+    from jumpprob.pipeline import Pipeline
+    from jumpprob.submit.runner import Runner, SINGLE_DIGIT_FIRST_SHARE
+    from jumpprob.submit.parser import parse_question
+    r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
+    even, lop = r.context("France", "Spain"), r.context("Brazil", "Haiti")
+    A = lambda t, c: r.answer(parse_question(t), c)
+    sdq = ("Will the first goal of the match (including extra time, excluding penalty shootout) "
+           "be scored by a player wearing a single-digit shirt number (1-9)? Resolves No if the "
+           "score is 0-0 after extra time.")
+    sd = A(sdq, even)                          # FRA/ESP: both teams' top scorer is double-digit
+    assert 0.25 < sd < 0.36                    # bottom-up sits BELOW the .365 flat base
+    assert sd < SINGLE_DIGIT_FIRST_SHARE
+    # the bottom-up differentiates: a single-digit-heavy matchup prices materially higher
+    assert r.answer(parse_question(sdq), lop) > sd + 0.08
+    sub_esp = A("Will Spain make the first substitution of the match in regulation "
+                "(90 minutes + stoppage time)?", even)
+    assert 0.45 < sub_esp < 0.58               # near-coin, tilted toward the likelier trailer
+    dog = A("Will Haiti make the first substitution of the match in regulation "
+            "(90 minutes + stoppage time)?", lop)
+    fav = A("Will Brazil make the first substitution of the match in regulation "
+            "(90 minutes + stoppage time)?", lop)
+    assert dog > 0.5 > fav                     # the big underdog is the likelier trailer
+    var = A("Will the referee conduct an on-field review at the pitchside VAR monitor at any "
+            "point in regulation (90 minutes + stoppage time) or extra time? Reviews during "
+            "the penalty shootout do not count.", even)
+    assert 0.28 < var < 0.42                    # WC26-reconstructed OFR base (~35%, up from 26%)
