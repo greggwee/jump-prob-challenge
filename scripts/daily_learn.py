@@ -57,6 +57,7 @@ def main() -> None:
         try:
             p = subprocess.run([str(PYEXE), script],
                                cwd=str(ROOT), capture_output=True, text=True, timeout=300,
+                               encoding="utf-8", errors="replace",
                                creationflags=CREATE_NO_WINDOW)
             lines = p.stdout.strip().splitlines() or [""]
             tail = next((ln for ln in lines if want_line in ln), lines[-1])

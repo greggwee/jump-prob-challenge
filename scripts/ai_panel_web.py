@@ -100,7 +100,8 @@ def log(msg: str) -> None:
 
 def _run(cmd: list[str]) -> None:
     log("> " + " ".join(cmd))
-    r = subprocess.run([PY, *cmd], env=_ENV, capture_output=True, text=True)
+    r = subprocess.run([PY, *cmd], env=_ENV, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
     tail = (r.stdout.strip().splitlines() or ["<no output>"])[-1]
     log(f"  exit={r.returncode}: {tail}")
     if r.returncode:
