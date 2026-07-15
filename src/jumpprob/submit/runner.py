@@ -678,6 +678,11 @@ class Runner:
             share = self.event_base["goal_share_1h_stoppage" if a == "goal_1h_stoppage"
                                     else "goal_share_2h_stoppage"]
             return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * share))
+        if a == "goal_stoppage":
+            # SF2 phrasing: EITHER stoppage period — sum both windows' goal shares
+            share = (self.event_base["goal_share_1h_stoppage"]
+                     + self.event_base["goal_share_2h_stoppage"])
+            return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * share))
         if a == "sub_before_ht":
             return float(self.event_base["sub_before_ht"])          # ~injury base rate
         if a == "sub_at_ht":

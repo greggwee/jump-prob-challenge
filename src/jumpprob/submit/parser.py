@@ -98,6 +98,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("corners_total_ge", threshold=int(m[1]))),
     (re.compile(r"will there be (\d+) or more total shots on target\?", re.I),
      lambda m: ParsedQuestion("total_sot_ge", threshold=int(m[1]))),
+    # SF2 phrasing: "(both teams combined)"
+    (re.compile(r"will there be (\d+) or more total shots on target \(both teams combined\)", re.I),
+     lambda m: ParsedQuestion("total_sot_ge", threshold=int(m[1]))),
     (re.compile(r"will the match have (\d+) or fewer total goals", re.I),
      lambda m: ParsedQuestion("total_le", threshold=int(m[1]))),
     (re.compile(r"will the match be tied at halftime", re.I),
@@ -110,6 +113,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"at halftime, will (.+?) be winning", re.I),
      lambda m: ParsedQuestion("ht_leading", m[1])),
     (re.compile(r"will (.+?) be (?:ahead|winning|leading) at halftime", re.I),
+     lambda m: ParsedQuestion("ht_leading", m[1])),
+    # SF2 phrasing: "Will England lead at halftime?"
+    (re.compile(r"will (.+?) lead at halftime", re.I),
      lambda m: ParsedQuestion("ht_leading", m[1])),
     (re.compile(r"will the second half have more (?:total )?goals than the first", re.I),
      lambda m: ParsedQuestion("h2_more_goals_than_h1")),
@@ -174,6 +180,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("goal_1h_stoppage")),
     (re.compile(r"will a goal be scored in second-half stoppage", re.I),
      lambda m: ParsedQuestion("goal_2h_stoppage")),
+    # SF2: either stoppage period combined
+    (re.compile(r"will a goal be scored during (?:first|second|either)[\w -]*stoppage", re.I),
+     lambda m: ParsedQuestion("goal_stoppage")),
     (re.compile(r"will a substitution be made before halftime", re.I),
      lambda m: ParsedQuestion("sub_before_ht")),
     # (substitute score / score-or-assist handled ABOVE the player_ga pattern — ordering matters)
@@ -235,6 +244,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"will both halves have the same number of goals", re.I),
      lambda m: ParsedQuestion("halves_equal_goals")),
     (re.compile(r"will the first card of the match be shown before the first goal", re.I),
+     lambda m: ParsedQuestion("first_card_before_goal")),
+    # SF2 phrasing of the same competing-risks race
+    (re.compile(r"will a card be shown before the first goal of the match", re.I),
      lambda m: ParsedQuestion("first_card_before_goal")),
     (re.compile(r"will (.+?) \((.+?)\) make (\d+) or more saves", re.I),
      lambda m: ParsedQuestion("player_saves_ge", m[1], m[2], threshold=int(m[3]))),

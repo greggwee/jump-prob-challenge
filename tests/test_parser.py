@@ -153,3 +153,16 @@ def test_sf_phrasings_route_correctly():
     assert q.archetype == "offsides_total_ge" and q.threshold == 4
     assert parse_question("Will the match be tied at the end of regulation (90 minutes + stoppage "
                           "time) and go to extra time?").archetype == "extra_time"
+
+
+def test_sf2_phrasings_route_correctly():
+    """ENG/ARG SF2 phrasings (2026-07-15): total-SoT-combined, lead-at-halftime, the
+    card-before-goal competing-risks variant, and either-half stoppage goal."""
+    q = parse_question("Will there be 8 or more total shots on target (both teams combined) in "
+                       "regulation (90 minutes + stoppage time)?")
+    assert q.archetype == "total_sot_ge" and q.threshold == 8
+    assert parse_question("Will England lead at halftime?").archetype == "ht_leading"
+    assert parse_question("Will a card be shown before the first goal of the match in regulation "
+                          "(90 minutes + stoppage time)?").archetype == "first_card_before_goal"
+    assert parse_question("Will a goal be scored during first- or second-half stoppage time in "
+                          "regulation?").archetype == "goal_stoppage"
