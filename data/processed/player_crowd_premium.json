@@ -1,7 +1,7 @@
 {
  "premium": {
-  "player_ga": 0.003,
   "player_sot_ge": 0.075,
+  "player_ga": 0.003,
   "player_scores": 0.038
  },
  "n": 84,
