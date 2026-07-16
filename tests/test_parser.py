@@ -166,3 +166,23 @@ def test_sf2_phrasings_route_correctly():
                           "(90 minutes + stoppage time)?").archetype == "first_card_before_goal"
     assert parse_question("Will a goal be scored during first- or second-half stoppage time in "
                           "regulation?").archetype == "goal_stoppage"
+
+
+def test_endgame_outrights_route_to_advance():
+    """3rd-place + final outrights (2026-07-17): no regulation qualifier -> whole-tie
+    settlement (incl. ET + pens) -> advance, NOT the 90-minute win grid."""
+    q = parse_question("Will France win the third-place match (Bronze Final)?")
+    assert q.archetype == "advance" and q.subject == "France"
+    q = parse_question("Will Argentina win the World Cup?")
+    assert q.archetype == "advance" and q.subject == "Argentina"
+    # the regulation-qualified phrasing must still hit the 90-minute win handler
+    assert parse_question("Will Argentina win in regulation (90 minutes + stoppage "
+                          "time)?").archetype == "win"
+
+
+def test_same_half_goals_routes_with_scope():
+    """Final novel kind (2026-07-17): '2+ goals in the same half' must NOT be swallowed
+    by team_goals_ge (which drops the same-half scope and grossly over-prices)."""
+    q = parse_question("Will either team score 2 or more goals in the same half of "
+                       "regulation (90 minutes + stoppage time)?")
+    assert q.archetype == "either_team_half_goals_ge" and q.threshold == 2

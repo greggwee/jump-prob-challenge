@@ -57,6 +57,11 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     # 'any player' -> side resolution failed -> the market was silently DROPPED.
     (re.compile(r"will any player score (\d+) or more goals?", re.I),
      lambda m: ParsedQuestion("any_player_goals_ge", threshold=int(m[1]))),
+    # Final novel kind (2026-07-17): ">=N goals in the SAME half" — must precede the
+    # team_goals_ge patterns below, which swallow it as a full-match team total
+    # ("either team" subject) with the same-half scope silently dropped.
+    (re.compile(r"will either team score (\d+) or more goals in the same half", re.I),
+     lambda m: ParsedQuestion("either_team_half_goals_ge", threshold=int(m[1]))),
     (re.compile(r"will (.+?) score at least (\d+) goals?", re.I),
      lambda m: ParsedQuestion("team_goals_ge", m[1], threshold=int(m[2]))),
     (re.compile(r"will (.+?) score (\d+) or more (?:total )?goals", re.I),
@@ -145,6 +150,13 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     # named doesn't change the handler. Subject is the team; runner derives it from
     # the 90-min market + an ET/shootout model (see runner.answer "advance").
     (re.compile(r"will (.+?) advance to the (?:round of \d+|quarter[- ]?finals?|semi[- ]?finals?|final)", re.I),
+     lambda m: ParsedQuestion("advance", m[1])),
+    # Endgame outrights (2026-07-17): "win the third-place match (Bronze Final)" / "win
+    # the World Cup" carry NO regulation qualifier — they settle on the whole tie incl.
+    # extra time + penalties, exactly like advance. The generic win catch-all below
+    # would price the 90-minute grid and under-price the winner by ~p(draw90)/2.
+    (re.compile(r"will (.+?) win the (?:(?:third|3rd)[- ]place (?:match|game|playoff)|bronze final"
+                r"|world cup|tournament|title)", re.I),
      lambda m: ParsedQuestion("advance", m[1])),
     (re.compile(r"will a card be shown in the (first|second) half", re.I),
      lambda m: ParsedQuestion("cards_ge", threshold=1, half=1 if m[1].lower() == "first" else 2)),

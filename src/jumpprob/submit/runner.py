@@ -53,6 +53,7 @@ GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge"
               # new QF templates (2026-07-07): all pure goal-grid / per-half-grid derivations
               "win_both_halves", "first_goal_2h", "margin_exactly", "total_odd",
               "team_scores_half", "half_total_ge", "team_goals_ge",
+              "either_team_half_goals_ge",
               "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
               "ht_scoreless",
               "advance"} | TIMING_ARCHS
@@ -938,6 +939,18 @@ class Runner:
             lam = share * (ctx.lam_a + ctx.lam_b)
             from scipy.stats import poisson
             return float(1 - poisson.cdf(q.threshold - 1, lam))
+        if a == "either_team_half_goals_ge":
+            # P(some (team, half) cell reaches the threshold): team lambdas split by the
+            # measured half shares, complement of "every cell stays under". The four cells
+            # are ~independent Poissons — the DC correction only moves the low-score JOINT
+            # cells, not a single team-half tail.
+            from scipy.stats import poisson
+            n = (q.threshold or 2) - 1
+            p_none = 1.0
+            for lam_t in (ctx.lam_a, ctx.lam_b):
+                for share in (H1, H2):
+                    p_none *= float(poisson.cdf(n, share * lam_t))
+            return float(1.0 - p_none)
         if a == "penalty_awarded":
             return P_PEN_MATCH
         if a == "pen_or_red":
