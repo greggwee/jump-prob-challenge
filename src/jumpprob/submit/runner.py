@@ -212,7 +212,8 @@ PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
 #     clamp, or hug — every safety margin must live in the handler itself. ---
 PEN_LAMBDA_WC26 = 0.206     # awarded pens/match, WC26-measured (21/102 — refs call ~60%
                             # of the 6-tournament 0.347 this cycle; P_PEN_MATCH is stale)
-PEN_FINAL_UPLIFT = 1.10     # cagey final -> more box scrutiny; sensitivity band midpoint
+PEN_FINAL_UPLIFT = 1.19     # cagey-final box scrutiny + the announced final ref: Vincic
+                            # career 0.27 pens/match, slightly above avg (pushback review §7)
 PEN_CONV = {"Spain": 0.85, "Argentina": 0.74}   # taker-weighted: Oyarzabal .898 career &
                             # on-pitch share; Messi 0/2 this WC (Beta-updated .72) + Lautaro
 PEN_CONV_DEFAULT = 0.75     # historical WC conversion (39/52)
@@ -239,6 +240,10 @@ EACH_TEAM_SOT_RHO = -0.05   # residual indicator corr: the raw within-match SoT 
 PEN_SHOOTOUT_SPEN = {"Argentina": 0.55, "Spain": 0.45}  # Martinez-era shootout evidence
                             # (ARG 5 straight, 4/4 era; ESP 2/6 since 2018): the r-based
                             # tilt is wrong-signed for ARG (quant review §3.1); cap ~+2pts
+# Per-minute form-rate pins for players whose club-table rate is confirmed badly stale
+# (pushback review §3: Dembele table 0.41 GA/90 vs PSG 25-26 ~1.0 / WC26 1.36; pinned at
+# 1.1 x the 0.80 transfer discount). Only fires unanchored — the book prop wins at lock.
+PLAYER_FORM_RATE_OVERRIDES = {("player_ga", "ousmane dembele"): 1.1 * 0.80 / 90.0}
 
 # Event markets our 90-min minute profile can't reach. Stoppage goals scale with the
 # match's scoring (lambda_W = lambda_tot * goal-share); subs are ~fixed base rates.
@@ -741,9 +746,10 @@ class Runner:
             s = -np.log(1.0 - self.event_base["substitute_scores"]) / lam0
             if a == "substitute_ga":
                 # "score OR ASSIST": widen the scoring hazard by the population GA/goal rate
-                # ratio (assists arrive at a similar clip to goals; capped at 2x). Structural,
-                # not fit — the score-or-assist phrasing first appeared in the QF round.
-                s *= min(self.prior_ga / max(self.prior_goal, 1e-9), 2.0)
+                # ratio (assists arrive at a similar clip to goals). Structural, not fit —
+                # cap trimmed 2.0 -> 1.5 (pushback review §6: the 1.64 measured ratio is the
+                # least-validated constant, n=2 settled; the trim is worth ~-3pts).
+                s *= min(self.prior_ga / max(self.prior_goal, 1e-9), 1.5)
             return float(1 - np.exp(-(ctx.lam_a + ctx.lam_b) * s))
         if a == "any_player_goals_ge":   # "any player score 2+ goals" — over the goal grid
             if (q.threshold or 2) > 2:   # brace curve is P(some player >=2 | team goals); no 3+ data
@@ -1234,6 +1240,8 @@ class Runner:
         if a in ("player_scores", "player_sot_ge", "player_ga"):
             rate_sot, rate_goal, rate_ga = self.player_rate(q.subject)
             rate = {"player_sot_ge": rate_sot, "player_scores": rate_goal, "player_ga": rate_ga}[a]
+            rate = PLAYER_FORM_RATE_OVERRIDES.get(
+                (a, _norm_name((q.subject or "").split("(")[0].strip())), rate)
             # opponent adjustment: scale by this match's intensity vs league avg
             scale = (ctx.lam_a + ctx.lam_b) / (2 * np.exp(self.pl.goal_model.b0))
             # half-specific player questions: exposure = minutes x half share

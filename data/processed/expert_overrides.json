@@ -1,10 +1,18 @@
 {
   "7bb54c7a-9831-4623-8777-829ffb4a6e65": {
-    "value": 34,
-    "why": "cards_ge 5+ (final): WC26 cards run LOW (realized .300 at 4+/5+ lines, n=30) but the count-Platt up-shift + risk-gate pull toward the stale threshold-blind .525 base ships .41 - quant review MUST-FIX 3; pin 0.33-0.36"
+    "value": 31,
+    "why": "cards_ge 5+ (final): 5-line 0/4 settled, NegBin from recent 4+ rate implies P(>=5)=.20, last 6 finals 2/6 at >=5 (mean 3.67), Vincic 2.7 cards/match this WC; 31 keeps one point of finals respect - pushback review \u00a79"
   },
   "3c5f085c-7a8e-4d24-8eb8-783c88393d2e": {
     "value": 42,
     "why": "offsides_total_ge 5+ (final): leak family (-2.6 RBP/q), crowd calibrated here (family realized .500 at crowd 51.4), and the semi-automated-offside regime postdates our 6-tournament base; model .22->clamp .26 too low - quant review MUST-FIX 4; pin 0.40-0.45"
+  },
+  "853c4ebf-8f09-4685-9e0c-4e5bc2c4fe6f": {
+    "value": 45,
+    "why": "9+ corners (bronze): WC26 corners run low (settled 9-lines 4/10, KO window 2/7); NegBin at current level gives .29-.40, bronze openness pulls back to 45 vs pipeline 52 - pushback review \u00a74"
+  },
+  "7fd0a148-7489-452e-8cb5-a6dbb3cdb69b": {
+    "value": 24,
+    "why": "each team 4+ SoT (bronze): handler 20 + SoT-under-call shade + ENG volume evidence (98 shots/7, >=4 SoT in 5/7; FRA 5-6/7) and bronze openness (O2.5 -250, Saliba out); cap 27 - pushback review \u00a71"
   }
 }
