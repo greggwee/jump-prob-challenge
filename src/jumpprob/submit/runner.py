@@ -53,7 +53,7 @@ GOAL_ARCHS = {"win", "draw", "btts", "total_ge", "total_le", "btts_and_total_ge"
               # new QF templates (2026-07-07): all pure goal-grid / per-half-grid derivations
               "win_both_halves", "first_goal_2h", "margin_exactly", "total_odd",
               "team_scores_half", "half_total_ge", "team_goals_ge",
-              "either_team_half_goals_ge",
+              "either_team_half_goals_ge", "first_goal_assisted",
               "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
               "ht_scoreless",
               "advance"} | TIMING_ARCHS
@@ -71,6 +71,9 @@ _MC_TIMING = {
     "h2_more_goals_than_h1": "h2_more_goals_than_h1", "first_goal_half": "first_goal_half",
     "first_goal_and_win": "first_goal_and_win", "first_goal_and_opp_2h": "first_goal_and_opp_2h",
     "goals_gt_half": "goals_gt_half",
+    # same-half team goals: the coupled MC removes the analytic handler's ~2pt
+    # independence over-price (quant review §3.4); analytic stays as the no-sim fallback
+    "either_team_half_goals_ge": "either_team_half_goals_ge",
 }
 
 CODE_MAP = {
@@ -204,6 +207,38 @@ VAR_OFR_LAMBDA = 0.33
 # by the win-prob gap, small (manager idiosyncrasy + injury randomness keep it near 50/50).
 FIRST_SUB_TILT = 0.10
 PEN_TILT = 0.20       # shootout favorite tilt vs the 90-min relative win share
+# --- endgame novel-kind constants (2026-07-17; docs/FINAL-NEW-KINDS-PLAN.md +
+#     docs/QUANT-REVIEW-ENDGAME.md). None of these archetypes have a crowd template,
+#     clamp, or hug — every safety margin must live in the handler itself. ---
+PEN_LAMBDA_WC26 = 0.206     # awarded pens/match, WC26-measured (21/102 — refs call ~60%
+                            # of the 6-tournament 0.347 this cycle; P_PEN_MATCH is stale)
+PEN_FINAL_UPLIFT = 1.10     # cagey final -> more box scrutiny; sensitivity band midpoint
+PEN_CONV = {"Spain": 0.85, "Argentina": 0.74}   # taker-weighted: Oyarzabal .898 career &
+                            # on-pitch share; Messi 0/2 this WC (Beta-updated .72) + Lautaro
+PEN_CONV_DEFAULT = 0.75     # historical WC conversion (39/52)
+PEN_SCORED_BOUNDS = (0.10, 0.30)   # fat-finger guard: naked new archetype at 3x
+FIRST_GOAL_PEN_SHARE = 0.08  # final-adjusted: pen intensity doesn't scale with a cagey
+                             # final's tempo, so the pen SHARE of first goals rises
+FIRST_GOAL_OG_SHARE = 0.05
+ASSISTED_OPEN_SHARE = 0.717  # lambda-weighted ESP .737 / ARG .692 (StatsBomb, 668 open goals)
+SOT_RACE_FORM_RATES = {"lionel messi": 2.4 / 90.0, "lamine yamal": 1.6 / 90.0}  # per-minute
+                            # SoT, 2/3 WC26 form + 1/3 history — the population table lags
+                            # stars badly (Messi runs ~3x his table rate this tournament)
+SOT_RACE_MINUTES = {"lionel messi": [(0.80, 90.0), (0.15, 75.0), (0.05, 60.0)],
+                    "lamine yamal": [(0.85, 88.0), (0.10, 70.0), (0.05, 25.0)]}
+SOT_RACE_CROWD_W = 0.35     # logit-blend toward the ~50 the field puts on star races: our
+                            # SoT family under-calls (realized .40 vs predicted .29) and no
+                            # template clamp exists for this archetype to catch an error
+SOT_RACE_FLOOR = 0.25       # plan §3(d): never ship the race below .25
+SHOOTER_OCC_B0, SHOOTER_OCC_B1 = -5.333, 0.847  # P(>=5 distinct shooters | N team shots),
+                            # logistic on 628 team-matches; zero team residual
+DISTINCT_SHOOTERS_BASE = 0.841   # population P(>=5 distinct); ship a half-step toward it
+EACH_TEAM_SOT_RHO = -0.05   # residual indicator corr: the raw within-match SoT corr (-0.23)
+                            # is matchup heterogeneity the anchored marginals already encode;
+                            # conditional residual is -0.076 -> indicator rho ~ -0.05
+PEN_SHOOTOUT_SPEN = {"Argentina": 0.55, "Spain": 0.45}  # Martinez-era shootout evidence
+                            # (ARG 5 straight, 4/4 era; ESP 2/6 since 2018): the r-based
+                            # tilt is wrong-signed for ARG (quant review §3.1); cap ~+2pts
 
 # Event markets our 90-min minute profile can't reach. Stoppage goals scale with the
 # match's scoring (lambda_W = lambda_tot * goal-share); subs are ~fixed base rates.
@@ -719,6 +754,14 @@ class Runner:
             lt, _ = lams(side)
             tot = ctx.lam_a + ctx.lam_b
             return float(lt / tot * (1 - np.exp(-tot)))
+        if a == "first_goal_assisted":
+            # P(>=1 goal in 90) x P(first goal assisted | goal). Only open-play goals
+            # carry a credited assist, so strip the first-goal pen/OG share, then apply
+            # the measured assisted share of open-play goals. The 0-0 -> No clause is
+            # exactly the grid's [0,0] cell (anchored, so the dominant term is market-set).
+            p_goal = 1.0 - float(ctx.grid[0, 0])
+            return float(p_goal * (1.0 - FIRST_GOAL_PEN_SHARE - FIRST_GOAL_OG_SHARE)
+                         * ASSISTED_OPEN_SHARE)
         if a == "win_margin":
             if side is None:
                 return None
@@ -751,6 +794,15 @@ class Runner:
             p_win_et, p_et_draw = mk.p_win(et, "a"), mk.p_draw(et)
             r = p_win90 / (p_win90 + p_lose90) if (p_win90 + p_lose90) > 0 else 0.5
             s_pen = 0.5 + PEN_TILT * (r - 0.5)
+            # Team-specific shootout evidence beats the r-tilt where it exists: the
+            # 90-min win share says nothing about pen-taking/GK assets, and it is
+            # wrong-SIGNED for ARG vs ESP (quant review §3.1). Bounded near the coin.
+            team = ctx.team_a if side == "a" else ctx.team_b
+            opp = ctx.team_b if side == "a" else ctx.team_a
+            if team in PEN_SHOOTOUT_SPEN:
+                s_pen = PEN_SHOOTOUT_SPEN[team]
+            elif opp in PEN_SHOOTOUT_SPEN:
+                s_pen = 1.0 - PEN_SHOOTOUT_SPEN[opp]
             q = p_win_et + p_et_draw * s_pen
             return float(p_win90 + p_draw90 * q)
         # --- QF templates (2026-07-05; docs/QF-TEMPLATES-PLAN.md) ---
@@ -951,6 +1003,17 @@ class Runner:
                 for share in (H1, H2):
                     p_none *= float(poisson.cdf(n, share * lam_t))
             return float(1.0 - p_none)
+        if a == "pen_scored":
+            # Penalty SCORED = awarded x taker conversion, Poisson-thinned (multi-pen
+            # safe): 1 - exp(-lam*conv) = P(>=1 of the awarded pens converts). WC26's
+            # own (low) awarded rate, conversion lambda-weighted by each team's share
+            # of goal intensity via its named-taker table. Deliberately NOT crowd-
+            # hugged (the crowd anchors on the awarded-family ~30s); hard bounds are
+            # the only net under a brand-new archetype at 3x.
+            conv = (ctx.lam_a * PEN_CONV.get(ctx.team_a, PEN_CONV_DEFAULT)
+                    + ctx.lam_b * PEN_CONV.get(ctx.team_b, PEN_CONV_DEFAULT)) / (ctx.lam_a + ctx.lam_b)
+            p = 1.0 - float(np.exp(-PEN_LAMBDA_WC26 * PEN_FINAL_UPLIFT * conv))
+            return float(np.clip(p, *PEN_SCORED_BOUNDS))
         if a == "penalty_awarded":
             return P_PEN_MATCH
         if a == "pen_or_red":
@@ -1079,6 +1142,53 @@ class Runner:
             pa = float(side_pmf("shots_on_target", "a")[q.threshold:].sum())
             pb = float(side_pmf("shots_on_target", "b")[q.threshold:].sum())
             return pa * pb
+        if a == "each_team_sot_ge":
+            # "each team records N+ SoT": joint AND with a SMALL negative-dependence
+            # term (Gaussian-copula-lite on the indicators). Deliberately its OWN
+            # archetype: both_teams_sot_ge sits in the risk gate + a threshold-blind
+            # crowd template fit at the 1+ line, a stack that ships ~0.56 on a ~0.20
+            # event at thr=4 (quant review §3.5-a). Residual rho only — the raw SoT
+            # corr is matchup mix the anchored marginals already encode.
+            pa = float(side_pmf("shots_on_target", "a")[q.threshold:].sum())
+            pb = float(side_pmf("shots_on_target", "b")[q.threshold:].sum())
+            bump = EACH_TEAM_SOT_RHO * float(np.sqrt(max(pa * (1 - pa) * pb * (1 - pb), 0.0)))
+            return float(np.clip(pa * pb + bump, 0.01, 0.99))
+        if a == "distinct_shooters_ge":
+            # P(>= 5 DIFFERENT <team> players attempt a shot): occupancy logistic over
+            # the team-shots pmf (the SOTCONC/BRACE trick at a new cell; zero team
+            # residual — shot volume is the sufficient statistic). Curve is fit for the
+            # 5+ line only; other thresholds fall to the template audit. Ship a
+            # half-step toward the population base: the residual risk is all in mu.
+            if side is None or q.threshold != 5:
+                return None
+            pmf = side_pmf("shots", side)
+            occ = 1.0 / (1.0 + np.exp(-(SHOOTER_OCC_B0 + SHOOTER_OCC_B1 * np.arange(len(pmf)))))
+            p = float(np.dot(pmf, occ))
+            return float(0.5 * p + 0.5 * DISTINCT_SHOOTERS_BASE)
+        if a == "player_sot_race":
+            # Player-vs-player SoT race, STRICTLY more (tie -> No): P(S > O) by
+            # convolving two minutes-mixed Poissons at match tempo. Star rates pinned
+            # from tournament form (the shrunk population table lags stars badly);
+            # unknown names fall back to the transfer-discounted table rate. No crowd
+            # template exists for this archetype, so the crowd shrink lives HERE:
+            # logit-blend toward the ~50 the field puts on star races, plus a floor.
+            if not q.subject or not q.other:
+                return None
+            from scipy.stats import poisson
+            scale = (ctx.lam_a + ctx.lam_b) / (2 * np.exp(self.pl.goal_model.b0))
+            ks = np.arange(13)
+            def _race_pmf(name):
+                key = _norm_name(name.split("(")[0].strip() or name)
+                rate = SOT_RACE_FORM_RATES.get(key)
+                if rate is None:
+                    # player_rate already folds the club->intl transfer discount into
+                    # its prior — do NOT re-apply it here (double-discount)
+                    rate = self.player_rate(name)[0]
+                mix = SOT_RACE_MINUTES.get(key, MINUTE_SCENARIOS)
+                return sum(w * poisson.pmf(ks, rate * scale * m) for w, m in mix)
+            p = p_a_gt_b(_race_pmf(q.subject), _race_pmf(q.other))
+            p = float(inv_logit((1 - SOT_RACE_CROWD_W) * logit(p)))   # logit(0.5) = 0
+            return max(p, SOT_RACE_FLOOR)
         if a == "offsides_ge":
             return None if side is None else float(side_pmf("offsides", side)[q.threshold:].sum())
         if a == "total_shots_ge":      # total shots (on+off) — modeled from real data, not SoT/0.37

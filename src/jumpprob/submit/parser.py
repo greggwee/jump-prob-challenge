@@ -73,12 +73,22 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     # "At halftime, ..." prefix = FIRST-HALF scope. Without these, the halftime phrasing
     # fell to the no-half patterns and priced as FULL-MATCH (~.88 vs ~.60 truth) — the
     # single worst category on the platform (-7.8 RBP; adversarial review 2026-07-05 §1.1).
+    # Endgame novel kind (2026-07-17): "each team record N+ SoT" is a both-teams AND,
+    # but routed to its OWN archetype: both_teams_sot_ge sits in the risk gate and under
+    # a threshold-blind crowd template fit at the 1+ line — at thr=4 that stack ships
+    # ~0.56 on a ~0.20 event (quant review §3.5-a). The new archetype prices clean.
+    (re.compile(r"will each team record (\d+) or more shots? on target", re.I),
+     lambda m: ParsedQuestion("each_team_sot_ge", threshold=int(m[1]))),
     (re.compile(r"at halftime, will both teams have (?:at least (\d+)|(\d+) or more) shots? on target", re.I),
      lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1] or m[2]), half=1)),
     (re.compile(r"will both teams have (\d+) or more shots on target in the (first|second) half", re.I),
      lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]), half=1 if m[2].lower() == "first" else 2)),
     (re.compile(r"will both teams have (\d+) or more shots on target", re.I),
      lambda m: ParsedQuestion("both_teams_sot_ge", threshold=int(m[1]))),
+    # Final novel kind (2026-07-17): distinct shooters ("5 or more different Spain
+    # players attempt a shot") — occupancy curve over the team-shots pmf (see runner).
+    (re.compile(r"will (\d+) or more different (.+?) players attempt a shot", re.I),
+     lambda m: ParsedQuestion("distinct_shooters_ge", m[2], threshold=int(m[1]))),
     # "any <TEAM> player" is a TEAM-scoped any-player market — without this it parsed as a
     # single unknown player named "any Portugal player" and priced at the flat low prior
     # (15 vs a true ~40): the mis-route class the template audit cannot see (it parses fine).
@@ -132,6 +142,9 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("player_ga", m[1])),
     # --- knockout / derived goal archetypes (recovered from the 2026-06-28 drop audit);
     #     all answerable straight from the (market-anchored) goal grid — see runner.answer ---
+    # Final novel kind (2026-07-17): first goal carries a credited assist; 0-0 -> No.
+    (re.compile(r"will the first goal of the match be credited with an assist", re.I),
+     lambda m: ParsedQuestion("first_goal_assisted")),
     (re.compile(r"will (.+?) score the first goal of the match", re.I),
      lambda m: ParsedQuestion("first_goal_match", m[1])),
     (re.compile(r"will (.+?) win by (\d+) or more goals", re.I),
@@ -228,6 +241,10 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("cards_ge", threshold=int(m[1]), half=1)),
     (re.compile(r"will both teams score and the match have (\d+) or more total goals", re.I),
      lambda m: ParsedQuestion("btts_and_total_ge", threshold=int(m[1]))),
+    # Final novel kind (2026-07-17): penalty SCORED = awarded x taker conversion —
+    # distinct from penalty_awarded, and deliberately NOT crowd-hugged (runner).
+    (re.compile(r"will a penalty kick be scored", re.I),
+     lambda m: ParsedQuestion("pen_scored")),
     (re.compile(r"will a penalty kick be awarded", re.I),
      lambda m: ParsedQuestion("penalty_awarded")),
     (re.compile(r"will an own goal be scored", re.I),
@@ -299,6 +316,11 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
      lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=2)),
     (re.compile(r"will (.+?) have more shots on target than (.+?) in the first half", re.I),
      lambda m: ParsedQuestion("sot_gt", m[1], m[2], half=1)),
+    # Final novel kind (2026-07-17): player-vs-player SoT race ("record more shots on
+    # target than", STRICTLY more — tie settles No). The verb "record" keeps it clear
+    # of the team sot_gt catch-alls, which all use "have more shots on target than".
+    (re.compile(r"will (.+?) record more shots on target than (.+?)\?", re.I),
+     lambda m: ParsedQuestion("player_sot_race", m[1], m[2])),
     # full-match catch-all (mirrors the corners_gt one) — must follow the half-specific
     # patterns above. The knockout "...in regulation (90 minutes + stoppage time)?" suffix is
     # stripped upstream, so this catches "Will X have more shots on target than Y?" which was

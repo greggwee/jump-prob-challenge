@@ -186,3 +186,32 @@ def test_same_half_goals_routes_with_scope():
     q = parse_question("Will either team score 2 or more goals in the same half of "
                        "regulation (90 minutes + stoppage time)?")
     assert q.archetype == "either_team_half_goals_ge" and q.threshold == 2
+
+
+def test_endgame_novel_kinds_route_correctly():
+    """The five final/bronze novel kinds (2026-07-17): each must hit its own archetype,
+    and the neighbours they could shadow must keep routing as before."""
+    q = parse_question("Will each team record 4 or more shots on target in regulation "
+                       "(90 minutes + stoppage time)?")
+    assert q.archetype == "each_team_sot_ge" and q.threshold == 4
+    assert parse_question("Will a penalty kick be scored in regulation (90 minutes + "
+                          "stoppage time)?").archetype == "pen_scored"
+    # ... and the awarded/or-red variants must NOT be stolen by pen_scored
+    assert parse_question("Will a penalty kick be awarded in regulation (90 minutes + "
+                          "stoppage time)?").archetype == "penalty_awarded"
+    assert parse_question("Will a penalty kick be awarded OR a red card be "
+                          "shown?").archetype == "pen_or_red"
+    assert parse_question("Will the first goal of the match be credited with an assist "
+                          "in regulation (90 minutes + stoppage time)? Settles No if the "
+                          "match is 0-0.").archetype == "first_goal_assisted"
+    q = parse_question("Will Lamine Yamal (Spain, #19) record more shots on target than "
+                       "Lionel Messi (Argentina, #10) in regulation (90 minutes + "
+                       "stoppage time)?")
+    assert q.archetype == "player_sot_race"
+    assert q.subject.startswith("Lamine Yamal") and q.other.startswith("Lionel Messi")
+    # ... team SoT comparisons ('have more') must keep routing to sot_gt
+    assert parse_question("Will Spain have more shots on target than Argentina in "
+                          "regulation (90 minutes + stoppage time)?").archetype == "sot_gt"
+    q = parse_question("Will 5 or more different Spain players attempt a shot in "
+                       "regulation (90 minutes + stoppage time)?")
+    assert q.archetype == "distinct_shooters_ge" and q.threshold == 5 and q.subject == "Spain"

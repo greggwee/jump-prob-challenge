@@ -133,3 +133,18 @@ def test_posterior_predictive_widens(engine):
     p_plain = answer(plain.simulate(ea, eb), "win", "a")
     assert p_pp < p_plain  # pulled toward the middle
     assert p_pp > 0.5
+
+
+def test_either_team_half_goals_ge_counts_cells():
+    """Endgame kind (2026-07-17): the same-half team-goals lambda must fire on any
+    (team, half) cell reaching the threshold — verified on a hand-built SimResult."""
+    from jumpprob.simulate.mc_engine import SimResult
+    res = SimResult(
+        score_a=np.array([2, 0, 3, 0]),     # draw 1: 2 in H1(a); draw 3: 2 in H2(a)
+        score_b=np.array([0, 2, 0, 0]),     # draw 2: 1+1 split -> no cell reaches 2
+        ht_a=np.array([2, 0, 1, 0]),
+        ht_b=np.array([0, 1, 0, 0]),
+        first_team=np.zeros(4), first_team_h2=np.zeros(4), counts={},
+    )
+    assert answer(res, "either_team_half_goals_ge", threshold=2) == pytest.approx(0.5)
+    assert answer(res, "either_team_half_goals_ge", threshold=3) == pytest.approx(0.0)

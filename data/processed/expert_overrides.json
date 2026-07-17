@@ -1,1 +1,10 @@
-{}
+{
+  "7bb54c7a-9831-4623-8777-829ffb4a6e65": {
+    "value": 34,
+    "why": "cards_ge 5+ (final): WC26 cards run LOW (realized .300 at 4+/5+ lines, n=30) but the count-Platt up-shift + risk-gate pull toward the stale threshold-blind .525 base ships .41 - quant review MUST-FIX 3; pin 0.33-0.36"
+  },
+  "3c5f085c-7a8e-4d24-8eb8-783c88393d2e": {
+    "value": 42,
+    "why": "offsides_total_ge 5+ (final): leak family (-2.6 RBP/q), crowd calibrated here (family realized .500 at crowd 51.4), and the semi-automated-offside regime postdates our 6-tournament base; model .22->clamp .26 too low - quant review MUST-FIX 4; pin 0.40-0.45"
+  }
+}
