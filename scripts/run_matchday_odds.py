@@ -82,9 +82,22 @@ market_rows = [{**m, "match": m["match"]} for m in all_markets]
 
 # player-prop market anchor (verified live: SoT / scorer / assist). Fetch on a full run;
 # reuse the cached snapshot on a targeted scheduler tick (per-event prop credits add up).
+# --refresh-props (the T-2 tick passes it): targeted top-up for JUST the due matches so the
+# closing submission prices post-LINEUP props — lineups drop ~T-60, after the cached snapshot,
+# and the book reprices star props on rotation news (the bronze risk). Cheap: 1 event/match.
 try:
-    player_props = odds_api.fetch_player_props() if matches_filter is None else odds_api.load_latest_props()
-    print(f"player props: {len(player_props)} fixtures")
+    if matches_filter is not None and "--refresh-props" in sys.argv:
+        from jumpprob.submit.runner import CODE_MAP
+        _pairs = []
+        for _mn in matches_filter:
+            _codes = [t.strip() for t in _mn.split(" vs ")]
+            if len(_codes) == 2:
+                _pairs.append(tuple(canonical(CODE_MAP.get(c, c)) for c in _codes))
+        player_props = odds_api.refresh_props_targeted(_pairs)
+        print(f"player props: targeted refresh {_pairs} -> {len(player_props)} fixtures")
+    else:
+        player_props = odds_api.fetch_player_props() if matches_filter is None else odds_api.load_latest_props()
+        print(f"player props: {len(player_props)} fixtures")
 except Exception as e:
     # same quota/outage resilience as the main odds fetch: cached props before model-only
     try:
@@ -165,6 +178,46 @@ if _ov and _hits is not None and _hits.any():
         _o = _ov[str(_r.market_id)]
         print(f"    {_r.sub_a} -> {_o['value']}  ({_o['why'][:80]}) | {_r.question[:44]}")
         df.loc[df.market_id == _r.market_id, "sub_a"] = int(_o["value"])
+
+# Conditional LINEUP-BRANCH overrides (the T-60 decision tables, made executable):
+# each rule fires only when the WebPanel-confirmed lineup status matches, so pre-staged
+# judgment values ("Kane benched -> substitute-GA up") apply automatically at the T-2
+# closing tick with nobody at the desk. Applied AFTER the static expert overrides so
+# confirmed lineup news wins. Format: [{"player","status","market_id","value","why"}];
+# an absent/empty data/processed/lineup_branch_overrides.json is inert.
+try:
+    _rules = json.loads(Path("data/processed/lineup_branch_overrides.json").read_text())
+except Exception:
+    _rules = []
+if _rules:
+    from jumpprob.ingest.odds_api import norm_player as _np_name
+    try:
+        _lu = json.loads(Path("data/processed/lineup_status.json").read_text())
+    except Exception:
+        _lu = {}
+    _fired = []
+    for _rule in _rules:
+        _ent = _lu.get(_np_name(str(_rule.get("player", ""))))
+        if not _ent:
+            continue
+        _st = str(_ent.get("status", "")).lower().replace("benched", "bench")
+        if _st != str(_rule.get("status", "")).lower().replace("benched", "bench"):
+            continue
+        _ts = _ent.get("ts")
+        try:
+            if _ts and (pd.Timestamp.now(tz="UTC") - pd.Timestamp(_ts)).total_seconds() / 3600.0 > 12.0:
+                continue
+        except Exception:
+            pass
+        _hit = df["market_id"].astype(str) == str(_rule.get("market_id"))
+        if _hit.any():
+            df.loc[_hit, "sub_a"] = int(_rule["value"])
+            _fired.append(_rule)
+    if _fired:
+        print("")
+        print(f"!! LINEUP-BRANCH overrides fired ({len(_fired)}):")
+        for _rule in _fired:
+            print(f"    {_rule['player']} {_rule['status']} -> {_rule['value']}  ({str(_rule.get('why', ''))[:70]})")
 
 # Lineup-status overrides (auto, near-KO): surface any player prop the runner capped for a
 # confirmed benched/out player. Applied inside the runner (already in sub_a); printed here so a

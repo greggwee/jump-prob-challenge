@@ -110,7 +110,8 @@ def main() -> None:
     STATE.write_text(json.dumps(st))
     try:
         r = subprocess.run(
-            [str(PYEXE), "scripts/run_matchday_odds.py", "--live", "--matches", names],
+            [str(PYEXE), "scripts/run_matchday_odds.py", "--live", "--matches", names,
+             "--refresh-props"],   # T-2 = post-lineup: top up props so the book impounds XI news
             cwd=str(ROOT), capture_output=True, text=True, timeout=600,
             creationflags=CREATE_NO_WINDOW,
         )

@@ -469,14 +469,10 @@ class Runner:
         from jumpprob.models import strategy
         return strategy.apply_risk(p, arch, self.risk, self.base_rates)
 
-    def _lineup_override(self, subject: str | None, arch: str, teams) -> tuple[float, str] | None:
-        """Bounded ceiling for a player confirmed benched/out THIS match, else None.
-
-        Reads lineup_status.json (auto-written by the near-KO WebPanel). 'out' -> a hard
-        low ceiling; 'bench' -> an elite-sub ceiling per archetype. Applied as a MIN by the
-        caller, so it only ever lowers a starter-priced prop, never raises one — a bounded,
-        one-sided safety override that beats the book anchor (the pm-guard otherwise drops it).
-        Team-scoped + freshness-gated so a stale flag can't bleed into another match."""
+    def _lineup_flag(self, subject: str | None, teams) -> str | None:
+        """Fresh, team-scoped confirmed lineup status for a player: 'out', 'bench', or
+        None. Reads lineup_status.json (auto-written by the near-KO WebPanel); freshness-
+        gated + team-scoped so a stale flag can't bleed into another match."""
         if not subject or not self.lineup_status:
             return None
         ent = self.lineup_status.get(norm_player(subject))
@@ -494,8 +490,22 @@ class Runner:
             return None
         status = str(ent.get("status", "")).lower()
         if status == "out":
-            return LINEUP_OUT_CEIL, status
-        if status in ("bench", "benched") and arch in LINEUP_BENCH_CAP:
+            return "out"
+        if status in ("bench", "benched"):
+            return "bench"
+        return None
+
+    def _lineup_override(self, subject: str | None, arch: str, teams) -> tuple[float, str] | None:
+        """Bounded ceiling for a player confirmed benched/out THIS match, else None.
+
+        'out' -> a hard low ceiling; 'bench' -> an elite-sub ceiling per archetype.
+        Applied as a MIN by the caller, so it only ever lowers a starter-priced prop,
+        never raises one — a bounded, one-sided safety override that beats the book
+        anchor (the pm-guard otherwise drops it)."""
+        flag = self._lineup_flag(subject, teams)
+        if flag == "out":
+            return LINEUP_OUT_CEIL, "out"
+        if flag == "bench" and arch in LINEUP_BENCH_CAP:
             return LINEUP_BENCH_CAP[arch], "bench"
         return None
 
@@ -1177,16 +1187,26 @@ class Runner:
             from scipy.stats import poisson
             scale = (ctx.lam_a + ctx.lam_b) / (2 * np.exp(self.pl.goal_model.b0))
             ks = np.arange(13)
-            def _race_pmf(name):
+            # Confirmed lineup news re-shapes the race automatically (the WebPanel writes
+            # lineup_status at T-35..80, before the T-2 closing submission): a benched
+            # player races from a ~25' cameo, an out player from zero minutes.
+            flag_s = self._lineup_flag(q.subject, (ctx.team_a, ctx.team_b))
+            flag_o = self._lineup_flag(q.other, (ctx.team_a, ctx.team_b))
+            def _race_pmf(name, flag):
                 key = _norm_name(name.split("(")[0].strip() or name)
                 rate = SOT_RACE_FORM_RATES.get(key)
                 if rate is None:
                     # player_rate already folds the club->intl transfer discount into
                     # its prior — do NOT re-apply it here (double-discount)
                     rate = self.player_rate(name)[0]
-                mix = SOT_RACE_MINUTES.get(key, MINUTE_SCENARIOS)
+                mix = ([(1.0, 0.0)] if flag == "out" else [(1.0, 25.0)] if flag == "bench"
+                       else SOT_RACE_MINUTES.get(key, MINUTE_SCENARIOS))
                 return sum(w * poisson.pmf(ks, rate * scale * m) for w, m in mix)
-            p = p_a_gt_b(_race_pmf(q.subject), _race_pmf(q.other))
+            p = p_a_gt_b(_race_pmf(q.subject, flag_s), _race_pmf(q.other, flag_o))
+            if flag_s or flag_o:
+                # the crowd shrink + floor are PRE-lineup uncertainty guards; with real
+                # news the raw (degenerate) race number is the honest price
+                return float(np.clip(p, 0.02, 0.98))
             p = float(inv_logit((1 - SOT_RACE_CROWD_W) * logit(p)))   # logit(0.5) = 0
             return max(p, SOT_RACE_FLOOR)
         if a == "offsides_ge":
