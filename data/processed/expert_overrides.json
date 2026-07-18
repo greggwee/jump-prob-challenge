@@ -8,8 +8,8 @@
     "why": "offsides_total_ge 5+ (final): leak family (-2.6 RBP/q), crowd calibrated here (family realized .500 at crowd 51.4), and the semi-automated-offside regime postdates our 6-tournament base; model .22->clamp .26 too low - quant review MUST-FIX 4; pin 0.40-0.45"
   },
   "853c4ebf-8f09-4685-9e0c-4e5bc2c4fe6f": {
-    "value": 45,
-    "why": "9+ corners (bronze): WC26 corners run low (settled 9-lines 4/10, KO window 2/7); NegBin at current level gives .29-.40, bronze openness pulls back to 45 vs pipeline 52 - pushback review \u00a74"
+    "value": 40,
+    "why": "9+ corners: operator calibration directive \u2014 price the measured WC26 regime (NegBin re-scale 0.29-0.40; 9-lines 4/10, KO window 2/7), not the bronze-openness story (n=4, corners-goals corr .11). 40 = top of the regime band; -10 vs the ~50 crowd sits in the 5-15pt deviation range that has been +EV in our best-attributed family (total corners +6.3/q)"
   },
   "7fd0a148-7489-452e-8cb5-a6dbb3cdb69b": {
     "value": 23,
