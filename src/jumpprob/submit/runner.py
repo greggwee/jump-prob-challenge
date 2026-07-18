@@ -241,9 +241,12 @@ PEN_SHOOTOUT_SPEN = {"Argentina": 0.55, "Spain": 0.45}  # Martinez-era shootout 
                             # (ARG 5 straight, 4/4 era; ESP 2/6 since 2018): the r-based
                             # tilt is wrong-signed for ARG (quant review §3.1); cap ~+2pts
 # Per-minute form-rate pins for players whose club-table rate is confirmed badly stale
-# (pushback review §3: Dembele table 0.41 GA/90 vs PSG 25-26 ~1.0 / WC26 1.36; pinned at
-# 1.1 x the 0.80 transfer discount). Only fires unanchored — the book prop wins at lock.
-PLAYER_FORM_RATE_OVERRIDES = {("player_ga", "ousmane dembele"): 1.1 * 0.80 / 90.0}
+# (pushback review §3: Dembele table 0.41 GA/90 vs PSG 25-26 ~1.0 / WC26 1.36). Pinned at
+# 0.85 GA/90 x the 0.80 transfer discount — deliberately BELOW raw form so the unanchored
+# number lands ~the book's if-starts price (~.43-.45); the raw 1.1 pin shipped .52, the
+# high-side extreme of a family where the crowd already over-prices (realized .125 at
+# crowd .367). Only fires unanchored — the book prop wins at lock.
+PLAYER_FORM_RATE_OVERRIDES = {("player_ga", "ousmane dembele"): 0.85 * 0.80 / 90.0}
 
 # Event markets our 90-min minute profile can't reach. Stoppage goals scale with the
 # match's scoring (lambda_W = lambda_tot * goal-share); subs are ~fixed base rates.
