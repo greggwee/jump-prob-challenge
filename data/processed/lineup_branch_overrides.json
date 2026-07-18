@@ -12,5 +12,19 @@
     "market_id": "9d4202c3-0df4-4b1f-954c-61082777d0ad",
     "value": 17,
     "why": "pen scored: ESP conv_eff drops toward .75 without the 53/59 career taker on from KO - pushback review T-60 #7"
+  },
+  {
+    "player": "Harry Kane",
+    "status": "bench",
+    "market_id": "f39897c3-9325-4025-94e7-b8af9d036343",
+    "value": 22,
+    "why": "confirmed bench: elite sub ~35min + pen duties + Golden Boot chase (on 6 vs Mbappe 8); generic 0.15 cap too harsh, book bench-Kane ~0.25 \u2014 ship just under"
+  },
+  {
+    "player": "Harry Kane",
+    "status": "bench",
+    "market_id": "a828fc43-7634-4e55-b78b-25fb9c267ac1",
+    "value": 53,
+    "why": "confirmed bench: Kane AND Bellingham both among subs with Boot incentives = strongest sub-scorer pool of the tournament in its openest match; T-60 table top branch"
   }
 ]
