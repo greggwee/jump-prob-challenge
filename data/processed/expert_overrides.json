@@ -14,5 +14,13 @@
   "7fd0a148-7489-452e-8cb5-a6dbb3cdb69b": {
     "value": 23,
     "why": "each team 4+ SoT: CONFIRMED XI \u2014 Kane+Bellingham benched (ENG finishing down) BUT Saka/Rashford/Eze/Toney all start (volume+quality partly held; the 'Saka rested' report was wrong) and FRA field four creators behind Mbappe; 23 between the both-stars-out 22 and pre-lineup 24"
+  },
+  "e9f5d9cd-8e6e-4301-931b-719822c82239": {
+    "value": 42,
+    "why": "goal pre-HB1: early-suppression minute shape is a STAKES artifact \u2014 bronze games start open (dossier mechanism 1) and both XIs attack; 38 sat UNDER a measured-calibrated crowd (template 40.8, realized .400) which the deviation curve punishes; 42 = half-relaxed suppression, +1 over expected crowd"
+  },
+  "fcde9802-5d19-4530-8377-f62b274bfb13": {
+    "value": 26,
+    "why": "any-player brace: population curve is concentration-blind \u2014 Mbappe at full tilt, 4 creators, Boot tied w/ Messi (insurance-goal incentive): Mbappe-aware decomposition ~.26. Deliberately UNDER expected crowd 28-32: crowd over-prices star-scorer events (GA crowd 36.7 vs realized .125; braces 0/4 at crowd 27.5) \u2014 stay on the measured low side"
   }
 }
