@@ -60,7 +60,7 @@ prediction from either bot** (all currently open). Cause: knockout phrasing.
   the earlier [75,90) guess under-predicted — backtest §G.)
 - **Pass 4 (14 → 12):** **advance to Round of 16** = win the R32 tie (incl. ET + penalties), derived
   from the 90-min 1X2 we already anchor + a small ET/shootout model grounded on 839 ET matches & 678
-  shootouts. Coherent (P(A adv)+P(B adv)=1). See `docs/KNOCKOUT-AND-TIMING-ESTIMATION.md`.
+  shootouts. Coherent (P(A adv)+P(B adv)=1). (Derivation in git history: docs/KNOCKOUT-AND-TIMING-ESTIMATION.md.)
 - **Still dropped (12), triaged:**
   - **Count-extendable (~5):** total shots (on+off ≈ SoT/0.37), total offside calls, both-teams-cards.
     *Cheap, but they introduce new no-edge count archetypes that need risk-gate entries to avoid the
