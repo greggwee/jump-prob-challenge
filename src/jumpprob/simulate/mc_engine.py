@@ -190,6 +190,10 @@ def answer(res: SimResult, archetype: str, side: str | None = None,
         "ht_tied": lambda: res.ht_a == res.ht_b,
         "ht_leading": lambda: (res.ht_a > res.ht_b) if side != "b" else (res.ht_b > res.ht_a),
         "half_total_ge": lambda: (sh[half][0] + sh[half][1]) >= threshold,
+        # some (team, half) cell reaches the threshold — the sim carries the full
+        # state-coupled joint, unlike the runner's independent-Poisson fallback
+        "either_team_half_goals_ge": lambda: (sh[1][0] >= threshold) | (sh[1][1] >= threshold)
+                                             | (sh[2][0] >= threshold) | (sh[2][1] >= threshold),
         "h2_more_goals_than_h1": lambda: (h2_a + h2_b) > (res.ht_a + res.ht_b),
         "first_goal_half": lambda: res.first_team_h2 == first_val if half == 2 else _first_h1(res) == first_val,
         "first_goal_and_win": lambda: (res.first_team == first_val) & (s > o),

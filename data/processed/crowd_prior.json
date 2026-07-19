@@ -1,8 +1,8 @@
 {
  "advance": {
-  "n": 12,
-  "mean": 59.9,
-  "std": 15.1
+  "n": 14,
+  "mean": 58.1,
+  "std": 14.7
  },
  "any_player_goals_ge": {
   "n": 4,
@@ -20,9 +20,9 @@
   "std": null
  },
  "both_teams_cards": {
-  "n": 2,
-  "mean": 63.0,
-  "std": 1.4
+  "n": 3,
+  "mean": 64.0,
+  "std": 2.0
  },
  "both_teams_sot_ge": {
   "n": 6,
@@ -30,8 +30,8 @@
   "std": 4.6
  },
  "btts": {
-  "n": 13,
-  "mean": 50.8,
+  "n": 14,
+  "mean": 51.4,
   "std": 7.2
  },
  "btts_and_total_ge": {
@@ -50,9 +50,9 @@
   "std": null
  },
  "cards_ge": {
-  "n": 31,
+  "n": 32,
   "mean": 44.9,
-  "std": 6.8
+  "std": 6.7
  },
  "cards_gt": {
   "n": 6,
@@ -80,9 +80,9 @@
   "std": null
  },
  "corners_gt": {
-  "n": 14,
-  "mean": 45.7,
-  "std": 15.2
+  "n": 15,
+  "mean": 45.6,
+  "std": 14.6
  },
  "corners_pre_hb1": {
   "n": 1,
@@ -90,9 +90,9 @@
   "std": null
  },
  "corners_total_ge": {
-  "n": 6,
-  "mean": 50.5,
-  "std": 2.4
+  "n": 7,
+  "mean": 49.7,
+  "std": 3.0
  },
  "draw": {
   "n": 2,
@@ -100,14 +100,14 @@
   "std": 0.7
  },
  "extra_time": {
-  "n": 1,
-  "mean": 32.0,
-  "std": null
+  "n": 2,
+  "mean": 33.0,
+  "std": 1.4
  },
  "first_card_before_goal": {
-  "n": 1,
-  "mean": 50.0,
-  "std": null
+  "n": 2,
+  "mean": 49.5,
+  "std": 0.7
  },
  "first_goal_2h": {
   "n": 1,
@@ -129,6 +129,16 @@
   "mean": 61.4,
   "std": 14.2
  },
+ "first_goal_single_digit": {
+  "n": 1,
+  "mean": 35.0,
+  "std": null
+ },
+ "first_sub_team": {
+  "n": 1,
+  "mean": 54.0,
+  "std": null
+ },
  "fouls_gt": {
   "n": 22,
   "mean": 55.1,
@@ -144,10 +154,15 @@
   "mean": 25.0,
   "std": null
  },
- "goal_each_half": {
+ "goal_between_hbs": {
   "n": 1,
-  "mean": 55.0,
+  "mean": 61.0,
   "std": null
+ },
+ "goal_each_half": {
+  "n": 2,
+  "mean": 53.0,
+  "std": 2.8
  },
  "goal_outside_box": {
   "n": 1,
@@ -160,9 +175,14 @@
   "std": 1.5
  },
  "goal_pre_hb1": {
-  "n": 9,
-  "mean": 41.1,
-  "std": 4.8
+  "n": 10,
+  "mean": 40.8,
+  "std": 4.6
+ },
+ "goal_stoppage": {
+  "n": 1,
+  "mean": 34.0,
+  "std": null
  },
  "goals_gt_half": {
   "n": 2,
@@ -185,9 +205,9 @@
   "std": 0.7
  },
  "ht_leading": {
-  "n": 9,
-  "mean": 48.7,
-  "std": 9.1
+  "n": 10,
+  "mean": 47.3,
+  "std": 9.6
  },
  "ht_scoreless": {
   "n": 1,
@@ -220,9 +240,9 @@
   "std": 3.5
  },
  "offsides_total_ge": {
-  "n": 7,
-  "mean": 51.6,
-  "std": 5.6
+  "n": 8,
+  "mean": 51.4,
+  "std": 5.2
  },
  "own_goal": {
   "n": 1,
@@ -240,14 +260,14 @@
   "std": 1.2
  },
  "penalty_awarded": {
-  "n": 4,
-  "mean": 28.5,
-  "std": 3.1
+  "n": 5,
+  "mean": 29.4,
+  "std": 3.4
  },
  "player_ga": {
-  "n": 30,
-  "mean": 36.3,
-  "std": 8.9
+  "n": 32,
+  "mean": 36.7,
+  "std": 8.8
  },
  "player_saves_ge": {
   "n": 1,
@@ -255,14 +275,14 @@
   "std": null
  },
  "player_scores": {
-  "n": 36,
-  "mean": 38.1,
-  "std": 10.9
+  "n": 39,
+  "mean": 38.8,
+  "std": 10.8
  },
  "player_sot_ge": {
-  "n": 65,
-  "mean": 45.9,
-  "std": 10.2
+  "n": 66,
+  "mean": 46.1,
+  "std": 10.3
  },
  "plays_full_match": {
   "n": 1,
@@ -315,9 +335,9 @@
   "std": 9.7
  },
  "team_goals_ge": {
-  "n": 6,
-  "mean": 46.0,
-  "std": 5.4
+  "n": 7,
+  "mean": 45.0,
+  "std": 5.6
  },
  "team_scores_half": {
   "n": 15,
@@ -325,9 +345,9 @@
   "std": 10.8
  },
  "team_sot_ge": {
-  "n": 33,
-  "mean": 48.2,
-  "std": 9.3
+  "n": 35,
+  "mean": 48.8,
+  "std": 9.5
  },
  "total_exact": {
   "n": 2,
@@ -335,9 +355,9 @@
   "std": 1.4
  },
  "total_ge": {
-  "n": 16,
-  "mean": 51.1,
-  "std": 4.7
+  "n": 17,
+  "mean": 51.2,
+  "std": 4.6
  },
  "total_le": {
   "n": 12,
@@ -350,14 +370,19 @@
   "std": 5.1
  },
  "total_sot_ge": {
-  "n": 3,
-  "mean": 62.3,
-  "std": 7.1
+  "n": 4,
+  "mean": 61.0,
+  "std": 6.4
  },
  "total_sot_half_ge": {
   "n": 6,
   "mean": 61.8,
   "std": 3.7
+ },
+ "var_ofr": {
+  "n": 1,
+  "mean": 42.0,
+  "std": null
  },
  "win": {
   "n": 34,
