@@ -2,32 +2,43 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-data/raw/
-data/cache/
 *.egg-info/
 .env
 
-# runtime state & logs (regenerated live; some contain our live predictions)
+# Raw feeds — large, re-fetchable via scripts/fetch_data.py and fetch_events.py
+data/raw/
+data/cache/
+
+# Logs and submission records
+data/*.log
+data/*.txt
 data/submissions/
-data/scheduler.log
-data/learning.log
-data/processed/scheduler_state.json
+
+# Runtime state: rewritten every scheduler tick or pricing pass
+data/processed/scheduler_state*.json
 data/processed/api_snapshot.json
+data/processed/lineup_status.json
+data/processed/matchday_predictions.csv
+data/processed/odds_anchor_run.csv
+data/processed/gigabot2_plan.csv
+data/processed/bot_b_manual.csv
+
+# Append-only audit ledgers (evidence of past runs, regenerated as new ones happen)
 data/processed/clv_ledger.csv
 data/processed/clv_analysis.csv
-data/*.txt
-data/*.log
+data/processed/divergence_audit.csv
+data/processed/template_audit.csv
+data/processed/coverage_unresolved.csv
+data/processed/shadow_decalib_ledger.csv
+data/processed/shadow_v2.csv
+data/processed/blend_fit.csv
+data/processed/master_eval.parquet
 
-# LLM expert panel — slate-specific, non-deterministic caches (regenerated per slate)
+# LLM panel caches — slate-specific and non-deterministic
 data/processed/ai_panel*.json
-# Tier-3 web pass: runtime state + forward-test ledger
 data/processed/ai_panel_web_state.json
 data/processed/ai_panel_web_ledger.csv
 
-# operational audit ledgers + analysis artifacts (regenerable / append-only runtime state)
-data/processed/divergence_audit.csv
-data/processed/template_audit.csv
-data/processed/master_eval.parquet
-data/processed/gigabot2_plan.csv
-data/processed/scheduler_state_b.json
-data/processed/lineup_status.json
+# Manual overrides — per-match judgement pins, keyed by that slate's market IDs
+data/processed/expert_overrides.json
+data/processed/lineup_branch_overrides.json

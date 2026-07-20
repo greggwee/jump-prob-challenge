@@ -53,7 +53,7 @@ def test_reduction_to_independent_grid():
 def test_lambda_override_matches_analytic_grid():
     """simulate(lam=...) bypasses Elo and uses the given intensities exactly —
     uncoupled marginals must match dc_grid(la, lb, 0) (used for odds-anchored
-    timing markets, rec #3)."""
+    timing markets)."""
     eng = MCEngine(GM, None, make_dynamics(), n_draws=400_000, coupled=False,
                    frailty=False, seed=8)
     la, lb = 1.85, 0.95

@@ -161,7 +161,8 @@ def test_player_prop_anchor_weight_near_book():
     the submission must land within ~1.5 pts of the book, not 5+ below it."""
     import pandas as pd
     from jumpprob.pipeline import Pipeline
-    from jumpprob.submit.runner import Runner, PLAYER_MODEL_FRAC
+    from jumpprob.submit.constants import PLAYER_MODEL_FRAC
+    from jumpprob.submit.runner import Runner
     from jumpprob.normalize.teams import canonical
     from jumpprob.ingest.odds_api import norm_player
 
@@ -184,8 +185,9 @@ def test_player_prop_crowd_lift():
     (CLV) pass stays pure book — and skipped for props already priced high (no crowd headroom)."""
     import pandas as pd
     from jumpprob.pipeline import Pipeline
-    from jumpprob.submit.runner import (Runner, PLAYER_CROWD_LIFT, PLAYER_CROWD_LIFT_CAP,
-                                        PLAYER_CROWD_LIFT_CEIL)
+    from jumpprob.submit.constants import (PLAYER_CROWD_LIFT, PLAYER_CROWD_LIFT_CAP,
+                                           PLAYER_CROWD_LIFT_CEIL)
+    from jumpprob.submit.runner import Runner
     from jumpprob.normalize.teams import canonical
     from jumpprob.ingest.odds_api import norm_player
     r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
@@ -258,7 +260,8 @@ def test_lineup_status_override():
     import pandas as pd
     from datetime import datetime, timezone
     from jumpprob.pipeline import Pipeline
-    from jumpprob.submit.runner import Runner, LINEUP_OUT_CEIL, LINEUP_BENCH_CAP
+    from jumpprob.submit.constants import LINEUP_OUT_CEIL, LINEUP_BENCH_CAP
+    from jumpprob.submit.runner import Runner
     from jumpprob.normalize.teams import canonical
     from jumpprob.ingest.odds_api import norm_player
     r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
@@ -576,7 +579,7 @@ def test_hydration_window_markets():
     import numpy as np
     from pathlib import Path
     from jumpprob.models.dynamics import Dynamics, BUCKET
-    from jumpprob.submit.runner import _WINDOW
+    from jumpprob.submit.constants import WINDOW
     for text, arch in [
         ("Will a goal be scored before the first hydration break?", "goal_pre_hb1"),
         ("Will a goal be scored after the second hydration break in regulation (90 minutes + stoppage time)?",
@@ -588,7 +591,7 @@ def test_hydration_window_markets():
         q = parse_question(text)
         assert q is not None and q.archetype == arch, text
     dyn = Dynamics.from_json(Path("data/processed/minute_dynamics.json"))
-    for arch, (fam, lo, hi) in _WINDOW.items():
+    for arch, (fam, lo, hi) in WINDOW.items():
         w = np.exp(np.asarray(dyn.alpha[fam])[BUCKET])
         frac = float(w[lo:hi].sum() / w.sum())
         assert 0.0 < frac < 1.0, arch          # a real probability mass, not all/none
@@ -794,7 +797,8 @@ def test_r16_review_ship_now_fixes():
     bypasses HALF-scoped questions (its bases are full-match quantities)."""
     import pandas as pd
     from jumpprob.pipeline import Pipeline
-    from jumpprob.submit.runner import Runner, GOAL_ARCHS
+    from jumpprob.submit.constants import GOAL_ARCHS
+    from jumpprob.submit.runner import Runner
     for a in ("pen_shootout", "total_exact", "goal_each_half", "leads_at_any_point"):
         assert a in GOAL_ARCHS, a
     r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
@@ -821,7 +825,7 @@ def test_r16_review_ship_now_fixes():
 
 
 def test_qf_templates_price_sanely():
-    """The 5 QF templates (docs/QF-TEMPLATES-PLAN.md): extra_time == grid draw mass;
+    """Five quarter-final templates: extra_time == grid draw mass;
     halves-equal in the validated band; the subs mixture reflects the ET-censoring fetch
     (~.54 at even-tie P(ET), NOT the naive non-ET .746); saves monotone in threshold; the
     card race prices inside the sane band (below the naive constant-rate ~.58)."""
@@ -853,7 +857,8 @@ def test_sf_novel_kinds_price_sanely():
     trailer; VAR on-field review = measured monitor-review base + ET exposure."""
     import pandas as pd
     from jumpprob.pipeline import Pipeline
-    from jumpprob.submit.runner import Runner, SINGLE_DIGIT_FIRST_SHARE
+    from jumpprob.submit.constants import SINGLE_DIGIT_FIRST_SHARE
+    from jumpprob.submit.runner import Runner
     from jumpprob.submit.parser import parse_question
     r = Runner(Pipeline(), pd.read_parquet("data/processed/player_match.parquet"), mc=None)
     even, lop = r.context("France", "Spain"), r.context("Brazil", "Haiti")

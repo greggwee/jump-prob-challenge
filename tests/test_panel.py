@@ -1,4 +1,4 @@
-"""Phase L0: routing, robust aggregation, cache I/O, and the gated blend.
+"""Routing, robust aggregation, cache I/O, and the gated blend.
 
 The load-bearing invariant under test: at the default env (all role weights 0),
 apply_expert returns the model probability UNCHANGED for every action — so live

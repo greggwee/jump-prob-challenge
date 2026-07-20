@@ -72,11 +72,11 @@ _PATTERNS: list[tuple[re.Pattern, callable]] = [
     # prop; _PLAYER_TO_TEAM re-routes to team_sot_ge when the subject is one of the teams.
     # "At halftime, ..." prefix = FIRST-HALF scope. Without these, the halftime phrasing
     # fell to the no-half patterns and priced as FULL-MATCH (~.88 vs ~.60 truth) — the
-    # single worst category on the platform (-7.8 RBP; adversarial review 2026-07-05 §1.1).
+    # single worst category on the platform, at -7.8 points.
     # Endgame novel kind (2026-07-17): "each team record N+ SoT" is a both-teams AND,
     # but routed to its OWN archetype: both_teams_sot_ge sits in the risk gate and under
     # a threshold-blind crowd template fit at the 1+ line — at thr=4 that stack ships
-    # ~0.56 on a ~0.20 event (quant review §3.5-a). The new archetype prices clean.
+    # ~0.56 on a ~0.20 event. The separate archetype prices it clean.
     (re.compile(r"will each team record (\d+) or more shots? on target", re.I),
      lambda m: ParsedQuestion("each_team_sot_ge", threshold=int(m[1]))),
     (re.compile(r"at halftime, will both teams have (?:at least (\d+)|(\d+) or more) shots? on target", re.I),

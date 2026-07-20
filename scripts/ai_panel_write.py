@@ -1,4 +1,4 @@
-"""Phase L0 — run the multi-model panel over the prep file and CACHE it.
+"""Run the multi-model panel over the prep file and CACHE it.
 
 Reads data/processed/ai_panel_prep.json, polls the curated panel per item (out of
 band, threaded over models), robust-combines (trim-median in log-odds), and writes

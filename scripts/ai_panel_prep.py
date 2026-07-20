@@ -1,4 +1,4 @@
-"""Phase L0 — assemble the out-of-band panel INPUT for a slate.
+"""Assemble the out-of-band panel INPUT for a slate.
 
 Reads a source of (market_id, question, archetype, our_p) rows, attaches the
 history grounding for player props, and writes data/processed/ai_panel_prep.json.
@@ -38,7 +38,7 @@ def _match_data(match: str) -> dict | None:
     try:
         from jumpprob.normalize.teams import canonical
         from jumpprob.pipeline import Pipeline
-        from jumpprob.submit.runner import CODE_MAP
+        from jumpprob.submit.constants import CODE_MAP
         if _PIPE is None:
             _PIPE = Pipeline()
         a, b = [canonical(CODE_MAP.get(t.strip(), t.strip())) for t in match.split(" vs ")]

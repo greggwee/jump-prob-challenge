@@ -1,4 +1,4 @@
-"""Phase L2 Tier-3 — near-kickoff WEB-SEARCH pass for the imminent match.
+"""Near-kickoff WEB-SEARCH pass for the imminent match.
 
 ~T-60 (when lineups publish) this refreshes ONLY the gated player props
 (player_ga / player_sot_ge) of a match about to kick off, using a web-search
@@ -36,7 +36,7 @@ from jumpprob.ingest.odds_api import norm_player
 from jumpprob.normalize.teams import canonical
 from jumpprob.submit.api_client import SportsPredictClient
 from jumpprob.submit.parser import parse_question
-from jumpprob.submit.runner import CODE_MAP
+from jumpprob.submit.constants import CODE_MAP
 
 
 def _name_to_pair(name: str) -> tuple[str, str] | None:

@@ -1,4 +1,4 @@
-"""Tests for evidence-gated extremizing (rec #2)."""
+"""Tests for evidence-gated extremizing."""
 
 import pytest
 

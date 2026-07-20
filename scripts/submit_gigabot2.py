@@ -30,7 +30,8 @@ from jumpprob.models.dynamics import Dynamics
 from jumpprob.pipeline import Pipeline
 from jumpprob.simulate.mc_engine import MCEngine
 from jumpprob.submit.api_client import SportsPredictClient
-from jumpprob.submit.runner import COUNT_ARCHS, PLAYER_ARCHS, TIMING_ARCHS, Runner
+from jumpprob.submit.constants import COUNT_ARCHS, PLAYER_ARCHS, TIMING_ARCHS
+from jumpprob.submit.runner import Runner
 
 EVENT = "aa5572ec-5930-4d99-b06b-f8966333d172"
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
@@ -43,7 +44,7 @@ LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
 TIER_A = {  # sharpest edge -> extremize hardest (k=3.0, cap 3/97)
     # market-anchored goal markets: matching the sharp line beats the field; push the favourite
     "win", "draw", "btts", "total_ge", "total_le", "team_goals_ge",
-    # knockout recoveries with validated OOS skill (backtest_recovered +.03-.05 Brier)
+    # knockout recoveries with validated out-of-sample skill (+.03-.05 Brier)
     "first_goal_match", "win_margin", "clean_sheet", "score_both_halves",
     # half-state goal markets off the (anchored) grid + proven-edge SoT
     "ht_leading", "team_scores_half", "goals_gt_half", "first_goal_half",

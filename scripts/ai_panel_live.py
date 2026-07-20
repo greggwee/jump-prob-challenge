@@ -1,4 +1,4 @@
-"""Phase L2 live op — generate the expert panel for the IMMINENT slate, out of band.
+"""Live op — generate the expert panel for the IMMINENT slate, out of band.
 
 Budget-aware: finds matches with open markets kicking off within --within-hours,
 refreshes the model numbers for just those (run_matchday_odds dry --matches), preps

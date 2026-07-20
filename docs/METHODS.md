@@ -524,7 +524,7 @@ $\hat r \approx r_0$, i.e. we price every uncovered striker identically. That is
 "Kubo failure mode," and it is *exactly* where the settled review (§13) finds our
 biggest player-prop bleeds. So the gating metric is the **coverage hole**: the
 fraction of players appearing in actual prop markets with no rate. The census
-(`scripts/coverage_census.py` → `broad_rates.py`) measured it at **44% with
+(`scripts/broad_rates.py`) measured it at **44% with
 Understat alone, cut to 16% after API-Football** — the difference is the leverage to
 even *attempt* a calibrated player-prop number rather than a base-rate guess.
 
@@ -899,7 +899,7 @@ Theory is cheap; the contest is settling questions. As of the last review,
 leaderboard/stats endpoint 500s — `audit_field_api.py`), so the per-question
 analysis below estimates relative points with the *same* field proxy the live
 extremizer uses (§12.5: belief shrunk toward 50 by per-family sharpness $\lambda$).
-Reproduce with `scripts/review_settled.py`.
+
 
 > **Reality check from the website (2026-06-19).** The platform front-end
 > (`play.sportspredict.com`, behind login — the React app reads `/api/probability/*`,
