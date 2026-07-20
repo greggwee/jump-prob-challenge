@@ -1,4 +1,4 @@
-"""Compute base rates + the confirmed-edge gate that drives extremizing (rec #2).
+"""Compute base rates and the confirmed-edge gate that drives extremizing.
 
 Base rates per archetype (the field proxy for no-line markets) come from the
 backtests. The edge gate asks, per archetype FAMILY, on SETTLED LIVE questions:
@@ -18,7 +18,7 @@ import pandas as pd
 
 from jumpprob.models.strategy import field_model, load_field_sharpness
 from jumpprob.submit.api_client import SportsPredictClient
-from jumpprob.submit.runner import COUNT_ARCHS, PLAYER_ARCHS, TIMING_ARCHS
+from jumpprob.submit.constants import COUNT_ARCHS, PLAYER_ARCHS, TIMING_ARCHS
 
 PROC = Path("data/processed")
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"

@@ -1,12 +1,12 @@
 """Phase 1b: shrink the coverage hole with API-Football broad-league rates.
 
-Takes the players Understat could not cover (the hole from coverage_census.py),
+Takes the players Understat could not cover,
 fetches their club season via API-Football (~1 request each — budget-safe), merges
 with the Understat rates into one player_rates table, and re-runs the census to
 measure the NEW hole. Writes player_rates_combined.parquet (the table the player
 model joins against) and prints which players were rescued and which remain.
 
-Requires API_FOOTBALL_KEY in .env. Run after coverage_census.py.
+Requires API_FOOTBALL_KEY in .env. Run after the Understat ingest.
 """
 
 import pandas as pd

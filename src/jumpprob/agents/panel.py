@@ -5,7 +5,7 @@ never calls an LLM: the panel is produced OUT OF BAND
 (scripts/ai_panel_prep.py -> scripts/ai_panel_write.py -> data/processed/ai_panel.json)
 and this module only reads that cache and applies a gated, per-archetype blend.
 
-Invariants (mirror docs/LLM-EXPERT-PLAN.md §3 — these never bend):
+Invariants (these never bend):
   * EXCLUDE archetypes (market-priced / sharp) never consult the panel.
   * SHADOW archetypes (proven edge) are logged but NEVER blended, even after a
     role weight is flipped on — they are protected.
@@ -13,8 +13,8 @@ Invariants (mirror docs/LLM-EXPERT-PLAN.md §3 — these never bend):
   * Cache miss or stale entry -> pure model (fallback-safe).
   * Default state (all weights 0) -> submissions are byte-for-byte unchanged.
 
-Routing uses the REAL parser archetype strings (verified 2026-06-20 against
-jumpprob.submit.parser); friendly names live in the plan doc, not here.
+Routing keys are the parser's own archetype strings, not friendly names, so a
+renamed archetype fails loudly here rather than silently skipping the panel.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ PANEL_PATH = Path("data/processed/ai_panel.json")
 
 EXCLUDE, SHADOW, BLEND, BLEND_CAPPED = "exclude", "shadow", "blend", "blend_capped"
 
-# archetype -> (role, action). See docs/LLM-EXPERT-PLAN.md §4.
+# archetype -> (role, action).
 #   exclude       : market-priced / sharp — the LLM must never move it.
 #   shadow        : we have validated OOS edge — log the expert, never blend.
 #   blend         : weak / no-edge / model-blind — blend at the role weight.
@@ -150,7 +150,7 @@ def expert_enabled() -> bool:
 
 
 def load_gate(path: Path = GATE_PATH) -> dict:
-    """Per-archetype blend config fitted in Phase L2 (scripts/fit_expert_gate.py):
+    """Per-archetype blend config, fitted by scripts/fit_expert_gate.py:
         {archetype: {"mode": "blend", "w": 0.5}}                 symmetric log-odds blend
         {archetype: {"mode": "asym_floor", "f": 0.5}}           one-sided ensemble floor
     Missing file -> {} -> every blendable archetype stays shadow (no-op)."""

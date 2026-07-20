@@ -1,4 +1,4 @@
-"""Phase L2 — fit the per-archetype expert gate -> data/processed/expert_gate.json.
+"""Fit the per-archetype expert gate -> data/processed/expert_gate.json.
 
 For each blendable archetype, pick the blend parameter by honest leave-one-MATCH-out
 CV with a PARSIMONY rule (the smallest param within GATE_EPS of the best OOS Brier --

@@ -13,6 +13,16 @@ import re
 import unicodedata
 
 
+def ascii_lower(name: str) -> str:
+    """Accent-stripped lowercase, preserving punctuation and word breaks.
+
+    Deliberately weaker than :func:`fold_name`: the player-rate tables are keyed
+    on this form, and it is used for substring token matching where keeping
+    hyphens and apostrophes intact is what makes the match specific.
+    """
+    return unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode().lower()
+
+
 def fold_name(name: str) -> str:
     """Accent-, punctuation-, case-insensitive normal form. Hyphens -> spaces so
     'Heung-min' and 'Heung min' tokenise identically."""

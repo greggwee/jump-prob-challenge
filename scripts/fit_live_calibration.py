@@ -1,4 +1,4 @@
-"""Fit per-family Platt calibration for the LIVE submission path (rec #1).
+"""Fit per-family Platt calibration for the live submission path.
 
 Calibration is a model-family property (count models share an overconfidence
 profile, players another), and per-archetype samples are thin — so we POOL by

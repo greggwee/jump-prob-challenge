@@ -1,8 +1,8 @@
 {
  "premium": {
   "player_scores": 0.041,
-  "player_ga": 0.003,
-  "player_sot_ge": 0.074
+  "player_sot_ge": 0.074,
+  "player_ga": 0.003
  },
  "n": 87,
  "pooled": 0.046

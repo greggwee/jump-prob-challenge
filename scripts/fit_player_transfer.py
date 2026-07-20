@@ -12,7 +12,8 @@ import pandas as pd
 
 from jumpprob.pipeline import Pipeline
 from jumpprob.submit.parser import parse_question
-from jumpprob.submit.runner import H1, H2, MINUTE_SCENARIOS, Runner
+from jumpprob.submit.constants import H1, H2, MINUTE_SCENARIOS
+from jumpprob.submit.runner import Runner
 
 ARCHS = ["player_sot_ge", "player_ga", "player_scores"]
 
@@ -32,9 +33,10 @@ def main():
         saved = runner.club_idx
         if not use_club:
             runner.club_idx = None
-        rs, rg, rga = runner.player_rate(subj)
+        rates = runner.player_rate(subj)
         runner.club_idx = saved
-        rate = {"player_sot_ge": rs, "player_scores": rg, "player_ga": rga}[arch]
+        rate = {"player_sot_ge": rates.sot, "player_scores": rates.goal,
+                "player_ga": rates.ga}[arch]
         share = H2 if half == 2 else H1 if half == 1 else 1.0
         return float(sum(w * (1 - np.exp(-rate * share * m)) for w, m in MINUTE_SCENARIOS))
 

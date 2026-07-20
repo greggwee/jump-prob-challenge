@@ -1,4 +1,4 @@
-"""Phase L0: the out-of-band expert caller — pure parts (no live API call).
+"""The out-of-band expert caller — pure parts (no live API call).
 
 The live call path was verified manually (Gyokeres SoT 0.11 -> 0.44). Here we
 test the prompt construction, the Pydantic schema, and graceful degradation when

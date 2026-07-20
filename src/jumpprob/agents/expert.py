@@ -36,7 +36,7 @@ from jumpprob.submit.env import load_dotenv
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search"}
 
 # Curated multi-MODEL panel (model diversity > prompt diversity). Anthropic-only
-# today; cross-provider is additive (see plan §7). Haiku may end up shadow once
+# today; cross-provider is additive. Haiku may end up shadow once
 # the L1 forward-test scores each model — our data decides, not a leaderboard.
 PANEL = ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
 LINEUP_PANEL = ["claude-opus-4-8", "claude-sonnet-4-6"]  # props fan out 2-wide (cost)

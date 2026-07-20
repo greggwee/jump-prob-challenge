@@ -62,7 +62,7 @@ def test_every_statsbomb_team_resolves(results, sb_matches):
 
 
 def test_statsbomb_scores_agree_with_martj42(results, sb_matches):
-    """Cross-validation between independent sources (plan §4.1): for WC 2022
+    """Cross-validation between independent sources: for WC 2022
     group-stage matches, scores must agree exactly after name resolution.
     Knockouts excluded: martj42 records 90'/120' conventions differ."""
     wc = sb_matches[(sb_matches.tournament == "wc2022") & (sb_matches.stage == "Group Stage")].copy()

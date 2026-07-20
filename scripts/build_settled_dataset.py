@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from jumpprob.submit.api_client import SportsPredictClient
-from jumpprob.submit.runner import COUNT_ARCHS, GOAL_ARCHS, PLAYER_ARCHS, TIMING_ARCHS
+from jumpprob.submit.constants import COUNT_ARCHS, GOAL_ARCHS, PLAYER_ARCHS, TIMING_ARCHS
 
 LOBBY = "8df8038c-fd2c-4a5f-be4e-0e11d5966c05"
 pd.set_option("display.width", 200)
