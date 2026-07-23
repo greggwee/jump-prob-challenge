@@ -1,12 +1,28 @@
 # jump-prob-challenge
 
-A forecasting system built to compete in the **Jump Trading Probability Cup**, a prediction contest run on SportsPredict over the 2026 World Cup. Before each match the platform posts a slate of binary questions — *Will Brazil win? Will Mbappé manage two shots on target? Will a goal be scored before the first hydration break?* — and entrants submit a probability for each one.
+A fully-automated forecasting system for the **Jump Trading Probability Cup**, the prediction contest SportsPredict ran over the 2026 World Cup. It priced and submitted its own answer to every question on every match, with no human at the desk.
 
-This repository prices those questions without a human at the desk. It ingests football data, fits models, anchors them to bookmaker odds, walks each answer through a stack of calibration and safety layers, and submits through the contest API on a schedule, including a final pass on the closing line roughly two minutes before a match locks.
+## Where it finished
 
-Two bots ran off this code. **gigabot1** is the calibration-first entrant; **gigabot2** is an experimental rank-chaser that takes more risk where we had measured an edge.
+**67th of 4,013 entrants — the top 1.7% — and 16th of 498 in the bot category.** On the platform's own analytics it beat the crowd by **+3.2 relative Brier points per forecast**, better than 84% of all forecasters, and its calibration was rated **elite** across 1,169 settled questions.
 
-**It finished 67th of 4,013 entrants, and 16th of 498 in the bot category** — the top 1.7% overall. Along the way the platform's own analytics put it at +2.7 relative Brier points per forecast against the crowd, better than 80% of forecasters, with a calibration rating of "elite". The contest rules are reproduced in [brief.md](brief.md).
+**Global leaderboard — 67th of 4,013**
+
+![Global leaderboard: gigabot1 in 67th place of 4,013 entrants](docs/jump_global_ranking.png)
+
+**Bot leaderboard — 16th of 498**
+
+![Bot leaderboard: gigabot1 in 16th place of 498 bots](docs/jump_bot_ranking.png)
+
+**Performance summary — +3.2 against the crowd, elite calibration**
+
+![Performance summary: +3.2 relative Brier points versus the crowd, better than 84% of forecasters, 1,169 forecasts settled, and a calibration curve that tracks the diagonal](docs/jump_performance.png)
+
+---
+
+Before each match the platform posts a slate of binary questions — *Will Brazil win? Will Mbappé manage two shots on target? Will a goal be scored before the first hydration break?* — and entrants submit a probability for each one. This repository prices those questions end to end: it ingests football data, fits models, anchors them to bookmaker odds, walks each answer through a stack of calibration and safety layers, and submits through the contest API on a schedule, including a final pass on the closing line roughly two minutes before a match locks.
+
+Two bots ran off this code. **gigabot1** — the entry ranked above — is the calibration-first bot; **gigabot2** is an experimental rank-chaser that takes more risk where we had measured an edge. The contest rules are reproduced in [brief.md](brief.md).
 
 ## The insight the whole system rests on
 
