@@ -21,10 +21,16 @@ The story has three acts:
 Part 4 reviews the results honestly. Part 5 is a drill of likely interview questions
 with short answers. Part 6 is a one-page cheat sheet of numbers.
 
+**If your interview is soon, read [Start here](#start-here--the-pitch-and-the-probe-ladder)
+first.** It is a spoken pitch, followed by every term the pitch uses, each taken through
+the four questions an interviewer asks. Each card points to the section with the full
+derivation.
+
 ---
 
 ## Contents
 
+- [Start here — the pitch and the probe ladder](#start-here--the-pitch-and-the-probe-ladder)
 - [Part 0 — Notation](#part-0--notation)
 - [Part 1 — The objective: relative Brier](#part-1--the-objective-relative-brier)
 - [Part 2 — Group stage: calibrate to the market, build the machinery](#part-2--group-stage-calibrate-to-the-market-build-the-machinery)
@@ -43,6 +49,588 @@ with short answers. Part 6 is a one-page cheat sheet of numbers.
 | Jun 28 – Jul 3 | round of 32 (2× stakes) | market-first rewrite; drop audit 56 → 0; player props anchored to book lines; crowd-proxy clamp; fouls and offsides pinned flat |
 | Jul 4–11 | R16 and QF (2×) | new question templates built from existing pieces; crowd lift on player props; lineup overrides; endgame variance dial (off by default) |
 | Jul 14–19 | SF, bronze (2×), final (3×) | final-round templates; staged lineup-conditional rules; stayed honest |
+
+---
+
+## Start here — the pitch and the probe ladder
+
+An interviewer who doesn't know this project won't ask you to derive things from
+scratch. They'll listen to your story, pick a term you used ("you de-vigged the odds?"),
+and dig until they find where your understanding stops. This section is built for that:
+a pitch you can say out loud, then a card for every term the pitch uses.
+
+### The probe ladder
+
+| rung | the interviewer asks | a strong answer has |
+|---|---|---|
+| 1. What | "What is that, exactly?" | a one-sentence plain definition, then the formula if asked |
+| 2. Why | "Why that, and not the obvious alternative?" | the alternative named, and the reason it loses |
+| 3. Assumes | "What does it assume? When does it break?" | the assumption, a case where it failed, and what you did about it |
+| 4. Evidence | "How do you know it worked?" | a number: a backtest, a validation, a before and after |
+
+Three rules for the room:
+
+- **Only use a term you can take up all four rungs.** Everything in your pitch is fair
+  game. Every term in the pitch below has a card.
+- **Say numbers, with units.** "It cost 84 points at 2×" beats "I lost a lot."
+- **Name the weak point before they find it.** "This test was partly circular, and
+  here's how I replaced it" shows more understanding than a story with no flaws.
+
+### The pitch (about 2½ minutes spoken)
+
+> "The Jump Probability Cup ran over the 2026 World Cup. For every match, the platform
+> posted 15 to 25 yes/no questions: will Spain win, will Mbappé have two shots on
+> target, will there be a goal before the first hydration break. You submit a
+> probability for each. I built a fully automated bot that priced and submitted every
+> question. It finished 67th of about 4,000 entrants and 16th of about 500 bots, and its
+> calibration was rated elite.
+>
+> **Phase one was understanding the objective.** Scoring was relative Brier: your Brier
+> score against the average forecaster's, times a multiplier that was 2× in the
+> knockouts and 3× in the final. Two things followed. First, the baseline is the
+> *average of individual* Brier scores. By Jensen's inequality, that is worse than the
+> consensus forecast's Brier by the crowd's dispersion, so being as good as the consensus
+> already earns points. Second, the payoff is asymmetric. Your upside on a question is
+> capped by the field's Brier, but being confidently wrong while the crowd is right costs
+> almost a full point. So the rule was calibration first.
+>
+> **Phase two was getting a calibrated price on everything.** Where bookmakers quote a
+> market, the sharp line is the best public forecast. I removed the bookmaker margin with
+> Shin's method, combined books with more weight on the sharper ones, and inverted the
+> win/draw/loss and totals prices into expected goals for each team. I blended those with
+> my own Elo-based Poisson model at 85% market, and built a Dixon–Coles scoreline grid.
+> Every question comes off that one model, so the answers are coherent. And the market's
+> information flows into the questions no bookmaker quotes: halves through Poisson
+> thinning, hydration-break windows from a fitted minute-by-minute intensity, corners and
+> cards from negative-binomial models, and player props from shrunk per-minute rates over
+> a mixture of minutes-played scenarios, anchored to book prop lines where they exist.
+>
+> **Phase three was edge.** I couldn't see the crowd before a market locked. So I logged
+> three prices for every question (pure model, blend, pure book) to measure closing-line
+> value, and after settlement I harvested the crowd's numbers to grade myself. That showed
+> where my deviations paid, on timing questions and team counts, and where they didn't.
+> Fouls and offsides were anti-signal, so I shrank them to flat. Deviations of more than
+> 25 points from the crowd were almost always bugs, so I added a clamp. Samples were
+> small, so every adjustment was cross-validated by match and deliberately under-sized.
+> In the endgame, a bootstrap showed that gambling added variance but no expected value,
+> so I stayed honest."
+
+### Term map: what the pitch commits you to
+
+| pitch phrase | cards |
+|---|---|
+| relative Brier, multiplier | [O1](#o1-brier-score-and-why-honesty-is-optimal), [O2](#o2-relative-brier-and-the-dispersion-bonus), [O4](#o4-stage-multipliers-and-rank-versus-expected-points) |
+| Jensen's inequality, dispersion, consensus | [O2](#o2-relative-brier-and-the-dispersion-bonus) |
+| asymmetric payoff, calibration first | [O3](#o3-the-asymmetric-payoff) |
+| Elo-based Poisson model | [M1](#m1-elo), [M2](#m2-the-poisson-goal-model) |
+| Dixon–Coles scoreline grid | [M3](#m3-dixoncoles) |
+| Shin's method, combining books | [M4](#m4-removing-the-margin-shins-method), [M5](#m5-combining-bookmakers) |
+| inverted into expected goals, 85% market | [M6](#m6-inverting-odds-into-expected-goals-then-blending) |
+| Poisson thinning | [M7](#m7-poisson-thinning-and-superposition) |
+| minute-by-minute intensity | [M8](#m8-the-minute-by-minute-intensity-profile) |
+| negative-binomial models | [M9](#m9-negative-binomial-counts), [M10](#m10-correlated-joint-questions) |
+| shrunk per-minute rates, minutes mixture, book prop lines | [M11](#m11-player-props) |
+| *likely asides:* knockouts, calibration, bugs | [M12](#m12-knockouts-advancing-extra-time-shootouts), [M13](#m13-calibration-platt-scaling), [M14](#m14-the-biggest-error-source-was-data-not-models) |
+| couldn't see the crowd | [E1](#e1-the-field-model-and-extremizing-the-deviation), [E2](#e2-the-backtest-gate-and-survivorship-bias) |
+| closing-line value | [E3](#e3-closing-line-value) |
+| harvested the crowd | [E4](#e4-harvesting-the-real-crowd) |
+| clamp, anti-signal | [E5](#e5-the-deviation-risk-curve-and-the-crowd-clamp), [E6](#e6-fouls-and-offsides-when-a-constant-beats-the-model) |
+| player-prop adjustments (if asked) | [E7](#e7-player-prop-adjustments-crowd-lift-and-confidence-floor) |
+| small samples, cross-validated by match, under-sized | [E8](#e8-small-samples-and-overfitting-controls) |
+| bootstrap, stayed honest | [E9](#e9-the-endgame-decision) |
+
+### Phase 1 cards — the objective
+
+#### O1. Brier score and why honesty is optimal
+
+- **What.** The squared error of a probability, $B = (q - y)^2$; lower is better. If the
+  true probability is $p$, the expected Brier is $(q-p)^2 + p(1-p)$.
+- **Why it matters.** It's *strictly proper*: only reporting the truth minimises expected
+  loss, and any shading costs $(q-p)^2$. So the job is estimation, not gaming the rule.
+- **Assumes / breaks.** Propriety is about *expected score*. It breaks when the prize is
+  about rank, where extra variance can help a forecaster who is behind (Lichtendahl &
+  Winkler).
+- **Evidence.** It's a derivation, not an experiment. Reporting whole percentages costs
+  at most $2.5\times10^{-5}$ per question.
+- **Likely follow-up.** *"Brier or log loss?"* → Both are proper. Log loss is unbounded,
+  so one confident miss can dominate. Brier caps a miss at 1.
+
+(Deep dive: §1.1–1.2.)
+
+#### O2. Relative Brier and the dispersion bonus
+
+- **What.** Points per question are $100\,m\,(F - B)$, where $F$ is the average of every
+  forecaster's own Brier and $m$ is the stage multiplier.
+- **Why it matters.** $F = (\bar q - y)^2 + s^2$: the consensus forecast's Brier plus the
+  crowd's dispersion. So a forecaster as good as the consensus earns $s^2 \approx 0.03$,
+  about +3 points a question, without beating anyone on information.
+- **Assumes / breaks.** The crowd's forecasts are fixed before the outcome, and you are
+  one of thousands of forecasters, so your effect on $\bar q$ is negligible. If the
+  platform scored against the *consensus's* Brier instead, the bonus would vanish.
+- **Evidence.** In the harvested crowd data the consensus scored about 0.222 and the
+  average individual about 0.252–0.256. Your +3.2 points per forecast is about that size.
+- **Likely follow-up.** *"Does relative scoring change what you should report?"* → No,
+  for expected points. $F$ doesn't depend on you, so maximising $F - B$ is the same as
+  minimising $B$. **Don't answer "yes, submit the consensus when unsure."** When you know
+  nothing the crowd doesn't, your honest belief *is* roughly the consensus.
+
+(Deep dive: §1.3–1.5.)
+
+#### O3. The asymmetric payoff
+
+- **What.** On one question, the most you can gain is $F$ and the most you can lose is
+  $1 - F$.
+- **Why it matters.** $F < 0.5$ unless the crowd is confidently wrong, so the possible
+  loss almost always exceeds the possible gain. The worst case is being confidently wrong
+  while the crowd is right. That's why "calibration first" was the design rule.
+- **Assumes / breaks.** When the crowd *is* confidently wrong ($F > 0.5$), the upside
+  dominates. That's exactly where edge lives.
+- **Evidence.** The per-question edge had skew −1.75. The most confident bucket was right
+  76% of the time and still lost 1.2 points per question. The DR Congo misroute
+  (submitted 8%, crowd 37%, settled YES, at 2×) cost about 84 points.
+- **Likely follow-up.** *"So you hedged toward 50?"* → No. Hedging toward 50 costs
+  $(0.5-p)^2$. I hedged toward the *book or the crowd*, which are calibrated.
+
+(Deep dive: §1.6.)
+
+#### O4. Stage multipliers and rank versus expected points
+
+- **What.** 1× in the group stage, 2× in the knockouts, 3× in the final. For rank,
+  $P(\text{win}) \approx \Phi((\mu-\tau)/\sigma)$ increases with $\sigma$ when you are
+  behind ($\tau > \mu$).
+- **Why I stayed honest.** Pushing a calibrated belief from $p$ to $q$ costs $(q-p)^2$
+  per question in expectation, and the multipliers scale losses as much as gains.
+- **Assumes / breaks.** Where you have structural edge on a question type, variance there
+  costs little. That's why the endgame dial only ever applied to an allow-list of such
+  types.
+- **Evidence.** A block bootstrap of the closing matches gave +481 ± 379 for honest play
+  and +475 ± 760 for blanket extremizing: the same mean at twice the spread.
+- **Likely follow-up.** *"When would you gamble?"* → When the rate you need clearly
+  exceeds your honest rate *and* the prize only pays the top. I computed it: the top 10
+  needed +12.9 points per question against +2.0 honest, so only a tail outcome would get
+  there. Buying variance would have lowered expected rank.
+
+(Deep dive: §1.8, §3.10.)
+
+### Phase 2 cards — the market machinery and the no-line questions
+
+#### M1. Elo
+
+- **What.** A rating per team, updated after each match by $K\,G\,(W - W_e)$, where
+  $W_e = 1/(1+10^{-\Delta R/400})$ is the expected result, $K$ the match importance and
+  $G$ a goal-margin multiplier.
+- **Why.** National teams play about 10 matches a year, far too few to fit attack and
+  defence ratings per team. Elo compresses a century of results into one number, and it
+  is computed point-in-time, so backtests can't see the future.
+- **Assumes / breaks.** Strength is one number that drifts slowly. Elo knows nothing of
+  lineups, injuries or rotated squads. Pure Elo had the USA at 26% to beat Paraguay with
+  the market near 50%, and the USA won. That's why the market anchor exists.
+- **Evidence.** The top three ratings matched eloratings.net. The goal model built on
+  Elo was backtested on six past tournaments.
+- **Likely follow-up.** *"What is Elo, statistically?"* → Online logistic regression:
+  each update is one gradient step on log loss.
+
+(Deep dive: §2.1.)
+
+#### M2. The Poisson goal model
+
+- **What.** Each team's goals are Poisson with
+  $\ln\lambda = \beta_0 + \beta_1\cdot\text{EloGap}/100$ (plus home ground), fitted by
+  weighted maximum likelihood with a two-year half-life on older matches.
+- **Why Poisson.** Goals are the limit of many small chances that are rarely converted.
+  One parameter per team then gives every question in closed form.
+- **Assumes / breaks.** Goals arrive independently at a constant rate. That breaks with
+  game state, since trailing teams push. Dixon–Coles (M3) and the simulator (M8) handle
+  that.
+- **Evidence.** $\beta_1 \approx 0.35$, so 100 Elo points means about ×1.42 expected
+  goals. The log-likelihood is concave, so the fit is unique. Half-lives of 1, 2 and 4
+  years scored the same.
+- **Likely follow-up.** *"How did you get parameter uncertainty?"* → A sandwich
+  covariance, because the age weights make it a pseudo-likelihood rather than a true
+  likelihood.
+
+(Deep dive: §2.2.)
+
+#### M3. Dixon–Coles
+
+- **What.** A correction factor $\tau$ on the 0-0, 1-0, 0-1 and 1-1 cells of the
+  scoreline grid, controlled by one parameter $\rho$.
+- **Why.** Two independent Poissons under-predict low-scoring draws.
+- **Assumes / breaks.** Dependence only matters in the low-score cells, and $\rho$ is the
+  same for every match.
+- **Evidence.** $\rho \approx -0.03$ to $-0.06$. The game-state simulator produces the
+  same excess of draws independently.
+- **Likely follow-up.** *"What does a negative $\rho$ do?"* → More 0-0 and 1-1, fewer
+  1-0 and 0-1, so more draws.
+
+(Deep dive: §2.3.)
+
+#### M4. Removing the margin (Shin's method)
+
+- **What.** Raw inverse odds sum to more than 1, and the excess is the bookmaker's
+  margin. Shin models a share $z$ of insider bettors, solves for probabilities that sum
+  to 1, and recovers $z$ from the size of the margin.
+- **Why not just normalise.** Proportional normalising keeps the favourite–longshot bias.
+  Shin takes proportionally more margin off longshots.
+- **Assumes / breaks.** It assumes the margin comes from defending against insiders. It
+  can't apply to one-sided prop quotes (only "Over" listed), so those fall back to a flat
+  8% haircut instead of being dropped.
+- **Evidence.** For odds of 1.80 / 3.60 / 4.75, the longshot goes from 0.2017 normalised
+  to 0.1974 with Shin. Štrumbelj (2014) found Shin beats normalising for soccer.
+- **Likely follow-up.** *"Why are longshots over-priced?"* → Bettors over-back them, and
+  informed money does the most damage to a book on unlikely outcomes, so the book
+  protects itself most there.
+
+(Deep dive: §2.5.)
+
+#### M5. Combining bookmakers
+
+- **What.** A weighted average of each book's de-vigged probabilities, with weight
+  proportional to sharpness ÷ (margin + 0.005).
+- **Why.** Weighting by inverse variance minimises the variance of the average, and a
+  book's margin is an observable proxy for its noise: a 2% book is sharper than an 8% one.
+- **Assumes / breaks.** It treats books as independent noisy copies of one truth. Their
+  errors are in fact correlated, because most books follow the same sharp line, so the
+  weighting is a good heuristic rather than the true optimum.
+- **Evidence.** Pinnacle at a 2.1% margin gets 88% of the weight against a 9.3% book.
+  Polymarket matched the book consensus to within 0.3%.
+- **Likely follow-up.** *"Why average probabilities here, but log-odds when blending with
+  your model?"* → Books are correlated measurements of one quantity, so an arithmetic
+  mean fits. Model and market are independent sources, and a plain average of
+  independent forecasters is under-confident.
+
+(Deep dive: §2.6.)
+
+#### M6. Inverting odds into expected goals, then blending
+
+- **What.** Find the pair $(\lambda_A, \lambda_B)$ whose scoreline grid best matches the
+  market's home/draw/away and over-2.5 prices (least squares: four targets, two
+  unknowns). Then blend with the model:
+  $\lambda = \lambda_{\text{mkt}}^{0.85}\,\lambda_{\text{model}}^{0.15}$.
+- **Why anchor expected goals rather than each price.** Coherence. One pair drives every
+  question, so the answers can't contradict each other, and the market's information
+  reaches questions no book quotes.
+- **Assumes / breaks.** That two Poissons can express the market's view. The fit residual
+  shows they can't fully: the draw comes out 1–2 points low. The 0.85 was fitted against
+  FiveThirtyEight, not real closing lines. A guard rejects absurd inversions.
+- **Evidence.** The weight's fit was flat from 0.65 to 1.0 over 84 fixtures. WC26 ran hot
+  (3.00 goals a match against the pure model's 2.49), and anchoring turned the
+  timing-window markets from slightly negative skill to positive.
+- **Likely follow-up.** *"Why blend in log space?"* → Expected goals are positive scale
+  parameters, and a log blend treats halving and doubling symmetrically.
+
+(Deep dive: §2.7–2.8.)
+
+#### M7. Poisson thinning and superposition
+
+- **What.** If you keep each event of a Poisson($\lambda$) stream independently with
+  probability $\theta$, the kept events are Poisson($\theta\lambda$). Independent Poisson
+  streams add.
+- **Why.** Halves, headers, outside-the-box goals and stoppage time all come off the
+  anchored intensity. For example,
+  $P(\text{team scores in the second half}) = 1 - e^{-0.556\lambda}$.
+- **Assumes / breaks.** Events are independent and the share is the same in every match.
+  Own goals failed this test: scaling them with total goals scored worse than a flat
+  rate, so they stayed flat.
+- **Evidence.** Thinning beat a flat rate by +0.027 Brier for headers and +0.021 for
+  outside-the-box goals.
+- **Likely follow-up.** *"Derive the chance team A scores first."* →
+  $\frac{\lambda_A}{\Lambda}(1 - e^{-\Lambda})$. Some goal happens with probability
+  $1 - e^{-\Lambda}$, and the first event of the merged stream is A's with probability
+  $\lambda_A/\Lambda$.
+
+(Deep dive: §2.10A–B.)
+
+#### M8. The minute-by-minute intensity profile
+
+- **What.** Goals and counts follow a Poisson process whose rate varies by minute, with
+  fitted 15-minute bucket weights. A window holding a share $\phi$ of the total intensity
+  gives $P(\text{goal}) = 1 - e^{-\Lambda\phi}$. A 90-slot Monte-Carlo simulator handles
+  score-state effects.
+- **Why.** The rate rises through each half. Minutes 0–22 carry 17.3% of goal intensity,
+  not the 24.4% a flat-time guess gives, which is about 11 points less on "goal before
+  the first break."
+- **Assumes / breaks.** The profile is stable across tournaments. The standard trick of
+  conditioning on each match's total is *biased* for goals, because each goal changes the
+  score state that follows it.
+- **Evidence.** A simulation test caught that bias (fitted +1.20 against a true +0.50),
+  and the full likelihood fixed it. Score-state effects on counts hurt out of sample
+  (−0.018 on shots on target), so only goals use them. Timing was the first family with
+  confirmed edge.
+- **Likely follow-up.** *"How did you validate the estimator?"* → Simulate data from known
+  parameters and check that the fit recovers them.
+
+(Deep dive: §2.10D–E.)
+
+#### M9. Negative-binomial counts
+
+- **What.** A count is Poisson($\mu G$), where $G$ is a Gamma-distributed "type of match"
+  multiplier. That makes it negative binomial with variance $\mu + \mu^2/k$. The mean
+  depends on both teams' expected goals.
+- **Why.** Corners are overdispersed (variance/mean 1.42), and a Poisson forces that
+  ratio to 1. Tying the mean to expected goals lets the counts inherit the market anchor.
+- **Assumes / breaks.** The two teams' counts are independent once expected goals are
+  known. Referees aren't modelled (there was no live assignment feed). Cards don't scale
+  with expected goals and ran low all tournament.
+- **Evidence.** Team corner and shots-on-target counts showed real edge against the
+  crowd. With 4.4 expected corners each, two equal teams each have a 0.446 chance of
+  "more corners," and a tie has 0.109.
+- **Likely follow-up.** *"Why are both teams below 50% on 'more corners'?"* → A tie
+  settles NO, and discrete counts tie often.
+
+(Deep dive: §2.10F.)
+
+#### M10. Correlated joint questions
+
+- **What.** For "more corners AND more shots,"
+  $P \approx p_1p_2 + \rho\sqrt{p_1(1-p_1)p_2(1-p_2)}$.
+- **Why.** An attacking day produces both, beyond what expected goals capture, so
+  treating them as independent under-prices the pair.
+- **Assumes / breaks.** It's a linear approximation, valid only for moderate $\rho$.
+- **Evidence.** The leftover correlation measured 0.41 over 314 matches, and 0.30 was
+  shipped. An earlier value of 0.05 was six times too low and made this the one handler
+  positioned to lose to the crowd.
+- **Likely follow-up.** *"Why ship less than you measured?"* → The approximation and the
+  small sample. Under-shipping parameters the data can't pin down was a deliberate rule
+  (E8).
+
+(Deep dive: §2.10F.)
+
+#### M11. Player props
+
+- **What.** A per-minute rate shrunk toward a prior,
+  $\hat r = (y + r_0M_0)/(m + M_0)$, with $r_0$ = 0.8 × the player's club rate. Then
+  $P(\ge k)$ is averaged over start, substitute and unused scenarios, and anchored at
+  97% to the book line where one exists.
+- **Why.** Tournament samples are tiny, so shrinkage is needed, but toward the *player's*
+  club rate rather than the population average. And $1 - e^{-rM}$ is concave, so by
+  Jensen, plugging in expected minutes overstates the probability.
+- **Assumes / breaks.** A constant club-to-country discount and Poisson shots. Name
+  matching broke silently: "Kylian Mbappé (France, #10)" matched no record, and Nordic
+  letters were dropped instead of transliterated.
+- **Evidence.** Club data cut the share of players with no rate from 44% to 16%. On 51
+  anchored props the Brier score improved steadily toward the book (model 0.250, blend
+  0.206, book 0.202), which is why the book gets 97%. Converting the book's 1+ line into a
+  2+ price fixed an Mbappé quote of 19 against a crowd at 63.
+- **Likely follow-up.** *"Why not shrink toward the population average?"* → It pulled
+  stars toward an average player. Prices sat 18–28 points under the crowd, and the gap
+  grew for bigger names.
+
+(Deep dive: §2.10G.)
+
+#### M12. Knockouts: advancing, extra time, shootouts
+
+- **What.** P(advance) = P(win in 90) + P(draw in 90) × [P(win in extra time) +
+  P(level after extra time) × P(win the shootout)].
+- **Why.** "Win the tie" isn't "win in 90 minutes," and that parser mix-up was worth up
+  to 15 points on a question.
+- **Assumes / breaks.** Extra time scores at 0.35× the regulation rate, and a shootout is
+  nearly a coin flip with a slight favourite tilt. Team shootout records overrode the
+  tilt for the final.
+- **Evidence.** 839 extra-time matches and 678 shootouts set the constants. The result
+  landed within 1–2 points of the book's outright price on every leg.
+- **Likely follow-up.** *"Is it coherent?"* → Yes. The two teams' probabilities of
+  advancing sum to 1 by construction.
+
+(Deep dive: §2.10H.)
+
+#### M13. Calibration (Platt scaling)
+
+- **What.** $q' = \sigma(a\cdot\text{logit}\,q + b)$, fitted per question family.
+  $a < 1$ tames over-confidence and $b$ corrects bias.
+- **Why.** The Brier score splits into reliability, resolution and uncertainty.
+  Post-processing can fix reliability, but it can't create resolution.
+- **Assumes / breaks.** When forecasts barely vary, the slope can't be estimated, so those
+  families correct the bias only. Backtest fits may not carry over: the player-prop
+  calibration hurt out of sample and was switched off. Anchored goal markets skip it,
+  because the book is already calibrated.
+- **Evidence.** Final reliability was 0.0014 over 1,169 questions. For player props,
+  cross-validation scored no calibration 0.2058, the old fit 0.2065 and a re-fit 0.2092.
+- **Likely follow-up.** *"Why not calibrate everything?"* → Calibrating the book again
+  double-counts, and an over-fitted calibration adds error.
+
+(Deep dive: §2.10J, §4.2.)
+
+#### M14. The biggest error source was data, not models
+
+- **What.** Questions sent to the wrong handler, and player names that failed to match.
+- **Why it matters.** "Both teams have a shot on target" was priced like a player prop at
+  9% against a fair 75%. "Will DR Congo score?" was priced like a fringe player at 8%
+  against about 40%.
+- **What I did.** Every question the parser couldn't read was logged loudly (dropped
+  questions went from 56 to 0), and each new question type was built from pieces already
+  validated.
+- **Evidence.** The recovered question types scored +0.0237 Brier better than base rates
+  over 702 questions.
+- **Likely follow-up.** *"What was your biggest mistake?"* → This class of bug. The fix
+  was structural, loud audits plus a clamp (E5), rather than patching each case.
+
+(Deep dive: §2.10K.)
+
+### Phase 3 cards — testing and spending edge
+
+#### E1. The field model and extremizing the deviation
+
+- **What.** Model the crowd as $f = \sigma(\lambda_f\cdot\text{logit}\,p)$, a duller
+  version of your own belief. Submit
+  $\text{logit}\,q = \text{logit}\,f + \kappa(\text{logit}\,p - \text{logit}\,f)$, which
+  amplifies your disagreement with the crowd by $\kappa$.
+- **Why.** Amplify only where you disagree with the field. Pushing every probability
+  toward 0 or 1 gambles even where you have no edge.
+- **Assumes / breaks.** The sharpness priors were judgement calls. And the test compares
+  you against a dulled copy of yourself, so it is partly circular. **Say this before they
+  do.**
+- **Evidence.** Timing passed the live test (at least 20 settled questions, beating the
+  model crowd by 0.005), which turned on $\kappa = 1.3$. Real crowd data later agreed:
+  timing beat the consensus by 15 points over 21 questions.
+- **Likely follow-up.** *"Isn't that circular?"* → Partly. It shows your sharpness pays
+  against a duller crowd, which is necessary but not sufficient. That's why harvesting
+  the real crowd (E4) mattered.
+
+(Deep dive: §3.2–3.3.)
+
+#### E2. The backtest gate and survivorship bias
+
+- **What.** A paired t-test on per-question Brier differences against a sharp model crowd,
+  run over past tournaments.
+- **Why.** Live results arrive slowly, so test offline as well.
+- **Assumes / breaks.** The backtest population must match the live one. For players it
+  didn't: backtest players had international history, which is *why* they were in the
+  data, while live squads were full of players without it.
+- **Evidence.** Players showed $t = 18.7$ over 12,120 questions, and I *overrode* it and
+  kept honest pricing. Kubo, with 90 career minutes, was priced at 7% to score or assist,
+  did it, and scored a Brier of 0.865.
+- **Likely follow-up.** *"Why ignore a t of 18?"* → Significance on the wrong population
+  isn't edge. Ask what generated the sample.
+
+(Deep dive: §3.4.)
+
+#### E3. Closing-line value
+
+- **What.** Every market was priced three ways (pure model, the 85% blend, pure book),
+  all three were logged, and each was scored after settlement.
+- **Why.** In betting, beating the closing line is the best predictor of long-run edge.
+  Here it tests whether my 15% model share adds anything over the book.
+- **Assumes / breaks.** The logged book price is close to the true closing price, and it
+  only works where a book line exists.
+- **Evidence.** On player props the pure book beat the blend (0.202 against 0.206), so the
+  model's share there was cut to 3%. Even 15% hurts there: a 7% model drags a 27% book
+  line down to 22.6%, because a low probability has a large negative log-odds.
+- **Likely follow-up.** *"What's closing-line value?"* → The gap between the price you
+  took and the final price. Beating the close consistently means you had information the
+  market didn't yet.
+
+(Deep dive: §3.5.)
+
+#### E4. Harvesting the real crowd
+
+- **What.** After a market locked, the web app showed the crowd's average forecast per
+  question. I measured edge against that consensus as
+  $(\bar q - y)^2 - (q - y)^2$.
+- **Why.** It's the only true grader, and it's tougher than the scoring baseline by
+  exactly $s^2$.
+- **Assumes / breaks.** It's only visible after lock, so it could **never** be a live
+  input, only a calibration target. Labels had to be right: six mislabelled bug rows had
+  flipped one question type's verdict from −83.6 to +11.7.
+- **Evidence.** On 646 questions I scored 0.2244 against the consensus's 0.2223, with
+  $t = -0.57$: statistically at consensus quality. That put me about 0.03 per question
+  ahead of the actual scoring baseline, the average individual.
+- **Likely follow-up.** *"So you weren't better than the crowd?"* → I matched its
+  consensus, which is what scoring well requires. Edge over the consensus showed up where
+  theory predicted: timing, team counts and player props.
+
+(Deep dive: §3.6, §4.3.)
+
+#### E5. The deviation risk curve and the crowd clamp
+
+- **What.** Edge grouped by how far I sat from the crowd. Gaps of 5–15 points paid on
+  average. Gaps over 25 points lost 0.079 per question.
+- **Why the clamp.** Historically, every loss on a 25-point-plus gap was a bug. So any
+  price not backed by a book that lands more than 25 points from that question type's
+  usual crowd level gets pulled back to 25 points.
+- **Assumes / breaks.** The crowd's level has to be stable for that question type, so
+  matchup-driven types like "win" are left out. Book-anchored prices and low player-prop
+  prices, a validated edge, are exempt.
+- **Evidence.** Fitted on group-stage data and applied to the round of 32, it fired zero
+  times on the fixed pipeline. Applied to past data, it caught exactly the historical
+  disasters.
+- **Likely follow-up.** *"Aren't you throwing away edge?"* → Only on gaps that
+  historically lost. The validated extreme cases are exempt.
+
+(Deep dive: §3.7a, §3.9i.)
+
+#### E6. Fouls and offsides: when a constant beats the model
+
+- **What.** A flat price beat both me and the crowd. Fouls: flat 0.245, crowd 0.263, me
+  0.277. Offsides: flat 0.233, crowd 0.253, me 0.280.
+- **Why.** If the model's match-to-match variation doesn't track outcomes, it only adds
+  error: $(q - p)^2$ with nothing gained.
+- **What I did.** Kept only 15% of the model's deviation (in log-odds) from a fixed base:
+  0.50 for fouls, because two interchangeable teams can't both be over 50% once ties
+  count as NO, and 0.40 for offsides, because a definition mismatch made even the crowd
+  too high.
+- **Evidence.** About 21–22 questions each: small, but consistent in direction, and the
+  shrink goes toward a principled value.
+- **Likely follow-up.** *"How can a constant beat a model?"* → Variation without
+  information costs points. In the Brier breakdown the model paid in reliability and
+  earned no resolution.
+
+(Deep dive: §3.7d, §3.9e.)
+
+#### E7. Player-prop adjustments: crowd lift and confidence floor
+
+- **What.** The crowd priced props above the book and was better calibrated (0.223
+  against 0.258). So anchored props were raised by half the estimated crowd premium,
+  capped at 6 points, and unanchored low props got a 15% floor.
+- **Why half.** The size of the effect wasn't pinned down. The fit kept improving all the
+  way to the edge of the range tested, the raw edge was borderline ($p \approx 0.065$),
+  and its direction was 15–14, a coin flip. Half kept about 70% of the modelled gain for
+  about half the downside.
+- **Assumes / breaks.** The premium stays stable across matches. The floor only helps
+  where the true rate exceeds its break-even point.
+- **Evidence.** Raising 0.10 to 0.15 helps exactly when the true probability is above
+  0.125. The floor improved cross-validated total Brier from 57.642 to 57.385, worth
+  about 26 points.
+- **Likely follow-up.** *"Why not just submit the crowd's number?"* → It's invisible
+  before lock. I estimated the premium and shipped less of it than the fit suggested.
+
+(Deep dive: §3.9g.)
+
+#### E8. Small samples and overfitting controls
+
+- **What.** The per-question edge had a standard deviation of about 0.093, so detecting a
+  0.01 edge takes about 345 questions. Per question type I had 5–50.
+- **Why it matters.** Almost no per-type effect was statistically established, so every
+  adjustment had to be principled, shrunk, cross-validated and under-sized.
+- **The controls.**
+  - Leave-one-*match*-out cross-validation.
+  - Choose the smallest setting within a tolerance of the best, not the best itself.
+  - Ship only on a cross-validated gain of at least 0.0005.
+  - Shrink calibration parameters toward "no change."
+  - Fix test parameters in advance.
+  - Shrink per-type estimates toward the pooled estimate.
+- **Evidence.** Two candidate features (squad quality and a gradient-boosted hybrid) were
+  rejected by rules set before running them.
+- **Likely follow-up.** *"Why leave out a match rather than a question?"* → Questions in
+  the same match share expected goals and match-level randomness, so leaving out single
+  questions leaks information.
+
+(Deep dive: §3.7f, §3.8.)
+
+#### E9. The endgame decision
+
+- **What.** A block bootstrap that resampled whole settled matches to simulate the closing
+  matches, under honest play and under blanket extremizing.
+- **Why a block bootstrap.** Questions in the same match are correlated, so you resample
+  matches, not individual questions.
+- **Assumes / breaks.** Past matches are representative of the remaining ones.
+- **Evidence.** Honest play gave +481 ± 379 and gambling +475 ± 760. The top 10 needed
+  +12.9 points per question against +2.0 honest.
+- **Likely follow-up.** *"So you never took risk?"* → I built a gated dial limited to
+  question types with structural edge, off by default, and pre-staged lineup-triggered
+  rules for the last two matches. The numbers said to leave the dial off.
+
+(Deep dive: §3.10.)
 
 ---
 
